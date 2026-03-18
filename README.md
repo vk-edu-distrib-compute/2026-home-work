@@ -1,4 +1,7 @@
 # 2026-home-work 
+
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/38db465ffe4340dab19641af02ea1814)](https://app.codacy.com/gh/vk-edu-distrib-compute/2026-home-work?utm_source=github.com&utm_medium=referral&utm_content=vk-edu-distrib-compute/2026-home-work&utm_campaign=Badge_Grade)
+
 Домашние задание курса "Распределенные вычисления" 2026 года
 
 ## Задание 1. HTTP API + хранилище (deadline 1 неделя)
