@@ -20,9 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 @ParameterizedClass
 @ArgumentsSource(KVServiceFactoryArgumentsProvider.class)
+@SuppressWarnings("PMD.UnitTestAssertionsShouldIncludeMessage")
 class SingleNodeTest extends TestBase {
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
-    public static final Duration TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     @Parameter
     KVServiceFactory kvServiceFactory;
@@ -104,7 +105,7 @@ class SingleNodeTest extends TestBase {
     }
 
     @Test
-    void getAbsent() {
+    void readAbsent() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             int port = randomPort();
             String endpoint = endpoint(port);

@@ -4,8 +4,11 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Contains utility methods for unit tests.
- *
  */
+@SuppressWarnings({
+    "PMD.AbstractClassWithoutAbstractMethod",
+    "PMD.ClassNamingConventions",
+})
 abstract class TestBase {
     private static final int VALUE_LENGTH = 1024;
 

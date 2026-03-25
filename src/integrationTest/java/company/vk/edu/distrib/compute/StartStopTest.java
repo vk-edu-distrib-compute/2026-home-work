@@ -20,20 +20,20 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * Basic init/deinit test for {@link KVService} implementation.
- *
  */
 @ParameterizedClass
 @ArgumentsSource(KVServiceFactoryArgumentsProvider.class)
-public class StartStopTest extends TestBase {
-    private static final HttpClient httpClient = HttpClient.newHttpClient();
+@SuppressWarnings("PMD.UnitTestAssertionsShouldIncludeMessage")
+class StartStopTest extends TestBase {
+    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     @Parameter
     KVServiceFactory kvServiceFactory;
 
     @AfterAll
-    public static void afterAll() {
-        httpClient.close();
+    static void afterAll() {
+        HTTP_CLIENT.close();
     }
 
     private static int status(int port) throws IOException, URISyntaxException, InterruptedException {
@@ -42,7 +42,7 @@ public class StartStopTest extends TestBase {
             .uri(new URI("http://localhost:" + port + "/v0/status"))
             .timeout(Duration.ofSeconds(2))
             .build();
-        HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+        HttpResponse<Void> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.discarding());
         return response.statusCode();
     }
 
