@@ -1,6 +1,7 @@
 package company.vk.edu.distrib.compute.vodobryshkin;
 
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,15 +14,17 @@ class DefaultKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger("server");
 
     private final HttpServer httpServer;
+    private final Dao<byte[]> storage;
 
     private boolean started = false;
     private boolean stopped = false;
 
-    DefaultKVService(int port, int backlogSize) throws IOException {
-        this(HttpServer.create(new InetSocketAddress(port), backlogSize));
+    DefaultKVService(Dao<byte[]> storage, int port, int backlogSize) throws IOException {
+        this(storage, HttpServer.create(new InetSocketAddress(port), backlogSize));
     }
 
-    DefaultKVService(HttpServer httpServer) {
+    DefaultKVService(Dao<byte[]> storage, HttpServer httpServer) {
+        this.storage = storage;
         this.httpServer = httpServer;
         log.debug("DefaultKVService was created");
     }
