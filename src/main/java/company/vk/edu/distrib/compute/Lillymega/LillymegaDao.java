@@ -10,11 +10,34 @@ public class LillymegaDao implements Dao<byte[]> {
     private final Map<String, byte[]> storage = new ConcurrentHashMap<>();
 
     @Override
-    public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException;
+    public byte[] get(String key){
+        validateKey (key);
+        byte[] value = storage.get(key);
+        if (value == null){
+            throw new NoSuchElementException("No value for key: " + key);
+        }
+    }
 
     @Override
-    void upsert(String key, T value) throws IllegalArgumentException, IOException;
+    public void upsert(String key, byte[] value) {
+        validateKey (key);
+        if (value == null) {
+            throw new IllegalArgumentException("Value must be not null");
+        }
+    }
 
     @Override
-    void delete(String key) throws IllegalArgumentException, IOException;
+    public void delete(String key) {
+        validateKey (key);
+        storage.remove(key);
+    }
+    @Override
+    public void close() {
+        storage.clear();
+    }
+    private static void validateKey(String key){
+        if (key == null || key.isEmpty()){
+            throw new IllegalArgumentException("Key must be not empty");
+        }
+    }
 }
