@@ -1,10 +1,11 @@
-package company.vk.edu.distrib.compute.vodobryshkin.file;
+package company.vk.edu.distrib.compute.vodobryshkin;
 
 import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.vodobryshkin.InMemoryDao;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.NoSuchElementException;
 
 public class CacheDao implements Dao<byte[]> {
     private final int limit;

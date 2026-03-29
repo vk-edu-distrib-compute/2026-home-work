@@ -15,8 +15,8 @@ public class DefaultKVServiceFactory extends KVServiceFactory {
 
     private final Dao<byte[]> storage;
 
-    public DefaultKVServiceFactory() {
-        this(new InMemoryDao());
+    public DefaultKVServiceFactory() throws IOException {
+        this(new FileDao());
     }
 
     public DefaultKVServiceFactory(Dao<byte[]> storage) {

@@ -59,9 +59,9 @@ public class EntityHandler implements HttpHandler {
         byte[] result;
 
         if (method.equals(HttpMethod.GET.name())) {
-            result = storage.get(id);
-
-            if (result == null) {
+            try {
+                result = storage.get(id);
+            } catch (Exception e) {
                 exchange.sendResponseHeaders(StatusCode.NOT_FOUND.getCode(), -1);
                 return;
             }
