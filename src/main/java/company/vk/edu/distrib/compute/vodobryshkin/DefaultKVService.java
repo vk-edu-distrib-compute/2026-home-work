@@ -11,8 +11,8 @@ class DefaultKVService implements KVService {
 
     private final HttpServer httpServer;
 
-    private boolean started = false;
-    private boolean stopped = false;
+    private boolean started;
+    private boolean stopped;
 
     DefaultKVService(HttpServer httpServer) {
         this.httpServer = httpServer;

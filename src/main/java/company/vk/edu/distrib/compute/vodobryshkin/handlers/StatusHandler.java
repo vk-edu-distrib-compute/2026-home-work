@@ -19,17 +19,17 @@ public class StatusHandler implements HttpHandler {
         log.info("Received a {}-request on /v0/status endpoint", method);
 
         try {
-            if (!method.equals(HttpMethod.GET.name()))  {
-                exchange.sendResponseHeaders(StatusCode.MethodNotAllowed.getCode(), -1);
+            if (!method.equals(HttpMethod.GET.name())) {
+                exchange.sendResponseHeaders(StatusCode.METHOD_NOT_ALLOWED.getCode(), -1);
 
                 return;
             }
 
-            exchange.sendResponseHeaders(StatusCode.Ok.getCode(), -1);
+            exchange.sendResponseHeaders(StatusCode.OK.getCode(), -1);
 
             log.debug("Successfully handled a request on /v0/status endpoint");
         } catch (IOException e) {
-            exchange.sendResponseHeaders(StatusCode.InternalServerError.getCode(), -1);
+            exchange.sendResponseHeaders(StatusCode.INTERNAL_SERVER_ERROR.getCode(), -1);
         }
 
     }

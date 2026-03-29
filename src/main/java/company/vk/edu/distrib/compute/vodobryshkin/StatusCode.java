@@ -1,14 +1,14 @@
 package company.vk.edu.distrib.compute.vodobryshkin;
 
 public enum StatusCode {
-    Ok(200),
-    Created(201),
-    Accepted(202),
-    BadRequest(400),
-    NotFound(404),
-    MethodNotAllowed(405),
-    UnprocessableContent(422),
-    InternalServerError(503);
+    OK(200),
+    CREATED(201),
+    ACCEPTED(202),
+    BAD_REQUEST(400),
+    NOT_FOUND(404),
+    METHOD_NOT_ALLOWED(405),
+    UNPROCESSABLE_CONTENT(422),
+    INTERNAL_SERVER_ERROR(503);
 
     private final int code;
 

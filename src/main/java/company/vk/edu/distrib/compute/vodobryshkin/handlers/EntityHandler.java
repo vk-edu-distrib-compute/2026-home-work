@@ -27,25 +27,26 @@ public class EntityHandler implements HttpHandler {
 
         log.info("Received a {}-request on /v0/entity?{} endpoint", method, queryString);
 
-        if (!method.equals(HttpMethod.GET.name()) && !method.equals(HttpMethod.PUT.name()) && !method.equals(HttpMethod.DELETE.name()))  {
-            exchange.sendResponseHeaders(StatusCode.MethodNotAllowed.getCode(), -1);
+        if (!method.equals(HttpMethod.GET.name()) && !method.equals(HttpMethod.PUT.name())
+                && !method.equals(HttpMethod.DELETE.name())) {
+            exchange.sendResponseHeaders(StatusCode.METHOD_NOT_ALLOWED.getCode(), -1);
             return;
         }
 
         if (queryString == null || queryString.isBlank()) {
-            exchange.sendResponseHeaders(StatusCode.BadRequest.getCode(), -1);
+            exchange.sendResponseHeaders(StatusCode.BAD_REQUEST.getCode(), -1);
             return;
         }
 
         String[] partsOfQueryString = queryString.split("=");
 
         if (partsOfQueryString.length == 0) {
-            exchange.sendResponseHeaders(StatusCode.BadRequest.getCode(), -1);
+            exchange.sendResponseHeaders(StatusCode.BAD_REQUEST.getCode(), -1);
             return;
         }
 
-        if (!partsOfQueryString[0].equals("id") || partsOfQueryString.length > 2) {
-            exchange.sendResponseHeaders(StatusCode.UnprocessableContent.getCode(), -1);
+        if (!"id".equals(partsOfQueryString[0]) || partsOfQueryString.length > 2) {
+            exchange.sendResponseHeaders(StatusCode.UNPROCESSABLE_CONTENT.getCode(), -1);
             return;
         }
 
@@ -56,11 +57,11 @@ public class EntityHandler implements HttpHandler {
             result = storage.get(id);
 
             if (result == null) {
-                exchange.sendResponseHeaders(StatusCode.NotFound.getCode(), -1);
+                exchange.sendResponseHeaders(StatusCode.NOT_FOUND.getCode(), -1);
                 return;
             }
 
-            exchange.sendResponseHeaders(StatusCode.Ok.getCode(), result.length);
+            exchange.sendResponseHeaders(StatusCode.OK.getCode(), result.length);
 
             OutputStream outputStream = exchange.getResponseBody();
             outputStream.write(result);
@@ -69,14 +70,14 @@ public class EntityHandler implements HttpHandler {
             log.debug("Successfully handled GET-request on /v0/entity?{} endpoint with a result: {}", method, result);
         } else if (method.equals(HttpMethod.DELETE.name())) {
             storage.delete(id);
-            exchange.sendResponseHeaders(StatusCode.Accepted.getCode(), -1);
+            exchange.sendResponseHeaders(StatusCode.ACCEPTED.getCode(), -1);
 
             log.debug("Successfully handled DELETE-request on /v0/entity?{}.", method);
         } else {
             byte[] body = exchange.getRequestBody().readAllBytes();
 
             storage.upsert(id, body);
-            exchange.sendResponseHeaders(StatusCode.Created.getCode(), -1);
+            exchange.sendResponseHeaders(StatusCode.CREATED.getCode(), -1);
 
             log.debug("Successfully handled PUT-request on /v0/entity?{}.", method);
         }

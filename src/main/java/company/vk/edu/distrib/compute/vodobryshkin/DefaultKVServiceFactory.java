@@ -16,6 +16,7 @@ public class DefaultKVServiceFactory extends KVServiceFactory {
     private final Dao<byte[]> storage;
 
     public DefaultKVServiceFactory(Dao<byte[]> storage) {
+        super();
         this.storage = storage;
     }
 
