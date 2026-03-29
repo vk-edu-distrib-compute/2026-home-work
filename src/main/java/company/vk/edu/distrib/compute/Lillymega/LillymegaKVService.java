@@ -1,5 +1,4 @@
 //реализация интерфейса
-//aboba
 package company.vk.edu.distrib.compute.Lillymega;
 
 import  com.sun.net.httpserver.HttpServer;
