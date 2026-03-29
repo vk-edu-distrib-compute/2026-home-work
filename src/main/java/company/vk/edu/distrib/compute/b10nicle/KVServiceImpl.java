@@ -102,9 +102,7 @@ public class KVServiceImpl implements KVService {
     private final class EntityHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String method = exchange.getRequestMethod();
-            String query = exchange.getRequestURI().getQuery();
-            String id = extractId(query);
+            String id = extractId(exchange.getRequestURI().getQuery());
 
             if (id == null) {
                 sendResponse(exchange, HttpStatus.BAD_REQUEST, MISSING_ID_MESSAGE);
@@ -112,13 +110,7 @@ public class KVServiceImpl implements KVService {
             }
 
             try {
-                switch (method) {
-                    case METHOD_GET -> handleGet(exchange, id);
-                    case METHOD_PUT -> handlePut(exchange, id);
-                    case METHOD_DELETE -> handleDelete(exchange, id);
-                    case null, default ->
-                        sendResponse(exchange, HttpStatus.METHOD_NOT_ALLOWED, METHOD_NOT_ALLOWED_MESSAGE);
-                }
+                processRequest(exchange, id);
             } catch (IllegalArgumentException e) {
                 sendResponse(exchange, HttpStatus.BAD_REQUEST, e.getMessage());
             } catch (NoSuchElementException e) {
@@ -126,6 +118,17 @@ public class KVServiceImpl implements KVService {
             } catch (IOException e) {
                 log.error("IO error handling request", e);
                 sendResponse(exchange, HttpStatus.INTERNAL_ERROR, INTERNAL_ERROR_MESSAGE);
+            }
+        }
+
+        private void processRequest(HttpExchange exchange, String id) throws IOException {
+            String method = exchange.getRequestMethod();
+
+            switch (method) {
+                case METHOD_GET -> handleGet(exchange, id);
+                case METHOD_PUT -> handlePut(exchange, id);
+                case METHOD_DELETE -> handleDelete(exchange, id);
+                case null, default -> sendResponse(exchange, HttpStatus.METHOD_NOT_ALLOWED, METHOD_NOT_ALLOWED_MESSAGE);
             }
         }
 
@@ -180,6 +183,5 @@ public class KVServiceImpl implements KVService {
         public static final int NOT_FOUND = 404;
         public static final int METHOD_NOT_ALLOWED = 405;
         public static final int INTERNAL_ERROR = 500;
-        public static final int SERVICE_UNAVAILABLE = 503;
     }
 }
