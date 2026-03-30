@@ -19,6 +19,8 @@ public class MyKVService implements KVService {
 
     private final Map<String, byte[]> storage = new ConcurrentHashMap<>();
 
+    private static final String FILE_NAME = "data.db";
+
     public MyKVService(int port) {
         this.port = port;
     }
@@ -32,6 +34,9 @@ public class MyKVService implements KVService {
             server.createContext("/v0/entity", this::handleEntity);
 
             server.setExecutor(Executors.newFixedThreadPool(4));
+
+            loadFromFile();
+
             server.start();
 
         } catch (IOException e) {
@@ -43,6 +48,33 @@ public class MyKVService implements KVService {
     public void stop() {
         if (server != null) {
             server.stop(0);
+        }
+    }
+
+    private void loadFromFile() {
+        java.io.File file = new java.io.File(FILE_NAME);
+        if (!file.exists()) {
+            return;
+        }
+
+        try (var fis = java.nio.file.Files.newInputStream(file.toPath())) {
+            byte[] intBuf = new byte[4];
+
+            while (fis.read(intBuf) == 4) {
+                int keyLen = java.nio.ByteBuffer.wrap(intBuf).getInt();
+
+                byte[] keyBytes = fis.readNBytes(keyLen);
+                String key = new String(keyBytes);
+
+                fis.read(intBuf);
+                int valLen = java.nio.ByteBuffer.wrap(intBuf).getInt();
+
+                byte[] value = fis.readNBytes(valLen);
+
+                storage.put(key, value);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -116,12 +148,29 @@ public class MyKVService implements KVService {
     }
 
     private void handlePut(HttpExchange exchange, String id) throws IOException {
-    byte[] body = exchange.getRequestBody().readAllBytes();
+        byte[] body = exchange.getRequestBody().readAllBytes();
 
-    storage.put(id, body);
+        storage.put(id, body);
 
-    exchange.sendResponseHeaders(201, -1);
-    exchange.close();
+        try (var fos = java.nio.file.Files.newOutputStream(
+        java.nio.file.Path.of(FILE_NAME),
+        java.nio.file.StandardOpenOption.CREATE,
+        java.nio.file.StandardOpenOption.APPEND)) {
+            byte[] keyBytes = id.getBytes();
+
+            fos.write(intToBytes(keyBytes.length));
+            fos.write(keyBytes);
+
+            fos.write(intToBytes(body.length));
+            fos.write(body);
+        }
+
+        exchange.sendResponseHeaders(201, -1);
+        exchange.close();
+    }
+
+    private byte[] intToBytes(int value) {
+        return java.nio.ByteBuffer.allocate(4).putInt(value).array();
     }
 
     private void handleDelete(HttpExchange exchange, String id) throws IOException {
