@@ -16,6 +16,8 @@ import java.util.concurrent.Executors;
 public class MyKVService implements KVService {
     private final HttpServer server;
     private final Dao<byte[]> dao;
+    private static final int EXPECTED_PARTS = 2;
+    private static final String ID_PARAM = "id";
 
     public MyKVService(Dao<byte[]> dao, int port) throws IOException {
         this.dao = dao;
@@ -122,7 +124,7 @@ public class MyKVService implements KVService {
             }
             for (String param : query.split("&")) {
                 String[] pair = param.split("=");
-                if (pair.length == 2 && "id".equals(pair[0])) {
+                if (pair.length == EXPECTED_PARTS && ID_PARAM.equals(pair[0])) {
                     return pair[1];
                 }
             }
