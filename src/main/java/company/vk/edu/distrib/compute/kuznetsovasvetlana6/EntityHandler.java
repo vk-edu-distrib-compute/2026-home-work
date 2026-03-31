@@ -20,47 +20,62 @@ public class EntityHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         try (exchange) {
-            String query = exchange.getRequestURI().getQuery();
-            if (query == null || !query.startsWith("id=")) {
-                exchange.sendResponseHeaders(400, 0);
-                return;
-            }
-
-            String id = query.substring(3);
-            if (id.isEmpty()) {
-                exchange.sendResponseHeaders(400, 0);
-                return;
-            }
-
-            String method = exchange.getRequestMethod();
-
             try {
-                switch (method) {
-                    case "GET" -> {
-                        byte[] data = dao.get(id);
-                        exchange.sendResponseHeaders(200, data.length);
-                        try (OutputStream os = exchange.getResponseBody()) {
-                            os.write(data);
-                        }
-                    }
-                    case "PUT" -> {
-                        try (InputStream is = exchange.getRequestBody()) {
-                            byte[] body = is.readAllBytes();
-                            dao.upsert(id, body);
-                        }
-                        exchange.sendResponseHeaders(201, 0);
-                    }
-                    case "DELETE" -> {
-                        dao.delete(id);
-                        exchange.sendResponseHeaders(202, 0);
-                    }
-                    default -> exchange.sendResponseHeaders(405, 0);
+                String id = extractId(exchange);
+                if (id == null) {
+                    return;
                 }
+                handleMethod(exchange, id);
             } catch (NoSuchElementException e) {
-                exchange.sendResponseHeaders(404, 0);
-            } catch (IOException e) {
-                exchange.sendResponseHeaders(500, 0);
+                exchange.sendResponseHeaders(404, -1);
+            } catch (Exception e) {
+                exchange.sendResponseHeaders(500, -1);
             }
+        } 
+    }
+
+    private String extractId(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || !query.startsWith("id=")) {
+            exchange.sendResponseHeaders(400, 0);
+            return null;
         }
+        String id = query.substring(3);
+        if (id.isEmpty()) {
+            exchange.sendResponseHeaders(400, 0);
+            return null;
+        }
+        return id;
+    }
+
+    private void handleMethod(HttpExchange exchange, String id) throws IOException {
+        String method = exchange.getRequestMethod();
+        switch (method) {
+            case "GET" -> handleGet(exchange, id);
+            case "PUT" -> handlePut(exchange, id);
+            case "DELETE" -> handleDelete(exchange, id);
+            default -> exchange.sendResponseHeaders(405, 0);
+        }
+    }
+
+    private void handleGet(HttpExchange exchange, String id) throws IOException {
+        byte[] data = dao.get(id);
+        exchange.sendResponseHeaders(200, data.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(data);
+        }
+    }
+
+    private void handlePut(HttpExchange exchange, String id) throws IOException {
+        try (InputStream is = exchange.getRequestBody()) {
+            byte[] body = is.readAllBytes();
+            dao.upsert(id, body);
+        }
+        exchange.sendResponseHeaders(201, 0);
+    }
+
+    private void handleDelete(HttpExchange exchange, String id) throws IOException {
+        dao.delete(id);
+        exchange.sendResponseHeaders(202, 0);
     }
 }

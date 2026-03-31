@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 
 public class MyKVService implements KVService {
@@ -34,7 +35,7 @@ public class MyKVService implements KVService {
         try {
             dao.close();
         } catch (IOException e) {
-            // Игнорируем
+            throw new UncheckedIOException(e);
         }
     }
 }
