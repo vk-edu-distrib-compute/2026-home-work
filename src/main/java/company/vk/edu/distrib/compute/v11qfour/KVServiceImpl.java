@@ -63,34 +63,36 @@ public class KVServiceImpl implements KVService {
             return;
         }
         String id = validateId(exchange, query);
-        String method = exchange.getRequestMethod();
-        switch (method) {
-            case "GET" -> {
-                byte[] value = dao.get(id);
-                if (value == null) {
-                    exchange.sendResponseHeaders(404, -1);
-                } else {
-                    exchange.sendResponseHeaders(200, value.length);
-                    try (OutputStream os = exchange.getResponseBody()) {
-                        os.write(value);
-                    }
-                }
-            }
-            case "PUT" -> {
-                try (var temp = exchange.getRequestBody()) {
-                    byte[] body = temp.readAllBytes();
-                    dao.upsert(id, body);
-                }
-                exchange.sendResponseHeaders(201, -1);
-            }
-            case "DELETE" -> {
-                dao.delete(id);
-                exchange.sendResponseHeaders(202, -1);
-            }
-            default -> {
-                exchange.sendResponseHeaders(405, -1);
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> handleGet(exchange, id);
+            case "PUT" -> handlePut(exchange, id);
+            case "DELETE" -> handleDelete(exchange, id);
+            default -> exchange.sendResponseHeaders(405, -1);
+        }
+    }
+
+    private void handleGet(HttpExchange exchange, String id) throws IOException {
+        byte[] value = dao.get(id);
+        if (value == null) {
+            exchange.sendResponseHeaders(404, -1);
+        } else {
+            exchange.sendResponseHeaders(200, value.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(value);
             }
         }
+    }
+
+    private void handlePut(HttpExchange exchange, String id) throws IOException {
+        try (var is = exchange.getRequestBody()) {
+            dao.upsert(id, is.readAllBytes());
+        }
+        exchange.sendResponseHeaders(201, -1);
+    }
+
+    private void handleDelete(HttpExchange exchange, String id) throws IOException {
+        dao.delete(id);
+        exchange.sendResponseHeaders(202, -1);
     }
 
     private String validateId(HttpExchange exchange, String query) throws IOException {
