@@ -77,14 +77,14 @@ public class EntityHandler implements HttpHandler {
             storage.delete(id);
             exchange.sendResponseHeaders(StatusCode.ACCEPTED.getCode(), -1);
 
-            log.debug("Successfully handled DELETE-request on /v0/entity?{}.", method);
+            log.debug("Successfully handled DELETE-request on /v0/entity?{}.", queryString);
         } else {
             byte[] body = exchange.getRequestBody().readAllBytes();
 
             storage.upsert(id, body);
             exchange.sendResponseHeaders(StatusCode.CREATED.getCode(), -1);
 
-            log.debug("Successfully handled PUT-request on /v0/entity?{}.", method);
+            log.debug("Successfully handled PUT-request on /v0/entity?{}.", queryString);
         }
     }
 }

@@ -26,7 +26,7 @@ public class FileDao implements Dao<byte[]> {
     private static final Logger log = LoggerFactory.getLogger("server");
 
     private static final Path DEFAULT_ROOT_DIRECTORY = Path.of("storage");
-    private static final int DEFAULT_LIMIT = 100;
+    private static final int DEFAULT_LIMIT = 200;
 
     private final Path rootDirectory;
     private final Dao<byte[]> cache;
