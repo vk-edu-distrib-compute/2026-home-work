@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute.v11qfour;
 
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
@@ -25,29 +26,29 @@ public class KVServiceImpl implements KVService {
         this.address = createInetSocketAddress(port);
     }
 
-    private InetSocketAddress createInetSocketAddress(int port) {
-        if (port < MIN_PORT || port > MAX_PORT) {
-            log.error("Port must be in range 1 to 65535");
-            throw new IllegalArgumentException("Port must be in range 1 to 65535");
-        }
-        return new InetSocketAddress(InetAddress.getLoopbackAddress(), port);
-    }
-
     @Override
     public void start() {
         try {
             server = HttpServer.create(address, 0);
             server.createContext("/v0/status", exchange -> {
-                exchange.sendResponseHeaders(200, 0);
-                exchange.close();
+                try {
+                    exchange.sendResponseHeaders(200, -1);
+                } finally {
+                    exchange.close();
+                }
             });
             server.createContext("/v0/entity", exchange -> {
-                String query = exchange.getRequestURI().getQuery();
-                String key = query.split("=")[1];
-                byte [] answer = dao.get(key);
-                exchange.sendResponseHeaders(200, answer.length);
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(answer);
+                try {
+                    handleEntityRequest(exchange);
+                } catch (Exception e) {
+                    log.error("Error handling request", e);
+                    try {
+                        exchange.sendResponseHeaders(500, -1);
+                    } catch (IOException ignore) {
+                        // ignore
+                    }
+                } finally {
+                    exchange.close();
                 }
             });
             server.start();
@@ -60,5 +61,60 @@ public class KVServiceImpl implements KVService {
     @Override
     public void stop() {
         server.stop(0);
+    }
+
+    private void handleEntityRequest(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || !query.contains("id=")) {
+            exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+        String id = null;
+        for (String param : query.split("&")) {
+            if (param.startsWith("id=")) {
+                id = param.substring(3);
+                break;
+            }
+        }
+        if (id == null || id.isEmpty()) {
+            exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+        String method = exchange.getRequestMethod();
+        switch (method) {
+            case "GET" -> {
+                byte[] value = dao.get(id);
+                if (value == null) {
+                    exchange.sendResponseHeaders(404, -1);
+                } else {
+                    exchange.sendResponseHeaders(200, value.length);
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(value);
+                    }
+                }
+            }
+            case "PUT" -> {
+                try (var temp = exchange.getRequestBody()) {
+                    byte[] body = temp.readAllBytes();
+                    dao.upsert(id, body);
+                }
+                exchange.sendResponseHeaders(201, -1);
+            }
+            case "DELETE" -> {
+                dao.delete(id);
+                exchange.sendResponseHeaders(202, -1);
+            }
+            default -> {
+                exchange.sendResponseHeaders(405, -1);
+            }
+        }
+    }
+
+    private InetSocketAddress createInetSocketAddress(int port) {
+        if (port < MIN_PORT || port > MAX_PORT) {
+            log.error("Port must be in range 1 to 65535");
+            throw new IllegalArgumentException("Port must be in range 1 to 65535");
+        }
+        return new InetSocketAddress(InetAddress.getLoopbackAddress(), port);
     }
 }

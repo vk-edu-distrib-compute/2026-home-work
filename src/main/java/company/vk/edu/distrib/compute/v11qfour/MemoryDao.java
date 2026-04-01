@@ -12,21 +12,37 @@ public class MemoryDao implements Dao<byte[]> {
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+        validateKey(key);
         return storage.get(key);
     }
 
     @Override
     public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
+        validateKey(key);
+        validateValue(value);
         storage.put(key, value);
     }
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
+        validateKey(key);
         storage.remove(key);
     }
 
     @Override
     public void close() throws IOException {
         storage.clear();
+    }
+
+    private void validateKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Key must not be null or empty");
+        }
+    }
+
+    private void validateValue(byte[] value) {
+        if (value == null || value.length == 0) {
+            throw new IllegalArgumentException("Value must not be null or empty");
+        }
     }
 }
