@@ -1,12 +1,16 @@
 package company.vk.edu.distrib.compute;
 
-import module java.base;
-import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
+import java.io.IOException;
+import company.vk.edu.distrib.compute.d1gitale.KVServiceFactoryImpl;
 import org.slf4j.LoggerFactory;
 
-public class Server {
+public final class Server {
 
-    void main() throws IOException {
+    private Server() {
+        // Utility class
+    }
+
+    public static void main(String[] args) throws IOException {
         var log = LoggerFactory.getLogger("server");
         var port = 8080;
         KVService storage = new KVServiceFactoryImpl().create(port);
