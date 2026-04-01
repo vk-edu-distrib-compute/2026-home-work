@@ -14,7 +14,7 @@ import org.junit.platform.commons.util.ReflectionUtils;
 
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-            company.vk.edu.distrib.compute.d1gitale.KVServiceFactoryImpl.class
+            KVServiceFactoryImpl.class
     );
 
     @Override

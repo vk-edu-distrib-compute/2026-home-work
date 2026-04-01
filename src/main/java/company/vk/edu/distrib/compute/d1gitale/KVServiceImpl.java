@@ -66,6 +66,7 @@ public class KVServiceImpl implements KVService {
                     break;
                 default:
                     exchange.sendResponseHeaders(405, 0);
+                    break;
             }
         }
     }
