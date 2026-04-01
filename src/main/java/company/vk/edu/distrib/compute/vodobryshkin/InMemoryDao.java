@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Dao в оперативной памяти.
+ *
  * <p>
  *     Сохраняет всю информацию в ConcurrentHashMap.
  * </p>
