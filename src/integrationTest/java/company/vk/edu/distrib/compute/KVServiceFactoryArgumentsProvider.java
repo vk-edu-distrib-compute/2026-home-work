@@ -1,9 +1,10 @@
 package company.vk.edu.distrib.compute;
 
+import company.vk.edu.distrib.compute.d1gitale.KVServiceFactoryImpl;
+
 import java.util.Set;
 import java.util.stream.Stream;
 
-import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
