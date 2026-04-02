@@ -1,0 +1,13 @@
+package company.vk.edu.distrib.compute.bobridze5;
+
+import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.KVServiceFactory;
+
+import java.io.IOException;
+
+public class BobridzeKVServiceFactory extends KVServiceFactory {
+    @Override
+    protected KVService doCreate(int port) throws IOException {
+        return new BobridzeKVService(port, new InMemoryDao());
+    }
+}
