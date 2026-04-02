@@ -28,7 +28,7 @@ class DefaultKVService implements KVService {
     @Override
     public void start() {
         if (started) {
-            throw new RuntimeException("You Can't Start Http Server Twice");
+            throw new IllegalStateException("You Can't Start Http Server Twice");
         }
 
         httpServer.start();
@@ -46,10 +46,10 @@ class DefaultKVService implements KVService {
     @Override
     public void stop() {
         if (!started) {
-            throw new RuntimeException("You Can't Stop KVService Without Starting It");
+            throw new IllegalStateException("You Can't Stop KVService Without Starting It");
         }
         if (stopped) {
-            throw new RuntimeException("You Can't Stop KVService Twice");
+            throw new IllegalStateException("You Can't Stop KVService Twice");
         }
 
         httpServer.stop(STOP_DELAY);
