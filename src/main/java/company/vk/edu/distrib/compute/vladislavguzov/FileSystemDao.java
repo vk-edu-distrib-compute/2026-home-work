@@ -12,6 +12,9 @@ public class FileSystemDao implements Dao<byte[]> {
     private final Path basePath;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    private static final int MAX_FILENAME_LENGTH = 200;
+    private static final int MAX_KEY_LENGTH = 1024;
+
     public FileSystemDao(String basePath) throws IOException {
         this.basePath = Paths.get(basePath).toAbsolutePath().normalize();
         Files.createDirectories(this.basePath);
@@ -74,8 +77,7 @@ public class FileSystemDao implements Dao<byte[]> {
 
     private Path resolveFilePath(String key) {
         String safeFileName = key.replaceAll("[/\\\\:*?\"<>|]", "_");
-        int safeFileNameLength = 200;
-        if (safeFileName.length() > safeFileNameLength) {
+        if (safeFileName.length() > MAX_FILENAME_LENGTH) {
             safeFileName = safeFileName.substring(0, 200)
                     + "_"
                     + Integer.toHexString(key.hashCode());
@@ -87,8 +89,7 @@ public class FileSystemDao implements Dao<byte[]> {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("key cannot be null or blank");
         }
-        int safeKeyLength = 1024;
-        if (key.length() > safeKeyLength) {
+        if (key.length() > MAX_KEY_LENGTH) {
             throw new IllegalArgumentException("key too long (max 1024 chars)");
         }
     }

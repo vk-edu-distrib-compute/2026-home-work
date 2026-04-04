@@ -45,25 +45,23 @@ public class InMemoryKVService implements KVService {
             final String id = parseId(query);
             final byte[] value;
             switch (requestMethod) {
-                case "GET":
+                case "GET" -> {
                     value = dao.get(id);
                     http.sendResponseHeaders(200, value.length);
                     http.getResponseBody().write(value);
-                    break;
-                case "PUT":
-                    InputStream requestBody = http.getRequestBody();
-                    value = requestBody.readAllBytes();
-                    requestBody.close();
-                    dao.upsert(id, value);
-                    http.sendResponseHeaders(201, 0);
-                    break;
-                case "DELETE":
+                }
+                case "PUT" -> {
+                    try (InputStream requestBody = http.getRequestBody()) {
+                        value = requestBody.readAllBytes();
+                        dao.upsert(id, value);
+                        http.sendResponseHeaders(201, 0);
+                    }
+                }
+                case "DELETE" -> {
                     dao.delete(id);
                     http.sendResponseHeaders(202, 0);
-                    break;
-                default:
-                    http.sendResponseHeaders(405, 0);
-                    break;
+                }
+                default -> http.sendResponseHeaders(405, 0);
             }
             http.close();
         }));
