@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
 public class KVServiceImpl implements KVService {
