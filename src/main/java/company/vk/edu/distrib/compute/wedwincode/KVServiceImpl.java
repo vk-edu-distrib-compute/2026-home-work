@@ -18,15 +18,21 @@ import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class KVServiceImpl implements KVService {
     private static final int EMPTY_RESPONSE = -1;
+    private static final String GET_METHOD = "GET";
+    private static final String PUT_METHOD = "PUT";
+    private static final String DELETE_METHOD = "DELETE";
     private static final int THREADS = 4;
 
     private boolean isStarted;
     private final Dao<byte[]> dao;
     private final HttpServer server;
     private final ExecutorService executor;
+
+    private final ReentrantLock lifecycleLock = new ReentrantLock();
 
     public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
         this.dao = dao;
@@ -39,32 +45,42 @@ public class KVServiceImpl implements KVService {
     }
 
     @Override
-    public synchronized void start() {
-        if (isStarted) {
-            throw new ServiceStartException("service already started");
+    public void start() {
+        lifecycleLock.lock();
+        try {
+            if (isStarted) {
+                throw new ServiceStartException("service already started");
+            }
+            isStarted = true;
+        } finally {
+            lifecycleLock.unlock();
         }
-        isStarted = true;
         server.start();
     }
 
     @Override
-    public synchronized void stop() {
-        if (!isStarted) {
-            throw new ServiceStopException("service was already stopped");
+    public void stop() {
+        lifecycleLock.lock();
+        try {
+            if (!isStarted) {
+                throw new ServiceStopException("service was already stopped");
+            }
+            isStarted = false;
+        } finally {
+            lifecycleLock.unlock();
         }
+
         server.stop(0);
         executor.shutdown();
         try {
             dao.close();
         } catch (IOException e) {
             throw new ServiceStopException("dao was not closed successfully", e);
-        } finally {
-            isStarted = false;
         }
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        if (!GET_METHOD.equals(exchange.getRequestMethod())) {
             handleUnsupportedMethod(exchange);
             return;
         }
@@ -81,9 +97,9 @@ public class KVServiceImpl implements KVService {
         }
         try {
             switch (exchange.getRequestMethod()) {
-                case "GET" -> handleGetEntity(id, exchange);
-                case "PUT" -> handlePutEntity(id, exchange);
-                case "DELETE" -> handleDeleteEntity(id, exchange);
+                case GET_METHOD -> handleGetEntity(id, exchange);
+                case PUT_METHOD -> handlePutEntity(id, exchange);
+                case DELETE_METHOD -> handleDeleteEntity(id, exchange);
                 default -> handleUnsupportedMethod(exchange);
             }
         } catch (IOException | RuntimeException e) {
@@ -137,16 +153,18 @@ public class KVServiceImpl implements KVService {
             throw new IllegalArgumentException();
         }
 
+        String idParamName = "id";
+        int paramPartsCount = 2;
         for (String q : query.split("&")) {
             String[] split = q.split("=", 2);
-            if (split.length != 2) {
+            if (split.length != paramPartsCount) {
                 continue;
             }
 
             String name = URLDecoder.decode(split[0], StandardCharsets.UTF_8);
             String value = URLDecoder.decode(split[1], StandardCharsets.UTF_8);
 
-            if ("id".equals(name) && !value.isEmpty()) {
+            if (idParamName.equals(name) && !value.isEmpty()) {
                 return value;
             }
         }
