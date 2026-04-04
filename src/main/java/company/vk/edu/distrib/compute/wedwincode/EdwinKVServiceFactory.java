@@ -7,8 +7,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 public class EdwinKVServiceFactory extends KVServiceFactory {
+    private static final Path DATA_DIR = Path.of(".data", "wedwincode");
+
     @Override
     protected KVService doCreate(int port) throws IOException {
-        return new KVServiceImpl(port, new PersistentDao(Path.of("db/")));
+        return new KVServiceImpl(port, new PersistentDao(DATA_DIR));
     }
 }

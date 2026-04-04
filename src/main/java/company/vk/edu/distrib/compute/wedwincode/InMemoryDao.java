@@ -27,6 +27,9 @@ public class InMemoryDao<T> implements Dao<T> {
     @Override
     public void upsert(String key, T value) throws IllegalArgumentException {
         checkKey(key);
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         storage.put(key, value);
     }
 

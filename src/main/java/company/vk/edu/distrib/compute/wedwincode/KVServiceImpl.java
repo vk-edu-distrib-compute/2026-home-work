@@ -4,35 +4,44 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.wedwincode.exceptions.ServerStopException;
+import company.vk.edu.distrib.compute.wedwincode.exceptions.ServiceStartException;
+import company.vk.edu.distrib.compute.wedwincode.exceptions.ServiceStopException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class KVServiceImpl implements KVService {
     private static final int EMPTY_RESPONSE = -1;
+    private static final int THREADS = 4;
 
     private boolean isStarted;
     private final Dao<byte[]> dao;
     private final HttpServer server;
+    private final ExecutorService executor;
 
     public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
         this.dao = dao;
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.server = HttpServer.create(new InetSocketAddress(
+                InetAddress.getLoopbackAddress(), port), 0);
         this.server.createContext("/v0/status", this::handleStatus);
         this.server.createContext("/v0/entity", this::handleEntity);
-        this.server.setExecutor(Executors.newFixedThreadPool(4));
+        this.executor = Executors.newFixedThreadPool(THREADS);
+        this.server.setExecutor(executor);
     }
 
     @Override
     public synchronized void start() {
         if (isStarted) {
-            return;
+            throw new ServiceStartException("service already started");
         }
         isStarted = true;
         server.start();
@@ -41,44 +50,55 @@ public class KVServiceImpl implements KVService {
     @Override
     public synchronized void stop() {
         if (!isStarted) {
-            return;
+            throw new ServiceStopException("service was already stopped");
         }
         server.stop(0);
+        executor.shutdown();
         try {
             dao.close();
         } catch (IOException e) {
-            throw new ServerStopException("dao was not closed successfully", e);
+            throw new ServiceStopException("dao was not closed successfully", e);
+        } finally {
+            isStarted = false;
         }
-        isStarted = false;
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            handleUnsupportedMethod(exchange);
+            return;
+        }
         sendEmptyResponse(HttpURLConnection.HTTP_OK, exchange);
     }
 
     private void handleEntity(HttpExchange exchange) throws IOException {
         String id;
         try {
-            id = parseQuery(exchange.getRequestURI().getQuery());
+            id = parseQuery(exchange.getRequestURI().getRawQuery());
         } catch (IllegalArgumentException e) {
             sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
             return;
         }
-
-        switch (exchange.getRequestMethod()) {
-            case "GET" -> handleGetEntity(id, exchange);
-            case "PUT" -> handlePutEntity(id, exchange);
-            case "DELETE" -> handleDeleteEntity(id, exchange);
-            default -> handleUnsupportedMethod(exchange);
+        try {
+            switch (exchange.getRequestMethod()) {
+                case "GET" -> handleGetEntity(id, exchange);
+                case "PUT" -> handlePutEntity(id, exchange);
+                case "DELETE" -> handleDeleteEntity(id, exchange);
+                default -> handleUnsupportedMethod(exchange);
+            }
+        } catch (IOException | RuntimeException e) {
+            sendEmptyResponse(HttpURLConnection.HTTP_INTERNAL_ERROR, exchange);
         }
     }
 
     private void handleGetEntity(String id, HttpExchange exchange) throws IOException {
         try {
             byte[] data = dao.get(id);
-            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, data.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(data);
+            try (exchange) {
+                exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, data.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(data);
+                }
             }
         } catch (NoSuchElementException e) {
             sendEmptyResponse(HttpURLConnection.HTTP_NOT_FOUND, exchange);
@@ -119,8 +139,15 @@ public class KVServiceImpl implements KVService {
 
         for (String q : query.split("&")) {
             String[] split = q.split("=", 2);
-            if (split.length == 2 && "id".equals(split[0]) && !split[1].isEmpty()) {
-                return split[1];
+            if (split.length != 2) {
+                continue;
+            }
+
+            String name = URLDecoder.decode(split[0], StandardCharsets.UTF_8);
+            String value = URLDecoder.decode(split[1], StandardCharsets.UTF_8);
+
+            if ("id".equals(name) && !value.isEmpty()) {
+                return value;
             }
         }
 
