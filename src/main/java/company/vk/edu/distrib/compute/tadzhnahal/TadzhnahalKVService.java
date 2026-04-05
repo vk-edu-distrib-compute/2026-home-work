@@ -10,8 +10,8 @@ import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
 
 public class TadzhnahalKVService implements KVService {
-    private static final String statusPath = "/v0/status";
-    private static final String entityPath = "/v0/entity";
+    private static final String STATUS_PATH = "/v0/status";
+    private static final String ENTITY_PATH = "/v0/entity";
 
     private final int port;
     private final Dao<byte[]> dao;
@@ -30,8 +30,8 @@ public class TadzhnahalKVService implements KVService {
 
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext(statusPath, this::handleStatus);
-            server.createContext(entityPath, this::handleEntity);
+            server.createContext(STATUS_PATH, this::handleStatus);
+            server.createContext(ENTITY_PATH, this::handleEntity);
             server.start();
         } catch (IOException e) {
             throw new IllegalStateException("Cannot start server", e);
@@ -56,7 +56,7 @@ public class TadzhnahalKVService implements KVService {
 
     private void handleStatus(HttpExchange exchange) throws IOException {
         try (exchange) {
-            if (!statusPath.equals(exchange.getRequestURI().getPath())) {
+            if (!STATUS_PATH.equals(exchange.getRequestURI().getPath())) {
                 sendEmptyResponse(exchange, 404);
                 return;
             }
@@ -73,7 +73,7 @@ public class TadzhnahalKVService implements KVService {
     private void handleEntity(HttpExchange exchange) throws IOException {
         try (exchange) {
             try {
-                if (!entityPath.equals(exchange.getRequestURI().getPath())) {
+                if (!ENTITY_PATH.equals(exchange.getRequestURI().getPath())) {
                     sendEmptyResponse(exchange, 404);
                     return;
                 }
