@@ -1,7 +1,7 @@
 package company.vk.edu.distrib.compute.tadzhnahal;
 
-import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
 
@@ -41,7 +41,7 @@ public class TadzhnahalKVService implements KVService {
     @Override
     public void stop() {
         if (server == null) {
-            throw new IllegalStateException("Sever is not started");
+            throw new IllegalStateException("Server is not started");
         }
 
         server.stop(0);
@@ -49,13 +49,13 @@ public class TadzhnahalKVService implements KVService {
 
         try {
             dao.close();
-        }  catch (IOException e) {
+        } catch (IOException e) {
             throw new IllegalStateException("Cannot close dao", e);
         }
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        try {
+        try (exchange) {
             if (!STATUS_PATH.equals(exchange.getRequestURI().getPath())) {
                 sendEmptyResponse(exchange, 404);
                 return;
@@ -67,13 +67,11 @@ public class TadzhnahalKVService implements KVService {
             }
 
             sendEmptyResponse(exchange, 200);
-        } finally {
-            exchange.close();
         }
     }
 
     private void handleEntity(HttpExchange exchange) throws IOException {
-        try {
+        try (exchange) {
             if (!ENTITY_PATH.equals(exchange.getRequestURI().getPath())) {
                 sendEmptyResponse(exchange, 404);
                 return;
@@ -101,8 +99,6 @@ public class TadzhnahalKVService implements KVService {
             sendEmptyResponse(exchange, 404);
         } catch (IOException e) {
             sendEmptyResponse(exchange, 500);
-        } finally {
-            exchange.close();
         }
     }
 

@@ -12,7 +12,7 @@ public class InMemoryDao implements Dao<byte[]> {
     private final Map<String, byte[]> storage = new ConcurrentHashMap<>();
 
     @Override
-    public byte [] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+    public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         validateKey(key);
 
         byte[] value = storage.get(key);
@@ -28,7 +28,7 @@ public class InMemoryDao implements Dao<byte[]> {
         validateKey(key);
 
         if (value == null) {
-            throw new IllegalArgumentException("Value most not be null");
+            throw new IllegalArgumentException("Value must not be null");
         }
 
         storage.put(key, Arrays.copyOf(value, value.length));
@@ -41,9 +41,9 @@ public class InMemoryDao implements Dao<byte[]> {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
+        storage.clear();
     }
-
 
     private void validateKey(String key) {
         if (key == null || key.isEmpty()) {
@@ -51,5 +51,3 @@ public class InMemoryDao implements Dao<byte[]> {
         }
     }
 }
-
-
