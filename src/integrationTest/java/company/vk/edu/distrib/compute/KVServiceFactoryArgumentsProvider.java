@@ -10,15 +10,23 @@ import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.support.ParameterDeclarations;
 import org.junit.platform.commons.util.ReflectionUtils;
 
+import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
+import company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory;
+import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
+import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
+import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
+import company.vk.edu.distrib.compute.ronshinvsevolod.RonshinInMemoryKVServiceFactory;
+import company.vk.edu.distrib.compute.ronshinvsevolod.RonshinFileKVServiceFactory;
+
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl.class,
-        company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory.class,
-        company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory.class,
-        company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory.class,
-        company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory.class,
-        company.vk.edu.distrib.compute.ronshinvsevolod.InMemoryKVServiceFactory.class,
-        company.vk.edu.distrib.compute.ronshinvsevolod.FileKVServiceFactory.class
+        KVServiceFactoryImpl.class,
+        InMemoryKVServiceFactory.class,
+        B10nicleKVServiceFactory.class,
+        NihuawayKVServiceFactory.class,
+        Vitos23KVServiceFactory.class,
+        RonshinInMemoryKVServiceFactory.class,
+        RonshinFileKVServiceFactory.class
     );
 
     @Override
