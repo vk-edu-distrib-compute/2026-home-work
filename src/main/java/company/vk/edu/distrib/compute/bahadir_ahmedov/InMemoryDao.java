@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.BahadirAhmedov;
+package company.vk.edu.distrib.compute.bahadir_ahmedov;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -7,13 +7,13 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class InMemoryDao implements Dao<byte[]>  {
+public class InMemoryDao implements Dao<byte[]> {
 
     private final Map<String, byte[]> storage = new ConcurrentHashMap<>();
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
-        return  storage.get(key);
+        return storage.get(key);
     }
 
     @Override
@@ -27,7 +27,7 @@ public class InMemoryDao implements Dao<byte[]>  {
     }
 
     @Override
-    public void close() throws IOException{
-
+    public void close() throws IOException {
+        storage.clear();
     }
 }
