@@ -2,12 +2,13 @@ package company.vk.edu.distrib.compute.marinchanka;
 
 import company.vk.edu.distrib.compute.Dao;
 import java.io.IOException;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class InMemoryDao implements Dao<byte[]> {
-    private final ConcurrentHashMap<String, byte[]> storage = new ConcurrentHashMap<>();
-    private volatile boolean closed = false;
+    private final Map<String, byte[]> storage = new ConcurrentHashMap<>();
+    private boolean closed;
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
@@ -45,7 +46,7 @@ public class InMemoryDao implements Dao<byte[]> {
     }
 
     private void validateKey(String key) {
-        if (key == null || key.trim().isEmpty()) {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Key cannot be null or empty");
         }
     }

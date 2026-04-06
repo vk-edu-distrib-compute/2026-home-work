@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.marinchanka;
 import company.vk.edu.distrib.compute.Dao;
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -10,8 +11,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class PersistentDao implements Dao<byte[]> {
     private final Path storageDir;
-    private final ConcurrentHashMap<String, ReadWriteLock> keyLocks = new ConcurrentHashMap<>();
-    private volatile boolean closed = false;
+    private final Map<String, ReadWriteLock> keyLocks = new ConcurrentHashMap<>();
+    private boolean closed;
 
     public PersistentDao(String storagePath) throws IOException {
         this.storageDir = Paths.get(storagePath);
@@ -94,7 +95,7 @@ public class PersistentDao implements Dao<byte[]> {
     }
 
     private void validateKey(String key) {
-        if (key == null || key.trim().isEmpty()) {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Key cannot be null or empty");
         }
     }

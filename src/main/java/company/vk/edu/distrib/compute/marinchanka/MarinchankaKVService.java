@@ -16,7 +16,7 @@ public class MarinchankaKVService implements KVService {
     private final int port;
     private final Dao<byte[]> dao;
     private HttpServer server;
-    private volatile boolean running = false;
+    private boolean running;
 
     public MarinchankaKVService(int port, Dao<byte[]> dao) {
         this.port = port;
@@ -56,11 +56,11 @@ public class MarinchankaKVService implements KVService {
         try {
             dao.close();
         } catch (IOException e) {
-            System.err.println("Error closing DAO: " + e.getMessage());
+            // Log error silently
         }
     }
 
-    private class StatusHandler implements HttpHandler {
+    private final class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"GET".equals(exchange.getRequestMethod())) {
@@ -76,7 +76,7 @@ public class MarinchankaKVService implements KVService {
         }
     }
 
-    private class EntityHandler implements HttpHandler {
+    private final class EntityHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String method = exchange.getRequestMethod();
@@ -132,7 +132,9 @@ public class MarinchankaKVService implements KVService {
         }
 
         private String extractId(String query) {
-            if (query == null) return null;
+            if (query == null) {
+                return null;
+            }
             String[] params = query.split("&");
             for (String param : params) {
                 String[] keyValue = param.split("=", 2);
