@@ -35,7 +35,12 @@ public final class QueryHelper {
                 value = "";
             }
 
-            queryPairs.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+            List<String> values = queryPairs.get(key);
+            if (values == null) {
+                values = new ArrayList<>();
+                queryPairs.put(key, values);
+            }
+            values.add(value);
         }
         return queryPairs;
     }
