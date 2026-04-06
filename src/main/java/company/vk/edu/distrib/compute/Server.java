@@ -1,17 +1,29 @@
 package company.vk.edu.distrib.compute;
 
-import module java.base;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
-import org.slf4j.LoggerFactory;
+import company.vk.edu.distrib.compute.arslan05t.MyKVServiceFactory;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class Server {
+public final class Server {
+    private static final Logger LOG = Logger.getLogger(Server.class.getName());
 
-    void main() throws IOException {
-        var log = LoggerFactory.getLogger("server");
-        var port = 8080;
-        KVService storage = new DummyKVServiceFactory().create(port);
-        storage.start();
-        log.info("Server started on port {}", port);
-        Runtime.getRuntime().addShutdownHook(new Thread(storage::stop));
+    private Server() {
+        // Utility class
+    }
+
+    public static void main(String[] args) throws IOException {
+        int port = 8080;
+        if (args.length > 0) {
+            port = Integer.parseInt(args[0]);
+        }
+
+        KVServiceFactory factory = new MyKVServiceFactory();
+        KVService service = factory.create(port);
+        service.start();
+
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("Server started on port " + port);
+        }
     }
 }

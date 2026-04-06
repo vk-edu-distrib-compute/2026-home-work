@@ -1,0 +1,23 @@
+package company.vk.edu.distrib.compute.arslan05t;
+
+import company.vk.edu.distrib.compute.Dao;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class InMemoryDao implements Dao<String, byte[]> {
+    private final ConcurrentHashMap<String, byte[]> storage = new ConcurrentHashMap<>();
+
+    @Override
+    public byte[] get(String key) {
+        return storage.get(key);
+    }
+
+    @Override
+    public void upsert(String key, byte[] value) {
+        storage.put(key, value);
+    }
+
+    @Override
+    public void delete(String key) {
+        storage.remove(key);
+    }
+}
