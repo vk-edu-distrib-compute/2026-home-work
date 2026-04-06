@@ -41,11 +41,7 @@ public final class QueryHelper {
     }
 
     private static void addValueToMap(Map<String, List<String>> map, String key, String value) {
-        List<String> values = map.get(key);
-        if (values == null) {
-            values = new ArrayList<>();
-            map.put(key, values);
-        }
+        List<String> values = map.computeIfAbsent(key, k -> new ArrayList<>());
         values.add(value);
     }
 }
