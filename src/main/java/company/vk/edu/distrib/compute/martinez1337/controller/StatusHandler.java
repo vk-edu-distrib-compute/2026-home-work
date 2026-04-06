@@ -8,6 +8,7 @@ public class StatusHandler extends BaseHttpHandler {
 
     @Override
     protected void handleGet(HttpExchange exchange) throws IOException {
+        log.info("Handling GET request");
         exchange.sendResponseHeaders(ResponseStatus.OK.getCode(), 0);
     }
 }

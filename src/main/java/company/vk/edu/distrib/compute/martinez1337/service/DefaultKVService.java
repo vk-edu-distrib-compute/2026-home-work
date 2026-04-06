@@ -9,11 +9,11 @@ import company.vk.edu.distrib.compute.martinez1337.controller.StatusHandler;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-public class InMemoryKVService implements KVService {
+public class DefaultKVService implements KVService {
     private final Dao<byte[]> dao;
     private final HttpServer server;
 
-    public InMemoryKVService(int port, Dao<byte[]> dao) throws IOException {
+    public DefaultKVService(int port, Dao<byte[]> dao) throws IOException {
         this.dao = dao;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         initServer();

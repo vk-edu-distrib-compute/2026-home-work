@@ -4,7 +4,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
-import company.vk.edu.distrib.compute.martinez1337.service.InMemoryKVServiceFactory;
+import company.vk.edu.distrib.compute.martinez1337.service.DefaultKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
@@ -18,7 +18,7 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
         KVServiceFactoryImpl.class,
-        InMemoryKVServiceFactory.class,
+        DefaultKVServiceFactory.class,
         Vitos23KVServiceFactory.class,
         NihuawayKVServiceFactory.class,
         B10nicleKVServiceFactory.class

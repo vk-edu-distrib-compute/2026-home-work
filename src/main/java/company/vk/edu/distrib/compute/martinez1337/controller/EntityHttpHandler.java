@@ -22,7 +22,7 @@ public class EntityHttpHandler extends BaseHttpHandler {
 
     @Override
     protected void handleGet(HttpExchange exchange) throws IOException {
-        log.debug("Handle GET request");
+        log.info("Handle GET request");
         Map<String, List<String>> params = QueryHelper.parseParams(exchange.getRequestURI().getRawQuery());
 
         if (params.isEmpty() || !params.containsKey(ID_PARAM_PREFIX)) {
@@ -38,7 +38,7 @@ public class EntityHttpHandler extends BaseHttpHandler {
 
     @Override
     protected void handlePut(HttpExchange exchange) throws IOException {
-        log.debug("Handle PUT request");
+        log.info("Handle PUT request");
         Map<String, List<String>> params = QueryHelper.parseParams(exchange.getRequestURI().getRawQuery());
 
         if (params.isEmpty() || !params.containsKey(ID_PARAM_PREFIX)) {
@@ -54,7 +54,7 @@ public class EntityHttpHandler extends BaseHttpHandler {
 
     @Override
     protected void handleDelete(HttpExchange exchange) throws IOException {
-        log.debug("Handle DELETE request");
+        log.info("Handle DELETE request");
         Map<String, List<String>> params = QueryHelper.parseParams(exchange.getRequestURI().getRawQuery());
 
         if (params.isEmpty() || !params.containsKey(ID_PARAM_PREFIX)) {
