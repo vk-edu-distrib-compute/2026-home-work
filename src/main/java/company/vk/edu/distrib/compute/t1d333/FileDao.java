@@ -9,9 +9,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Base64;
 import java.util.NoSuchElementException;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public final class FileDao implements Dao<byte[]> {
     private final Path rootDir;
+    private final Lock lock = new ReentrantLock();
 
     public FileDao(Path rootDir) throws IOException {
         this.rootDir = rootDir;
@@ -23,32 +26,47 @@ public final class FileDao implements Dao<byte[]> {
     }
 
     @Override
-    public synchronized byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
-        Path file = fileFor(key);
-        if (Files.notExists(file)) {
-            throw new NoSuchElementException("Key not found: " + key);
+    public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+        lock.lock();
+        try {
+            Path file = fileFor(key);
+            if (Files.notExists(file)) {
+                throw new NoSuchElementException("Key not found: " + key);
+            }
+            return Files.readAllBytes(file);
+        } finally {
+            lock.unlock();
         }
-        return Files.readAllBytes(file);
     }
 
     @Override
-    public synchronized void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
-        Files.write(
-            fileFor(key),
-            value,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE
-        );
+    public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
+        lock.lock();
+        try {
+            Files.write(
+                fileFor(key),
+                value,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE
+            );
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized void delete(String key) throws IllegalArgumentException, IOException {
-        Files.deleteIfExists(fileFor(key));
+    public void delete(String key) throws IllegalArgumentException, IOException {
+        lock.lock();
+        try {
+            Files.deleteIfExists(fileFor(key));
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
         // persistent filesystem storage: nothing to close
     }
 
