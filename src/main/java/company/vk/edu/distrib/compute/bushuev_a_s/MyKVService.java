@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.bushuev_a_s.MyFileDao.DaoException;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -134,13 +135,16 @@ public class MyKVService implements KVService {
                 delegate.handle(exchange);
             } catch (IllegalArgumentException e) {
                 log.debug("Bad request", e); // Добавлено логирование
-                exchange.sendResponseHeaders(400, 0);
+                exchange.sendResponseHeaders(400, -1);
             } catch (NoSuchElementException e) {
                 log.debug("Not found", e); // Добавлено логирование
-                exchange.sendResponseHeaders(404, 0);
+                exchange.sendResponseHeaders(404, -1);
             } catch (IOException e) {
                 log.error("Internal server error", e); // Добавлено логирование
-                exchange.sendResponseHeaders(500, 0);
+                exchange.sendResponseHeaders(500, -1);
+            } catch (DaoException e) {
+                log.error("Storage error", e);
+                exchange.sendResponseHeaders(500, -1);
             }
         }
     }

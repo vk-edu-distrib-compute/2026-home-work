@@ -27,7 +27,7 @@ public class MyFileDao implements Dao<byte[]> {
         try {
             return Files.readAllBytes(filePath);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to read file", e);
+            throw new DaoException("Failed to read file", e);
         }
     }
 
@@ -39,7 +39,7 @@ public class MyFileDao implements Dao<byte[]> {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to write file", e);
+            throw new DaoException("Failed to write file", e);
         }
     }
 
@@ -49,7 +49,7 @@ public class MyFileDao implements Dao<byte[]> {
         try {
             Files.deleteIfExists(filePath);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to delete file", e);
+            throw new DaoException("Failed to delete file", e);
         }
     }
 
@@ -57,4 +57,11 @@ public class MyFileDao implements Dao<byte[]> {
     public void close() throws IOException {
         //yet empty
     }
+
+    public class DaoException extends RuntimeException {
+        public DaoException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
 }
