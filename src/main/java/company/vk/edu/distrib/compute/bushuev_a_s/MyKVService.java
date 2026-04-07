@@ -23,7 +23,6 @@ public class MyKVService implements KVService {
 
     /**
      * Создаёт новый экземпляр сервиса хранения ключ-значение.
-     *
      * @param port порт для запуска HTTP сервера
      * @param dao  DAO для работы с хранилищем данных
      * @throws IOException если не удаётся создать HTTP сервер
@@ -122,7 +121,6 @@ public class MyKVService implements KVService {
 
         /**
          * Создаёт обёртку для обработчика с перехватом исключений.
-         *
          * @param delegate делегируемый обработчик
          */
         private ErrorHttpHandler(HttpHandler delegate) {
