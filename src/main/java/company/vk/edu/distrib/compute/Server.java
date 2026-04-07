@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 
 public class Server {
 
-    void main(String[] args) throws IOException {
+    void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
         if (isClusterMode(args)) {
             List<Integer> ports = Arrays.asList(8080, 8081);
@@ -24,7 +24,7 @@ public class Server {
         }
     }
 
-    private boolean isClusterMode(String[] args) {
+    private boolean isClusterMode(String... args) {
         return args.length > 0 && args[0].startsWith("cluster");
     }
 }
