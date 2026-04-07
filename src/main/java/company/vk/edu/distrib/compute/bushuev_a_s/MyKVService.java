@@ -19,7 +19,7 @@ public class MyKVService implements KVService {
     private static final String ID_PREFIX = "id=";
 
     private final HttpServer server;
-    //private final Dao<byte[]> dao;
+    private final Dao<byte[]> dao;
 
     /**
      * Создаёт новый экземпляр сервиса хранения ключ-значение.
@@ -30,55 +30,61 @@ public class MyKVService implements KVService {
      */
     public MyKVService(int port, Dao<byte[]> dao) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.dao = dao;
 
         server.createContext("/v0/status", new ErrorHttpHandler(
-                http -> {
-                    final var method = http.getRequestMethod();
-                    if (Objects.equals("GET",method)) {
-                        http.sendResponseHeaders(200, -1);
-                        // No response body required for status check
-                    } else {
-                        http.sendResponseHeaders(405, -1);
-                    }
-                }));
+                this::handleStatus));
 
         server.createContext("/v0/entity", new ErrorHttpHandler(
-                http -> {
-                    final String method = http.getRequestMethod();
-                    final String query = http.getRequestURI().getQuery();
-                    final String id = parceId(query);
-
-                    // No response body required for status check
-                    switch (method) {
-                        case "GET":
-                            // No response body required for status check
-                            final byte[] value = dao.get(id);
-                            try (var os = http.getResponseBody()) {
-                                http.sendResponseHeaders(200, value.length);
-                                os.write(value); // Запись данных в поток
-                            }
-                            break;
-                        case "PUT":
-                            // No response body required for status check
-                            try (InputStream is = http.getRequestBody()) {
-                                // No response body required for status check
-                                final byte[] upsertValue = is.readAllBytes();
-                                dao.upsert(id, upsertValue);
-                            }
-                            http.sendResponseHeaders(201, -1);
-                            break;
-                        case "DELETE":
-                            // No response body required for status check
-                            dao.delete(id);
-                            http.sendResponseHeaders(202, -1);
-                            break;
-                        default:
-                            // No response body required for status check
-                            http.sendResponseHeaders(405, -1);
-                            break;
-                    }
-                }
+                this::handleEntity
         ));
+    }
+
+    private void handleStatus(HttpExchange http) throws IOException {
+        final var method = http.getRequestMethod();
+        if (Objects.equals("GET",method)) {
+            http.sendResponseHeaders(200, -1);
+            // No response body required for status check
+        } else {
+            http.sendResponseHeaders(405, -1);
+        }
+
+    }
+
+    private void handleEntity(HttpExchange http) throws IOException {
+        final var method = http.getRequestMethod();
+        final var query = http.getRequestURI().getQuery();
+        final String id = parceId(query);
+
+        // No response body required for status check
+        switch (method) {
+            case "GET":
+                // No response body required for status check
+                final byte[] value = dao.get(id);
+                try (var os = http.getResponseBody()) {
+                    http.sendResponseHeaders(200, value.length);
+                    os.write(value); // Запись данных в поток
+                }
+                break;
+            case "PUT":
+                // No response body required for status check
+                try (InputStream is = http.getRequestBody()) {
+                    // No response body required for status check
+                    final byte[] upsertValue = is.readAllBytes();
+                    dao.upsert(id, upsertValue);
+                }
+                http.sendResponseHeaders(201, -1);
+                break;
+            case "DELETE":
+                // No response body required for status check
+                dao.delete(id);
+                http.sendResponseHeaders(202, -1);
+                break;
+            default:
+                // No response body required for status check
+                http.sendResponseHeaders(405, -1);
+                break;
+        }
     }
 
     /**
@@ -132,7 +138,7 @@ public class MyKVService implements KVService {
                 log.debug("Bad request", e); // Добавлено логирование
                 exchange.sendResponseHeaders(400, 0);
             } catch (NoSuchElementException e) {
-                log.debug("Not found", e);   // Добавлено логирование
+                log.debug("Not found", e); // Добавлено логирование
                 exchange.sendResponseHeaders(404, 0);
             } catch (IOException e) {
                 log.error("Internal server error", e); // Добавлено логирование

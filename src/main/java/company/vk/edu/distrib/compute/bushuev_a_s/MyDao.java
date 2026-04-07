@@ -13,11 +13,11 @@ public class MyDao implements Dao<byte[]> {
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
-        if (key==null || key.isBlank()) {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("key is null or blank");
         }
         final var value = storage.get(key);
-        if (value==null) {
+        if (value == null) {
             throw new NoSuchElementException("no value for key" + key);
         }
         return value;
@@ -25,10 +25,10 @@ public class MyDao implements Dao<byte[]> {
 
     @Override
     public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
-        if (key==null || key.isBlank()) {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("key is null or blank");
         }
-        if (value==null) {
+        if (value == null) {
             throw new IllegalArgumentException("value is null");
         }
         storage.put(key, value);
@@ -36,7 +36,7 @@ public class MyDao implements Dao<byte[]> {
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
-        if (key==null || key.isBlank()) {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("key is null or blank");
         }
         if (!storage.containsKey(key)) {
@@ -47,6 +47,6 @@ public class MyDao implements Dao<byte[]> {
 
     @Override
     public void close() throws IOException {
-
+        //yet it's empty
     }
 }
