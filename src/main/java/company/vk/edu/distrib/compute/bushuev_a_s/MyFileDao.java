@@ -65,5 +65,4 @@ public class MyFileDao implements Dao<byte[]> {
             super(message, cause);
         }
     }
-
 }
