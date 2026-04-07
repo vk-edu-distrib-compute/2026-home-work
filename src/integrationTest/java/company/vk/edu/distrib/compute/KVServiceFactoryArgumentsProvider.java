@@ -3,17 +3,7 @@ package company.vk.edu.distrib.compute;
 import java.util.Set;
 import java.util.stream.Stream;
 
-<<<<<<< feat/homework1
 import company.vk.edu.distrib.compute.bahadir_ahmedov.BahadirAhmedovKVServiceFactory;
-=======
-import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
-import company.vk.edu.distrib.compute.ip.PopovIgorKVServiceFactoryImpl;
->>>>>>> master
-import company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory;
-import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
-import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
-import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
-import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -25,17 +15,7 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
 
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        KVServiceFactoryImpl.class,
-        MyKVServiceFactory.class,
-        InMemoryKVServiceFactory.class,
-        Vitos23KVServiceFactory.class,
-        NihuawayKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
-<<<<<<< feat/homework1
         BahadirAhmedovKVServiceFactory.class
-=======
-        PopovIgorKVServiceFactoryImpl.class
->>>>>>> master
     );
 
     @Override
