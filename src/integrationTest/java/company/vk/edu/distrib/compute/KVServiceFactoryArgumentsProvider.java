@@ -3,8 +3,12 @@ package company.vk.edu.distrib.compute;
 import java.util.Set;
 import java.util.stream.Stream;
 
+<<<<<<< feat/homework1
+import company.vk.edu.distrib.compute.bahadir_ahmedov.BahadirAhmedovKVServiceFactory;
+=======
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
 import company.vk.edu.distrib.compute.ip.PopovIgorKVServiceFactoryImpl;
+>>>>>>> master
 import company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
@@ -27,7 +31,11 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         Vitos23KVServiceFactory.class,
         NihuawayKVServiceFactory.class,
         B10nicleKVServiceFactory.class,
+<<<<<<< feat/homework1
+        BahadirAhmedovKVServiceFactory.class
+=======
         PopovIgorKVServiceFactoryImpl.class
+>>>>>>> master
     );
 
     @Override
