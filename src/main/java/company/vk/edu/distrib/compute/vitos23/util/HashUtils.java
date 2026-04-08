@@ -16,7 +16,7 @@ public final class HashUtils {
             byte[] digest = md.digest(data.getBytes(StandardCharsets.UTF_8));
             return bytesToLong(digest);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Hash algorithm not available: " + MD5_ALGORITHM, e);
+            throw new IllegalStateException("Hash algorithm not available: " + MD5_ALGORITHM, e);
         }
     }
 

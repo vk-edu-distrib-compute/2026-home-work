@@ -48,7 +48,7 @@ public class KVClusterImpl implements KVCluster {
             node.start();
             kvServiceByEndpoint.put(endpoint, node);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new ServerException(e);
         }
     }
 
