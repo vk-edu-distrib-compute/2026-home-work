@@ -2,8 +2,8 @@ package company.vk.edu.distrib.compute.vitos23;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,17 +11,18 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
 
+import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
+
 public class KVServiceImpl implements KVService {
 
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
-    private static final int NO_BODY_RESPONSE_LENGTH = -1;
 
     private final HttpServer server;
-    private final Dao<byte[]> dao;
+    private final EntityRequestProcessor entityRequestProcessor;
 
-    public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
+    public KVServiceImpl(int port, EntityRequestProcessor entityRequestProcessor) throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.dao = dao;
+        this.entityRequestProcessor = entityRequestProcessor;
         server.createContext("/v0/status", this::handleStatusCheck);
         server.createContext("/v0/entity", this::dispatchEntityRequest);
     }
@@ -53,11 +54,10 @@ public class KVServiceImpl implements KVService {
         String id = extractId(exchange.getRequestURI().getQuery());
 
         switch (exchange.getRequestMethod()) {
-            case "GET" -> handleGet(exchange, id);
-            case "PUT" -> handlePut(exchange, id);
-            case "DELETE" -> handleDelete(exchange, id);
-            case null, default ->
-                    exchange.sendResponseHeaders(HttpCodes.METHOD_NOT_ALLOWED, NO_BODY_RESPONSE_LENGTH);
+            case "GET" -> entityRequestProcessor.handleGet(exchange, id);
+            case "PUT" -> entityRequestProcessor.handlePut(exchange, id);
+            case "DELETE" -> entityRequestProcessor.handleDelete(exchange, id);
+            case null, default -> exchange.sendResponseHeaders(HttpCodes.METHOD_NOT_ALLOWED, NO_BODY_RESPONSE_LENGTH);
         }
     }
 
@@ -76,23 +76,6 @@ public class KVServiceImpl implements KVService {
             }
         }
         throw new IllegalArgumentException("Missing query parameter 'id'");
-    }
-
-    private void handleGet(HttpExchange exchange, String id) throws IOException {
-        byte[] value = dao.get(id);
-        exchange.sendResponseHeaders(HttpCodes.OK, value.length);
-        exchange.getResponseBody().write(value);
-    }
-
-    private void handlePut(HttpExchange exchange, String id) throws IOException {
-        byte[] body = exchange.getRequestBody().readAllBytes();
-        dao.upsert(id, body);
-        exchange.sendResponseHeaders(HttpCodes.CREATED, NO_BODY_RESPONSE_LENGTH);
-    }
-
-    private void handleDelete(HttpExchange exchange, String id) throws IOException {
-        dao.delete(id);
-        exchange.sendResponseHeaders(HttpCodes.ACCEPTED, NO_BODY_RESPONSE_LENGTH);
     }
 
     @Override

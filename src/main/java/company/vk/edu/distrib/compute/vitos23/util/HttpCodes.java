@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.vitos23;
+package company.vk.edu.distrib.compute.vitos23.util;
 
 public final class HttpCodes {
     public static final int OK = 200;
