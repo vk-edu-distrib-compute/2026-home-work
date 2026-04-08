@@ -12,7 +12,7 @@ import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
 
 /**
- * KVServiceImpl — обработчик http запросов
+ * KVServiceImpl — обработчик http запросов.
  *
  * @author Linempy
  * @since 28.03.2026

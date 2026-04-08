@@ -12,10 +12,10 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Persistent Dao — stores data on the file system.
+ * Persistent Dao — хранилище данных в файловой системе.
  *
- * <p>Each key is saved to a separate file in the data directory.
- * Uses locks for thread safety.</p>
+ * <p>Каждый ключ сохраняется в отдельный файл в директории данных.
+ * Использует блокировки для потокобезопасности.</p>
  *
  * @author Linempy
  * @since 29.03.2026
@@ -51,8 +51,7 @@ public class PersistentDao implements Dao<byte[]> {
             if (!Files.exists(filePath)) {
                 throw new NoSuchElementException("Value not found for key: " + key);
             }
-            byte[] data = Files.readAllBytes(filePath);
-            return data;
+            return Files.readAllBytes(filePath);
         } finally {
             lock.readLock().unlock();
         }

@@ -1,7 +1,7 @@
 package company.vk.edu.distrib.compute.linempy;
 
 /**
- * HttpCodes — коды ответов сервера
+ * HttpCodes — коды HTTP ответов.
  *
  * @author Linempy
  * @since 28.03.2026
