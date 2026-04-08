@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 
 public class Server {
 
-    void main() throws IOException {
+    void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
         var port = 8080;
         KVService storage = new Andrey1afKVServiceFactory().create(port);
