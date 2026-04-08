@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.vitos23.shard;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.vitos23.EntityRequestProcessor;
+import company.vk.edu.distrib.compute.vitos23.ServerException;
 
 import java.io.IOException;
 import java.net.URI;
@@ -61,7 +62,7 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
                 proxyHttpExchange(exchange, targetEndpoint);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
+                throw new ServerException(e);
             }
         }
     }
