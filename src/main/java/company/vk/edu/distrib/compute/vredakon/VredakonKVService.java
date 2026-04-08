@@ -19,7 +19,7 @@ public class VredakonKVService implements KVService {
         initServer();
     }
 
-    private void initServer() {
+    private void initServer() throws IOException {
         if (server == null) {
             log.error("Server is null");
         } else {

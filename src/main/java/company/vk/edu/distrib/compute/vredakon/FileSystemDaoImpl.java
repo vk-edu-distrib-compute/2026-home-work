@@ -18,7 +18,8 @@ public class FileSystemDaoImpl implements Dao<byte[]> {
     private final Logger log = LoggerFactory.getLogger("FileSystemDao");
     private final AtomicBoolean isClosed;
 
-    public FileSystemDaoImpl() {
+    public FileSystemDaoImpl() throws IOException {
+        createStorage();
         this.isClosed = new AtomicBoolean(false);
     }
 
@@ -54,5 +55,11 @@ public class FileSystemDaoImpl implements Dao<byte[]> {
             return;
         }
         log.error("Resource is already closed");
+    }
+
+    private static void createStorage() throws IOException {
+        if (Files.notExists(Path.of(STORAGE_PATH))) {
+            Files.createDirectory(Path.of(STORAGE_PATH));
+        }
     }
 }

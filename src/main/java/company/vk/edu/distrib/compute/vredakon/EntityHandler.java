@@ -12,7 +12,11 @@ import company.vk.edu.distrib.compute.Dao;
 
 public class EntityHandler implements HttpHandler {
 
-    private final Dao<byte[]> dao = new FileSystemDaoImpl();
+    private final Dao<byte[]> dao;
+
+    public EntityHandler() throws IOException {
+        this.dao = new FileSystemDaoImpl();
+    }
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
