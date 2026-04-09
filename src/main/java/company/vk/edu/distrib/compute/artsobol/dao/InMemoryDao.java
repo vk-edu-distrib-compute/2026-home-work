@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.artsobol;
+package company.vk.edu.distrib.compute.artsobol.dao;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -30,6 +30,6 @@ public class InMemoryDao implements Dao<byte[]> {
 
     @Override
     public void close() {
-        // No resources to release
+        // Nothing to close
     }
 }
