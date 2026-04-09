@@ -12,43 +12,49 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
 
-public class InMemoryKvService implements KVService {
+public class KvByteService implements KVService {
 
-    private static final Logger log = LoggerFactory.getLogger(InMemoryKvService.class);
+    private static final Logger log = LoggerFactory.getLogger(KvByteService.class);
     private static final int DELAY_TO_STOP_SECONDS = 2;
 
     private final HttpServer httpServer;
     private final Dao<byte[]> dao;
     private boolean isStarted;
 
-    public InMemoryKvService(int port, Dao<byte[]> dao) throws IOException {
+    private final Object lock = new Object();
+
+    public KvByteService(int port, Dao<byte[]> dao) throws IOException {
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
         this.dao = dao;
     }
 
     @Override
-    public synchronized void start() {
-        if (isStarted) {
-            log.error("Server already started");
-            return;
-        }
-        registerHandlers();
-        httpServer.start();
-        isStarted = true;
-        if (log.isInfoEnabled()) {
-            log.info("Server started on port {}", httpServer.getAddress().getPort());
+    public void start() {
+        synchronized (lock) {
+            if (isStarted) {
+                log.error("Server already started");
+                return;
+            }
+            registerHandlers();
+            httpServer.start();
+            isStarted = true;
+            if (log.isInfoEnabled()) {
+                log.info("Server started on port {}", httpServer.getAddress().getPort());
+            }
         }
     }
 
     @Override
-    public synchronized void stop() {
-        if (!isStarted) {
-            log.error("Trying to stop server which was not started");
-        }
-        isStarted = false;
-        httpServer.stop(DELAY_TO_STOP_SECONDS);
-        if (log.isInfoEnabled()) {
-            log.info("Server stopped");
+    public void stop() {
+        synchronized (lock) {
+            if (!isStarted) {
+                log.error("Trying to stop server which was not started");
+            }
+            isStarted = false;
+            httpServer.stop(DELAY_TO_STOP_SECONDS);
+            if (log.isInfoEnabled()) {
+                log.info("Server stopped");
+            }
         }
     }
 

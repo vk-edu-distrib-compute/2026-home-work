@@ -6,6 +6,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -149,7 +150,7 @@ public class FileByteDao implements Dao<byte[]> {
             ByteBuffer keyBuffer = ByteBuffer.allocate(keyLength);
             readFully(keyBuffer, offset + HEADER_SIZE + valueLength);
             keyBuffer.flip();
-            String key = new String(keyBuffer.array());
+            String key = StandardCharsets.UTF_8.decode(keyBuffer).toString();
 
             byte tombstone = tombstoneBuffer.get();
             if (tombstone == ALIVE) {
