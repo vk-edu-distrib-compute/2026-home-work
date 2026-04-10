@@ -22,29 +22,30 @@ public class EntityHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        String id = extractId(exchange.getRequestURI());
         try (exchange) {
-            if (id == null) {
-                throw new IllegalArgumentException("Bad request");
+            try {
+                String id = extractId(exchange.getRequestURI());
+                if (id == null) {
+                    exchange.sendResponseHeaders(400, 0);
+                    return;
+                }
+                switch (exchange.getRequestMethod()) {
+                    case "GET" -> handleGet(exchange, id);
+                    case "PUT" -> handlePut(exchange, id);
+                    case "DELETE" -> handleDelete(exchange, id);
+                    default -> exchange.sendResponseHeaders(405, 0);
+                }
+            } catch (IllegalArgumentException e) {
+                exchange.sendResponseHeaders(400, 0);
+            } catch (NoSuchElementException e) {
+                exchange.sendResponseHeaders(404, 0);
+            } catch (IOException e) {
+                log.error("I/O error while handling entity request", e);
+                exchange.sendResponseHeaders(500, 0);
+            } catch (RuntimeException e) {
+                log.error("Unexpected error while handling entity request", e);
+                exchange.sendResponseHeaders(500, 0);
             }
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
-                default -> exchange.sendResponseHeaders(405, 0);
-            }
-        } catch (IllegalArgumentException e) {
-            exchange.sendResponseHeaders(400, 0);
-        } catch (NoSuchElementException e) {
-            exchange.sendResponseHeaders(404, 0);
-        } catch (IOException e) {
-            log.error("I/O error while handling entity request", e);
-            exchange.sendResponseHeaders(500, 0);
-        } catch (RuntimeException e) {
-            log.error("Unexpected error while handling entity request", e);
-            exchange.sendResponseHeaders(500, 0);
-        } finally {
-            exchange.close();
         }
     }
 
