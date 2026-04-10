@@ -13,6 +13,7 @@ import company.vk.edu.distrib.compute.nesterukia.file_system.NesterukiaFileSyste
 import company.vk.edu.distrib.compute.nesterukia.in_memory.NesterukiaInMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
+import company.vk.edu.distrib.compute.patersss.DumpKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
 
@@ -26,18 +27,19 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
 
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        KVServiceFactorySimple.class,
-        KVServiceFactoryImpl.class,
-        AndecoKVServiceFactory.class,
-        MyKVServiceFactory.class,
-        InMemoryKVServiceFactory.class,
-        Vitos23KVServiceFactory.class,
-        NihuawayKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
-        VredakonKVServiceFactory.class,
-        PopovIgorKVServiceFactoryImpl.class,
-        NesterukiaInMemoryKVServiceFactory.class,
-        NesterukiaFileSystemKVServiceFactory.class
+//        KVServiceFactorySimple.class,
+//        KVServiceFactoryImpl.class,
+//        AndecoKVServiceFactory.class,
+//        MyKVServiceFactory.class,
+//        InMemoryKVServiceFactory.class,
+//        Vitos23KVServiceFactory.class,
+//        NihuawayKVServiceFactory.class,
+//        B10nicleKVServiceFactory.class,
+//        VredakonKVServiceFactory.class,
+//        PopovIgorKVServiceFactoryImpl.class,
+//        NesterukiaInMemoryKVServiceFactory.class,
+//        NesterukiaFileSystemKVServiceFactory.class,
+        DumpKVServiceFactory.class
     );
 
     @Override
