@@ -44,7 +44,6 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         Vitos23KVServiceFactory.class,
         RonshinInMemoryKVServiceFactory.class,
         RonshinFileKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
         VredakonKVServiceFactory.class,
         PopovIgorKVServiceFactoryImpl.class,
         NesterukiaInMemoryKVServiceFactory.class,
