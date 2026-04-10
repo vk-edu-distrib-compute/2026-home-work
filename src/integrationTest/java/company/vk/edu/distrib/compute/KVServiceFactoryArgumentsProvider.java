@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import company.vk.edu.distrib.compute.proteusp.ProteuspKVServiceFactory;
 import company.vk.edu.distrib.compute.aldor7705.KVServiceFactorySimple;
 import company.vk.edu.distrib.compute.andeco.AndecoKVServiceFactory;
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
@@ -37,7 +38,8 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         VredakonKVServiceFactory.class,
         PopovIgorKVServiceFactoryImpl.class,
         NesterukiaInMemoryKVServiceFactory.class,
-        NesterukiaFileSystemKVServiceFactory.class
+        NesterukiaFileSystemKVServiceFactory.class,
+            ProteuspKVServiceFactory.class
     );
 
     @Override
