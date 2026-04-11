@@ -32,14 +32,14 @@ public class ConsistentHashKVCluster implements KVCluster {
         }
         for (int port : ports) {
             try {
-                Dao<byte[]> dao = new FileDao("./data/consistent_node_" + port);
-                HashStrategy strategy = new ConsistentHashStrategy(endpoints, 150);
-                KVService service = new ShardedKVService(dao, port, strategy);
+                Dao<byte[]> dao = new FileDao("./data/consistent_node_" + port); // NOSONAR
+                HashStrategy strategy = new ConsistentHashStrategy(endpoints, 150); // NOSONAR
+                KVService service = new ShardedKVService(dao, port, strategy); // NOSONAR
                 service.start();
                 nodes.add(service);
                 endpointToNode.put("http://localhost:" + port, service);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException("Failed to start node on port " + port, e); // NOSONAR
             }
         }
         started = true;

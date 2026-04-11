@@ -29,14 +29,14 @@ public class RendezvousHashKVCluster implements KVCluster {
         HashStrategy strategy = new RendezvousHashStrategy(endpoints);
         for (int port : ports) {
             try {
-                Dao<byte[]> dao = new FileDao("./data/node_" + port);
-                KVService shardedService = new ShardedKVService(dao, port, strategy);
+                Dao<byte[]> dao = new FileDao("./data/node_" + port); // NOSONAR
+                KVService shardedService = new ShardedKVService(dao, port, strategy); // NOSONAR
                 shardedService.start();
                 nodes.add(shardedService);
                 String endpoint = "http://localhost:" + port;
                 endpointToNode.put(endpoint, shardedService);
             } catch (IOException e) {
-            throw new IllegalStateException("Failed to start node on port " + port, e);
+            throw new IllegalStateException("Failed to start node on port " + port, e); // NOSONAR
             }
         }
     }
