@@ -17,8 +17,12 @@ import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
+<<<<<<< HEAD
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevKVServiceFactory;
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevFileSystemKVServiceFactory;
+=======
+import company.vk.edu.distrib.compute.mariguss.MarigussKVServiceFactory;
+>>>>>>> 5989e00 (fix: register MarigussKVServiceFactory and fix line endings)
 
 import company.vk.edu.distrib.compute.luckyslon2003.LuckySlon2003KVServiceFactory;
 import company.vk.edu.distrib.compute.wolfram158.Wolfram158KVServiceFactoryFileWithCacheImpl;
@@ -50,6 +54,7 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         LuckySlon2003KVServiceFactory.class,
         Wolfram158KVServiceFactoryFileWithCacheImpl.class,
         CakeKVServiceFactory.class
+        MarigussKVServiceFactory.class
     );
 
     @Override
