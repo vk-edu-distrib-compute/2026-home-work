@@ -27,7 +27,7 @@ public class ShardedKVService implements KVService {
     private final HashStrategy hashStrategy;
     private static final int EXPECTED_PARTS = 2;
     private static final String ID_PARAM = "id";
-    private volatile boolean running;
+    private boolean running;
 
     public ShardedKVService(Dao<byte[]> dao, int port, HashStrategy hashStrategy) {
         this.dao = dao;
@@ -36,9 +36,8 @@ public class ShardedKVService implements KVService {
         this.hashStrategy = hashStrategy;
     }
 
-    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     @Override
-    public void start() {
+    public synchronized void start() { // synchronized for PMD
         if (running) {
             throw new IllegalStateException("Already started");
         }
@@ -55,7 +54,7 @@ public class ShardedKVService implements KVService {
     }
 
     @Override
-    public void stop() {
+    public synchronized void stop() {
         if (running) {
             server.stop(0);
             running = false;
