@@ -1,30 +1,33 @@
 package company.vk.edu.distrib.compute;
 
-import module java.base;
-import company.vk.edu.distrib.compute.dummy.DummyKVClusterFactory;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.IOException;
 
-public class Server {
+public final class Server {
+    private static final Logger LOG = LoggerFactory.getLogger(Server.class);
+    private static final int PORT = 8000;
+    private static final String DEFAULT_STORAGE_DIR = "./data";
 
-    void main(String... args) throws IOException {
-        var log = LoggerFactory.getLogger("server");
-        if (isClusterMode(args)) {
-            List<Integer> ports = Arrays.asList(8080, 8081);
-            KVCluster cluster = new DummyKVClusterFactory().create(ports);
-            cluster.start();
-            log.info("Cluster started on ports={}", ports);
-            Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
-        } else {
-            var port = 8080;
-            KVService storage = new DummyKVServiceFactory().create(port);
-            storage.start();
-            log.info("Server started on port {}", port);
-            Runtime.getRuntime().addShutdownHook(new Thread(storage::stop));
-        }
+    private Server() {
     }
 
-    private boolean isClusterMode(String... args) {
-        return args.length > 0 && args[0].startsWith("cluster");
+    static void main(String[] args) {
+        try {
+            Dao<byte[]> dao = new FileSystemDao(DEFAULT_STORAGE_DIR);
+            SimpleKVService service = new SimpleKVService(PORT, dao);
+            service.start();
+            LOG.info("KVService started on port {}", PORT);
+            LOG.info("Press Enter to stop...");
+            System.in.read();
+            service.stop();
+            LOG.info("KVService stopped");
+        } catch (IOException e) {
+            LOG.error("IO error while starting service", e);
+            System.exit(1);
+        } catch (Exception e) {
+            LOG.error("Ошибка: " + e.getMessage());
+            System.exit(1);
+        }
     }
 }
