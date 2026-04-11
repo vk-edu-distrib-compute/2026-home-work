@@ -23,7 +23,6 @@ public class SolntsevaKVCluster implements KVCluster {
         services.forEach(KVService::start);
     }
 
-    // Исправлено: запускаем только конкретную ноду
     @Override
     public void start(String endpoint) {
         int idx = endpoints.indexOf(endpoint);
