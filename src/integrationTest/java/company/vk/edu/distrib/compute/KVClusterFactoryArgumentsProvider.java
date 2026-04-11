@@ -10,9 +10,13 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import company.vk.edu.distrib.compute.ronshinvsevolod.RonshinRendezvousHashKVClusterFactory;
+import company.vk.edu.distrib.compute.ronshinvsevolod.RonshinConsistentHashKVClusterFactory;
+
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
-    //        DummyKVClusterFactory.class
+        RonshinRendezvousHashKVClusterFactory.class,
+        RonshinConsistentHashKVClusterFactory.class
     );
 
     @Override
