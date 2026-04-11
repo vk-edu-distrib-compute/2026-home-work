@@ -8,6 +8,6 @@ import java.io.IOException;
 public class DumpKVServiceFactory extends KVServiceFactory {
     @Override
     protected KVService doCreate(int port) throws IOException {
-        return null;
+        return new DumpKVService(port, new DumpDAO());
     }
 }
