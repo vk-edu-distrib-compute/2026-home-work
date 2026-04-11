@@ -24,15 +24,19 @@ public class RendezvousHashKVCluster implements KVCluster {
                 .collect(Collectors.toList());
     }
 
+    private KVService createNode(int port, List<String> endpoints) throws IOException {
+        Dao<byte[]> dao = new FileDao("./data/rendezvous_node_" + port);
+        // codacy:ignore=avoid_instantiating_objects_in_loops
+        HashStrategy strategy = new RendezvousHashStrategy(endpoints);
+        // codacy:ignore=avoid_instantiating_objects_in_loops
+        return new ShardedKVService(dao, port, strategy);
+    }
+
     @Override
     public void start() {
-        HashStrategy strategy = new RendezvousHashStrategy(endpoints);
         for (int port : ports) {
             try {
-                Dao<byte[]> dao = new FileDao("./data/node_" + port);
-                // codacy:ignore=avoid_instantiating_objects_in_loops
-                KVService shardedService = new ShardedKVService(dao, port, strategy);
-                // codacy:ignore=avoid_instantiating_objects_in_loops
+                KVService shardedService = createNode(port, endpoints);
                 shardedService.start();
                 nodes.add(shardedService);
                 String endpoint = "http://localhost:" + port;

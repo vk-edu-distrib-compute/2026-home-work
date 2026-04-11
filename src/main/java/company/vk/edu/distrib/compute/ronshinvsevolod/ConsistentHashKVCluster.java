@@ -25,6 +25,14 @@ public class ConsistentHashKVCluster implements KVCluster {
                 .collect(Collectors.toList());
     }
 
+    private KVService createNode(int port, List<String> endpoints) throws IOException {
+        // codacy:ignore=avoid_instantiating_objects_in_loops
+        Dao<byte[]> dao = new FileDao("./data/consistent_node_" + port);
+        // codacy:ignore=avoid_instantiating_objects_in_loops
+        HashStrategy strategy = new ConsistentHashStrategy(endpoints, 150);
+        return new ShardedKVService(dao, port, strategy);
+    }
+
     @Override
     public void start() {
         if (started) {
@@ -32,13 +40,7 @@ public class ConsistentHashKVCluster implements KVCluster {
         }
         for (int port : ports) {
             try {
-                Dao<byte[]> dao = new FileDao("./data/consistent_node_" + port);
-                // codacy:ignore=avoid_instantiating_objects_in_loops
-                HashStrategy strategy = new ConsistentHashStrategy(endpoints, 150);
-                // codacy:ignore=avoid_instantiating_objects_in_loops
-                KVService service = new ShardedKVService(dao, port, strategy);
-                // codacy:ignore=avoid_instantiating_objects_in_loops
-                service.start();
+                KVService service = createNode(port, endpoints);
                 nodes.add(service);
                 endpointToNode.put("http://localhost:" + port, service);
             } catch (IOException e) {
