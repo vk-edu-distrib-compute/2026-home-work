@@ -50,6 +50,7 @@ public class MarigussKVService implements KVService {
                 default:
                     exchange.sendResponseHeaders(400, 0);
                     exchange.close();
+                    break;
             }
         } catch (Exception e) {
             exchange.sendResponseHeaders(500, 0);
