@@ -1,9 +1,8 @@
 package company.vk.edu.distrib.compute;
 
+import module java.base;
 import company.vk.edu.distrib.compute.artsobol.ConcreteKVServiceFactory;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 
 public class Server {
 
