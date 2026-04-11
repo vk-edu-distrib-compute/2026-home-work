@@ -84,7 +84,7 @@ public class SimpleKVService implements KVService {
     private static final class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            if (!METHOD_GET.equalsIgnoreCase(exchange.getRequestMethod())) {
                 sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, new byte[0]);
                 return;
             }
