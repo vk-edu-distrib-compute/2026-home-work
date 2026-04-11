@@ -6,6 +6,7 @@ import java.util.stream.Stream;
 import company.vk.edu.distrib.compute.aldor7705.KVServiceFactorySimple;
 import company.vk.edu.distrib.compute.andeco.AndecoKVServiceFactory;
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
+import company.vk.edu.distrib.compute.ferty460.Ferty460KVServiceFactory;
 import company.vk.edu.distrib.compute.ip.PopovIgorKVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
@@ -26,18 +27,19 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
 
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        KVServiceFactorySimple.class,
-        KVServiceFactoryImpl.class,
-        AndecoKVServiceFactory.class,
-        MyKVServiceFactory.class,
-        InMemoryKVServiceFactory.class,
-        Vitos23KVServiceFactory.class,
-        NihuawayKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
-        VredakonKVServiceFactory.class,
-        PopovIgorKVServiceFactoryImpl.class,
-        NesterukiaInMemoryKVServiceFactory.class,
-        NesterukiaFileSystemKVServiceFactory.class
+            KVServiceFactorySimple.class,
+            KVServiceFactoryImpl.class,
+            AndecoKVServiceFactory.class,
+            MyKVServiceFactory.class,
+            InMemoryKVServiceFactory.class,
+            Vitos23KVServiceFactory.class,
+            NihuawayKVServiceFactory.class,
+            B10nicleKVServiceFactory.class,
+            VredakonKVServiceFactory.class,
+            Ferty460KVServiceFactory.class,
+            PopovIgorKVServiceFactoryImpl.class,
+            NesterukiaInMemoryKVServiceFactory.class,
+            NesterukiaFileSystemKVServiceFactory.class
     );
 
     @Override
