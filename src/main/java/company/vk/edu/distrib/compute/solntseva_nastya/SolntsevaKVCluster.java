@@ -23,9 +23,13 @@ public class SolntsevaKVCluster implements KVCluster {
         services.forEach(KVService::start);
     }
 
+    // Исправлено: запускаем только конкретную ноду
     @Override
-    public void start(String config) {
-        start();
+    public void start(String endpoint) {
+        int idx = endpoints.indexOf(endpoint);
+        if (idx >= 0) {
+            services.get(idx).start();
+        }
     }
 
     @Override
@@ -34,7 +38,10 @@ public class SolntsevaKVCluster implements KVCluster {
     }
 
     @Override
-    public void stop(String reason) {
-        stop();
+    public void stop(String endpoint) {
+        int idx = endpoints.indexOf(endpoint);
+        if (idx >= 0) {
+            services.get(idx).stop();
+        }
     }
 }
