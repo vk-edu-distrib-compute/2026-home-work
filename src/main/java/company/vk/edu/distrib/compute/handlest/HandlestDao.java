@@ -8,10 +8,12 @@ import java.io.IOException;
 import java.util.NoSuchElementException;
 
 public class HandlestDao implements Dao<byte[]> {
-    private static final String PATH_TO_LOCAL_STORAGE_FOLDER = "./handlest_storage";
+    private final HandlestStorage<byte[]> storage;
 
-    //  HandlestStorage<byte[]> storage = new HandlestBytePayloadInMemoryStorage();
-    HandlestStorage<byte[]> storage = new HandlestBytePayloadFileSystemStorage(PATH_TO_LOCAL_STORAGE_FOLDER);
+    public HandlestDao(String storageFolderPath) {
+         this.storage = new HandlestBytePayloadFileSystemStorage(storageFolderPath);
+         // this.storage = new HandlestBytePayloadInMemoryStorage();
+    }
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {

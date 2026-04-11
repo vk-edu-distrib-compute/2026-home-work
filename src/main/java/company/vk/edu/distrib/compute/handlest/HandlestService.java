@@ -17,8 +17,9 @@ public class HandlestService implements KVService {
     private final HandlestDao dao;
     private final AtomicBoolean healthy = new AtomicBoolean(true);
 
-    private static final int MIN_PORT_VALUE = 1024; // values less then 1024 are reserved by system
+    private static final int MIN_PORT_VALUE = 1024; // values less than 1024 are reserved by system
     private static final int MAX_PORT_VALUE = 65535;
+    private static final String PATH_TO_LOCAL_STORAGE_FOLDER = "handlest_storage";
 
     public HandlestService(int port) throws IOException {
         if (port < MIN_PORT_VALUE || port > MAX_PORT_VALUE) {
@@ -26,7 +27,7 @@ public class HandlestService implements KVService {
                     "Port must be between " + MIN_PORT_VALUE + " and " + MAX_PORT_VALUE + ", got: " + port);
         }
 
-        this.dao = new HandlestDao();
+        this.dao = new HandlestDao(PATH_TO_LOCAL_STORAGE_FOLDER);
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
 
         server.createContext("/v0/status", this::handleStatus);

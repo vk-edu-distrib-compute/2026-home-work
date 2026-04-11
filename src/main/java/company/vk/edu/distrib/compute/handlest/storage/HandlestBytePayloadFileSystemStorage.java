@@ -1,16 +1,25 @@
 package company.vk.edu.distrib.compute.handlest.storage;
 
+import company.vk.edu.distrib.compute.handlest.exceptions.FileException;
+
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.stream.Stream;
 
 public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byte[]> {
     private final Path basePath;
 
     private Path resolveKey(String key) {
-        return basePath.resolve(key);
+        if (key.contains("..")) {
+            throw new SecurityException("Can not traverse outside storage folder");
+        }
+
+        String sanitizedKey = key;
+        if (sanitizedKey.startsWith("/")) {
+            sanitizedKey = sanitizedKey.replaceAll("^/+|/+$", "");
+        }
+
+        return basePath.resolve(sanitizedKey);
     }
 
     public HandlestBytePayloadFileSystemStorage(String baseDirPath) {
@@ -24,7 +33,7 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
                 throw new IllegalArgumentException("Path exists but is not a directory: " + baseDirPath);
             }
         } catch (IOException e) {
-            throw new RuntimeException("Failed to initialize storage directory", e);
+            throw new FileException("Failed to initialize storage directory", e);
         }
     }
 
@@ -35,7 +44,7 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
             try {
                 return Files.readAllBytes(file);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to read file for key: " + key, e);
+                throw new FileException("Failed to read file for key: " + key, e);
             }
         }
         return null;
@@ -43,11 +52,37 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
 
     @Override
     public void put(String key, byte[] value) {
-        Path file = resolveKey(key);
+        Path targetFile = resolveKey(key);
+        Path tempFile = null;
         try {
-            Files.write(file, value);
+            Path parent = targetFile.getParent();
+            if (parent != null && !Files.exists(parent)) {
+                Files.createDirectories(parent);
+            }
+
+            tempFile = Files.createTempFile(
+                    parent != null ? parent : basePath,
+                    targetFile.getFileName().toString() + ".",
+                    ".tmp"
+            );
+
+            Files.write(tempFile, value);
+            try {
+                Files.move(tempFile, targetFile,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
-            throw new RuntimeException("Failed to write file for key: " + key, e);
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                    throw new FileException("Temp file was not deleted", e);
+                }
+            }
+            throw new FileException("Failed to write file for key: " + key, e);
         }
     }
 
@@ -57,7 +92,7 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to delete file for key: " + key, e);
+            throw new FileException("Failed to delete file for key: " + key, e);
         }
     }
 
@@ -68,11 +103,11 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
                 try {
                     Files.deleteIfExists(file);
                 } catch (IOException e) {
-                    throw new RuntimeException("Failed to delete file during clear: " + file, e);
+                    throw new FileException("Failed to delete file during clear: " + file, e);
                 }
             });
         } catch (IOException e) {
-            throw new RuntimeException("Failed to list directory for clear", e);
+            throw new FileException("Failed to list directory for clear", e);
         }
     }
 }
