@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.solntseva_nastya;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
-import company.vk.edu.distrib.compute.KVService; // Добавленный импорт
+import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
