@@ -100,7 +100,7 @@ public class FileDao implements Dao<byte[]> {
         try {
             digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new IllegalArgumentException("SHA-256 is not available", e);
         }
         return digest.digest(key.getBytes(StandardCharsets.UTF_8));
     }

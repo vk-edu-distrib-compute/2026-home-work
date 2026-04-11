@@ -61,22 +61,21 @@ public class KVServiceImpl implements KVService {
 
     private void handleEntityRequest(HttpExchange http, String method, String id) throws IOException {
         switch (method) {
-            case "GET":
+            case "GET" -> {
                 final var value = dao.get(id);
                 http.sendResponseHeaders(200, value.length);
                 http.getResponseBody().write(value);
-                break;
-            case "PUT":
+            }
+            case "PUT" -> {
                 byte[] response = http.getRequestBody().readAllBytes();
                 dao.upsert(id, response);
                 http.sendResponseHeaders(201, -1);
-                break;
-            case "DELETE":
+            }
+            case "DELETE" -> {
                 dao.delete(id);
                 http.sendResponseHeaders(202, -1);
-                break;
-            default:
-                http.sendResponseHeaders(405, -1);
+            }
+            default -> http.sendResponseHeaders(405, -1);
         }
     }
 
