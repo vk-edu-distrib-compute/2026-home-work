@@ -1,13 +1,13 @@
-package company.vk.edu.distrib.compute.Lillymega;
+package company.vk.edu.distrib.compute.lillymega;
 //реализация класса и фабрики
 import  company.vk.edu.distrib.compute.KVService;
 import  company.vk.edu.distrib.compute.KVServiceFactory;
 
 import java.io.IOException;
 
-class LillymegaKVServiceFactory extends KVServiceFactory{
+public class LillymegaKVServiceFactory extends KVServiceFactory{
     @Override
     protected KVService doCreate(int port) throws IOException{
-        return new LillymegaKVService(port);
+        return new LillymegaKVService(port, new Dao<byte[]> dao);
     }
 }

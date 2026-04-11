@@ -1,7 +1,6 @@
-package company.vk.edu.distrib.compute.Lillymega;
+package company.vk.edu.distrib.compute.lillymega;
 import company.vk.edu.distrib.compute.Dao;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,6 +15,7 @@ public class LillymegaDao implements Dao<byte[]> {
         if (value == null){
             throw new NoSuchElementException("No value for key: " + key);
         }
+        return value;
     }
 
     @Override
@@ -24,6 +24,7 @@ public class LillymegaDao implements Dao<byte[]> {
         if (value == null) {
             throw new IllegalArgumentException("Value must be not null");
         }
+        storage.put(key, value);
     }
 
     @Override
