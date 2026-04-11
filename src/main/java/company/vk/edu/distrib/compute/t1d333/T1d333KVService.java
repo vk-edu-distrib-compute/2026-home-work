@@ -20,14 +20,20 @@ public class T1d333KVService implements KVService {
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
+    private final Path storageDir;
     private final int port;
 
     public T1d333KVService(int port) throws IOException {
         this.port = port;
-        Path storageDir = Files.createTempDirectory("t1d333-dao-" + port + "-");
+        this.storageDir = resolveStorageDir(port);
+        Files.createDirectories(storageDir);
         this.dao = new FileDao(storageDir);
         this.server = HttpServer.create(new InetSocketAddress("localhost", port), 0);
         setupRoutes();
+    }
+
+    private static Path resolveStorageDir(int port) {
+        return Path.of(".t1d333-data", "port-" + port).toAbsolutePath().normalize();
     }
 
     private void setupRoutes() {
@@ -84,8 +90,10 @@ public class T1d333KVService implements KVService {
             return;
         }
 
-        byte[] body = exchange.getRequestBody().readAllBytes();
-        dao.upsert(id, body);
+        try (var requestBody = exchange.getRequestBody()) {
+            byte[] body = requestBody.readAllBytes();
+            dao.upsert(id, body);
+        }
         sendResponse(exchange, 201, new byte[0]);
     }
 
@@ -131,7 +139,7 @@ public class T1d333KVService implements KVService {
     @Override
     public void start() {
         server.start();
-        log.info("T1d333KVService started on port {}", port);
+        log.info("T1d333KVService started on port {}, storageDir={}", port, storageDir);
     }
 
     @Override
@@ -142,6 +150,6 @@ public class T1d333KVService implements KVService {
         } catch (IOException e) {
             log.error("Error while closing dao", e);
         }
-        log.info("T1d333KVService stopped");
+        log.info("T1d333KVService stopped, storageDir={}", storageDir);
     }
 }
