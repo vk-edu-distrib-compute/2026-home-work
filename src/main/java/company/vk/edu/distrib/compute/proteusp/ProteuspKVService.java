@@ -5,7 +5,8 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.proteusp.dao.ProteusPInMemoryDao;
+import company.vk.edu.distrib.compute.proteusp.dao.ProteusPFSDao;
+//import company.vk.edu.distrib.compute.proteusp.dao.ProteusPInMemoryDao;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +39,7 @@ public class ProteuspKVService implements KVService {
     }
 
     public ProteuspKVService(int port) {
-        this(port, new ProteusPInMemoryDao());
+        this(port, new ProteusPFSDao(KVService.class));
     }
 
     private HttpHandler handleErrors(HttpHandler handler) {
