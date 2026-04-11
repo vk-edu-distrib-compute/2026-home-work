@@ -26,10 +26,10 @@ public class RendezvousHashKVCluster implements KVCluster {
 
     @Override
     public void start() {
+        HashStrategy strategy = new RendezvousHashStrategy(endpoints);
         for (int port : ports) {
             try {
                 Dao<byte[]> dao = new FileDao("./data/node_" + port);
-                HashStrategy strategy = new RendezvousHashStrategy(endpoints);
                 KVService shardedService = new ShardedKVService(dao, port, strategy);
                 shardedService.start();
                 nodes.add(shardedService);

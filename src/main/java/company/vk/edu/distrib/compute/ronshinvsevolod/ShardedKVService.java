@@ -22,24 +22,24 @@ public class ShardedKVService implements KVService {
     private HttpServer server;
     private final Dao<byte[]> dao;
     private final int port;
-    //private final List<String> allEndpoints;
     private final String myEndpoint;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final HashStrategy hashStrategy;
     private static final int EXPECTED_PARTS = 2;
     private static final String ID_PARAM = "id";
+    private volatile boolean running;
 
     public ShardedKVService(Dao<byte[]> dao, int port, HashStrategy hashStrategy) {
         this.dao = dao;
         this.port = port;
-        //this.allEndpoints = allEndpoints;
         this.myEndpoint = "http://localhost:" + port;
         this.hashStrategy = hashStrategy;
     }
 
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     @Override
     public void start() {
-        if (server != null) {
+        if (running) {
             throw new IllegalStateException("Already started");
         }
         try {
@@ -48,16 +48,17 @@ public class ShardedKVService implements KVService {
             server.createContext("/v0/entity", new EntityHandler());
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
+            running = true;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start HTTP server on port " + port, e);
+            throw new IllegalStateException("Failed to start HTTP server on port " + port, e);
         }
     }
 
     @Override
     public void stop() {
-        if (server != null) {
+        if (running) {
             server.stop(0);
-            server = null;
+            running = false;
         }
     }
 

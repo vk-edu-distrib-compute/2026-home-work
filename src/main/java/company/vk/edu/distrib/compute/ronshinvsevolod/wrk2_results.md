@@ -1,8 +1,6 @@
 
 # Результаты тестирования монолита с кластером и анализ результатов
-
-## Монолит
-### PUT
+## Монолит (PUT)
 ```
 Running 30s test @ http://localhost:8080
   2 threads and 100 connections
@@ -94,9 +92,7 @@ Running 30s test @ http://localhost:8080
 Requests/sec:    196.72
 Transfer/sec:     15.37KB
 ```
-
-
-### GET
+## Монолит (GET)
 ```
 Running 30s test @ http://localhost:8080
   2 threads and 100 connections
@@ -188,14 +184,7 @@ Running 30s test @ http://localhost:8080
 Requests/sec:    200.05
 Transfer/sec:     16.80KB
 ```
-
-
-
-
-
-
-## Кластер
-### PUT
+## Кластер (PUT)
 ```
 Running 30s test @ http://localhost:8080
   2 threads and 100 connections
@@ -287,9 +276,7 @@ Running 30s test @ http://localhost:8080
 Requests/sec:    200.04
 Transfer/sec:     17.05KB
 ```
-
-
-### GET
+## Кластер (GET)
 ```
 Running 30s test @ http://localhost:8080
   2 threads and 100 connections
@@ -381,13 +368,10 @@ Running 30s test @ http://localhost:8080
 Requests/sec:    196.81
 Transfer/sec:     16.53KB
 ```
-
-
 ## Анализ (монолит/кластера)
 Монолит быстрее в записях, а кластер -- в чтении
 У кластера существенно меньше задержки записи, если нагрузка не критическая
 При чтении ситуация противоположная, а при критической нагрузке ожидания чтения кластера дольше на порядки.
 Задержка GET у кластера очень вариативна.
-
-### Практический вывод:
+### Практический вывод
 Нельзя однозначно сказать, что один подход хуже или лучше другого. Необходимо выбирать решение в зависимости от ситуации и может быть даже искать/придумывать какую-то свою архитектурную модель хранения данных, основываясь на компромиссах.
