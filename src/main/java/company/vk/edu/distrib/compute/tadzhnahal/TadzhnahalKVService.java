@@ -12,10 +12,15 @@ import java.util.NoSuchElementException;
 public class TadzhnahalKVService implements KVService {
     private static final String STATUS_PATH = "/v0/status";
     private static final String ENTITY_PATH = "/v0/entity";
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
 
     private final int port;
     private final Dao<byte[]> dao;
     private HttpServer server;
+    private boolean started;
+    private boolean stopped;
 
     public TadzhnahalKVService(int port, Dao<byte[]> dao) {
         this.port = port;
@@ -24,7 +29,7 @@ public class TadzhnahalKVService implements KVService {
 
     @Override
     public void start() {
-        if (server != null) {
+        if (started) {
             throw new IllegalStateException("Server already started");
         }
 
@@ -33,6 +38,7 @@ public class TadzhnahalKVService implements KVService {
             server.createContext(STATUS_PATH, this::handleStatus);
             server.createContext(ENTITY_PATH, this::handleEntity);
             server.start();
+            started = true;
         } catch (IOException e) {
             throw new IllegalStateException("Cannot start server", e);
         }
@@ -40,12 +46,12 @@ public class TadzhnahalKVService implements KVService {
 
     @Override
     public void stop() {
-        if (server == null) {
-            throw new IllegalStateException("Server is not started");
+        if (!started || stopped) {
+            throw new IllegalStateException("Server is not started or already stopped");
         }
 
         server.stop(0);
-        server = null;
+        stopped = true;
 
         try {
             dao.close();
@@ -61,7 +67,7 @@ public class TadzhnahalKVService implements KVService {
                 return;
             }
 
-            if (!"GET".equals(exchange.getRequestMethod())) {
+            if (!METHOD_GET.equals(exchange.getRequestMethod())) {
                 sendEmptyResponse(exchange, 405);
                 return;
             }
@@ -81,13 +87,13 @@ public class TadzhnahalKVService implements KVService {
                 String id = extractId(exchange);
 
                 switch (exchange.getRequestMethod()) {
-                    case "GET":
+                    case METHOD_GET:
                         handleGetEntity(exchange, id);
                         break;
-                    case "PUT":
+                    case METHOD_PUT:
                         handlePutEntity(exchange, id);
                         break;
-                    case "DELETE":
+                    case METHOD_DELETE:
                         handleDeleteEntity(exchange, id);
                         break;
                     default:
