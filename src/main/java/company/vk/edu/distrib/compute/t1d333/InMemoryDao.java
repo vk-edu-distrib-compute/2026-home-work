@@ -6,10 +6,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * In-memory реализация Dao для byte[].
- * Go-аналогия: структура с sync.Map и методами Get/Put/Delete.
- */
 public class InMemoryDao implements Dao<byte[]> {
     private final Map<String, byte[]> data = new ConcurrentHashMap<>();
 

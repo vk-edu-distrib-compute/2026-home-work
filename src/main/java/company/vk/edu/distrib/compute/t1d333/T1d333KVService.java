@@ -146,8 +146,7 @@ public class T1d333KVService implements KVService {
     }
 
     private void sendResponse(HttpExchange exchange, int statusCode, byte[] body) throws IOException {
-        long contentLength = body.length == 0 ? -1 : body.length;
-        exchange.sendResponseHeaders(statusCode, contentLength);
+        exchange.sendResponseHeaders(statusCode, body.length);
         try (var os = exchange.getResponseBody()) {
             if (body.length > 0) {
                 os.write(body);
