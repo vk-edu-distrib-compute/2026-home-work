@@ -106,3 +106,4 @@ tasks.named("pmdIntegrationTest") {
 tasks.named("pmdTest") {
     enabled = false
 }
+

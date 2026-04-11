@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute;
 
+import company.vk.edu.distrib.compute.solntseva_nastya.SolntsevaKVClusterFactory; // Добавь этот импорт
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -11,8 +12,9 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
+    // Добавляем твою фабрику в список для тестов
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
-    //        DummyKVClusterFactory.class
+            SolntsevaKVClusterFactory.class
     );
 
     @Override
