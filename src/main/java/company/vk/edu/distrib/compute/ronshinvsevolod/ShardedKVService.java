@@ -6,7 +6,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
-
+import java.util.concurrent.locks.ReentrantLock;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -25,6 +25,7 @@ public class ShardedKVService implements KVService {
     private final String myEndpoint;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final HashStrategy hashStrategy;
+    private final ReentrantLock lock = new ReentrantLock();
     private static final int EXPECTED_PARTS = 2;
     private static final String ID_PARAM = "id";
     private boolean running;
@@ -37,27 +38,37 @@ public class ShardedKVService implements KVService {
     }
 
     @Override
-    public synchronized void start() { // synchronized for PMD
-        if (running) {
-            throw new IllegalStateException("Already started");
-        }
+    public void start() {
+        lock.lock();
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext("/v0/status", new StatusHandler());
-            server.createContext("/v0/entity", new EntityHandler());
-            server.setExecutor(Executors.newCachedThreadPool());
-            server.start();
-            running = true;
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to start HTTP server on port " + port, e);
+            if (running) {
+                throw new IllegalStateException("Already started");
+            }
+            try {
+                server = HttpServer.create(new InetSocketAddress(port), 0);
+                server.createContext("/v0/status", new StatusHandler());
+                server.createContext("/v0/entity", new EntityHandler());
+                server.setExecutor(Executors.newCachedThreadPool());
+                server.start();
+                running = true;
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to start HTTP server on port " + port, e);
+            }
+        } finally {
+            lock.unlock();
         }
     }
 
     @Override
-    public synchronized void stop() {
-        if (running) {
-            server.stop(0);
-            running = false;
+    public void stop() {
+        lock.lock();
+        try {
+            if (running) {
+                server.stop(0);
+                running = false;
+            }
+        } finally {
+            lock.unlock();
         }
     }
 

@@ -36,7 +36,7 @@ public class RendezvousHashKVCluster implements KVCluster {
                 String endpoint = "http://localhost:" + port;
                 endpointToNode.put(endpoint, shardedService);
             } catch (IOException e) {
-            throw new RuntimeException("Failed to start node on port " + port, e);
+            throw new IllegalStateException("Failed to start node on port " + port, e);
             }
         }
     }
