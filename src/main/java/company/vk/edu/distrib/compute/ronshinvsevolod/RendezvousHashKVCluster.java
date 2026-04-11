@@ -29,14 +29,17 @@ public class RendezvousHashKVCluster implements KVCluster {
         HashStrategy strategy = new RendezvousHashStrategy(endpoints);
         for (int port : ports) {
             try {
-                Dao<byte[]> dao = new FileDao("./data/node_" + port);  // codacy:ignore=avoid_instantiating_objects_in_loops
-                KVService shardedService = new ShardedKVService(dao, port, strategy);  // codacy:ignore=avoid_instantiating_objects_in_loops
+                Dao<byte[]> dao = new FileDao("./data/node_" + port);
+                // codacy:ignore=avoid_instantiating_objects_in_loops
+                KVService shardedService = new ShardedKVService(dao, port, strategy);
+                // codacy:ignore=avoid_instantiating_objects_in_loops
                 shardedService.start();
                 nodes.add(shardedService);
                 String endpoint = "http://localhost:" + port;
                 endpointToNode.put(endpoint, shardedService);
             } catch (IOException e) {
-            throw new IllegalStateException("Failed to start node on port " + port, e); // codacy:ignore=avoid_instantiating_objects_in_loops
+            throw new IllegalStateException("Failed to start node on port " + port, e);
+            // codacy:ignore=avoid_instantiating_objects_in_loops
             }
         }
     }

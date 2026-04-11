@@ -28,18 +28,22 @@ public class ConsistentHashKVCluster implements KVCluster {
     @Override
     public void start() {
         if (started) {
-            throw new IllegalStateException("Already started"); 
+            throw new IllegalStateException("Already started");
         }
         for (int port : ports) {
             try {
-                Dao<byte[]> dao = new FileDao("./data/consistent_node_" + port);  // codacy:ignore=avoid_instantiating_objects_in_loops
-                HashStrategy strategy = new ConsistentHashStrategy(endpoints, 150);  // codacy:ignore=avoid_instantiating_objects_in_loops
-                KVService service = new ShardedKVService(dao, port, strategy);  // codacy:ignore=avoid_instantiating_objects_in_loops
+                Dao<byte[]> dao = new FileDao("./data/consistent_node_" + port);
+                // codacy:ignore=avoid_instantiating_objects_in_loops
+                HashStrategy strategy = new ConsistentHashStrategy(endpoints, 150);
+                // codacy:ignore=avoid_instantiating_objects_in_loops
+                KVService service = new ShardedKVService(dao, port, strategy);
+                // codacy:ignore=avoid_instantiating_objects_in_loops
                 service.start();
                 nodes.add(service);
                 endpointToNode.put("http://localhost:" + port, service);
             } catch (IOException e) {
-                throw new IllegalStateException("Failed to start node on port " + port, e);  // codacy:ignore=avoid_instantiating_objects_in_loops
+                throw new IllegalStateException("Failed to start node on port " + port, e);
+                // codacy:ignore=avoid_instantiating_objects_in_loops
             }
         }
         started = true;
