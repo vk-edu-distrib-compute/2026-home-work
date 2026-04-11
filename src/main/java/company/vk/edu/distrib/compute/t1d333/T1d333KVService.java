@@ -19,6 +19,9 @@ import java.util.NoSuchElementException;
 public class T1d333KVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(T1d333KVService.class);
     private static final String API_PREFIX = "/v0";
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
@@ -52,9 +55,9 @@ public class T1d333KVService implements KVService {
             try {
                 String method = exchange.getRequestMethod();
                 switch (method) {
-                    case "GET" -> handleGet(exchange);
-                    case "PUT" -> handlePut(exchange);
-                    case "DELETE" -> handleDelete(exchange);
+                    case METHOD_GET -> handleGet(exchange);
+                    case METHOD_PUT -> handlePut(exchange);
+                    case METHOD_DELETE -> handleDelete(exchange);
                     default -> sendError(exchange, 405);
                 }
             } catch (Exception e) {
@@ -65,7 +68,7 @@ public class T1d333KVService implements KVService {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        if (!METHOD_GET.equals(exchange.getRequestMethod())) {
             sendError(exchange, 405);
             return;
         }
