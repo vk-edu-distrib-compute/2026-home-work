@@ -27,6 +27,12 @@ public class SimpleKVService implements KVService {
     private static final int STATUS_METHOD_NOT_ALLOWED = 405;
     private static final int STATUS_INTERNAL_ERROR = 500;
     private static final String MISSING_ID_MSG = "Missing id";
+    private static final String ID_PARAM = "id";
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String OCTET_STREAM = "application/octet-stream";
+    private static final String AMPERSAND = "&";
+    private static final String EQUALS = "=";
+    private static final String EMPTY = "";
 
     private final int port;
     private final Dao<byte[]> dao;
@@ -103,7 +109,7 @@ public class SimpleKVService implements KVService {
 
         private String extractId(HttpExchange exchange) {
             Map<String, String> queryParams = parseQuery(exchange.getRequestURI().getQuery());
-            String id = queryParams.get("id");
+            String id = queryParams.get(ID_PARAM);
             return (id == null || id.isEmpty()) ? null : id;
         }
 
@@ -136,7 +142,7 @@ public class SimpleKVService implements KVService {
 
         private void handleGet(HttpExchange exchange, String id) throws IOException {
             byte[] data = dao.get(id);
-            exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            exchange.getResponseHeaders().set(CONTENT_TYPE, OCTET_STREAM);
             sendResponse(exchange, STATUS_OK, data);
         }
 
@@ -151,14 +157,13 @@ public class SimpleKVService implements KVService {
             sendResponse(exchange, STATUS_ACCEPTED, new byte[0]);
         }
 
-        //Разбор query-строки: разбивает строку по символу &, каждый параметр по =
         private Map<String, String> parseQuery(String query) {
             Map<String, String> params = new ConcurrentHashMap<>();
             if (query == null) {
                 return params;
             }
-            for (String pair : query.split("&")) {
-                int eq = pair.indexOf('=');
+            for (String pair : query.split(AMPERSAND)) {
+                int eq = pair.indexOf(EQUALS);
                 String key;
                 String value;
                 if (eq > 0) {
@@ -166,7 +171,7 @@ public class SimpleKVService implements KVService {
                     value = decode(pair.substring(eq + 1));
                 } else {
                     key = decode(pair);
-                    value = "";
+                    value = EMPTY;
                 }
                 params.put(key, value);
             }
