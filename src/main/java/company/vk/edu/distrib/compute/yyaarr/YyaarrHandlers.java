@@ -43,7 +43,7 @@ public class YyaarrHandlers {
             logger.info("id: {}", id);
             if (id.isBlank()) {
                 t.sendResponseHeaders(400, 0);
-                t.getResponseBody().write("Missing query".getBytes());
+                t.getResponseBody().close();
             }
             switch (requestMethod) {
                 case "GET": {
