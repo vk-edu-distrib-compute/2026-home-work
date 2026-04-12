@@ -23,7 +23,7 @@ public class ProteusPFSDao implements Dao<byte[]> {
         try {
             Files.createDirectories(storagePath);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create storage directory", e);
+            throw new IllegalStateException("Failed to create storage directory at: " + storagePath, e);
         }
     }
 
@@ -31,7 +31,7 @@ public class ProteusPFSDao implements Dao<byte[]> {
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         Path filePath = storagePath.resolve(key);
         if (!Files.exists(filePath)) {
-            return null;
+            throw new NoSuchElementException("Key not found: " + key);
         }
         return Files.readAllBytes(filePath);
     }

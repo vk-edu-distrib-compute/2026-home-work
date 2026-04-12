@@ -15,8 +15,16 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ProteuspKVService implements KVService {
+
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
+    private static final String PARAM_ID = "id";
+
+    private final ReentrantLock lock = new ReentrantLock();
 
     private final ExecutorService executor;
     private final HttpServer server;
@@ -29,7 +37,7 @@ public class ProteuspKVService implements KVService {
         try {
             this.server = HttpServer.create(new InetSocketAddress(port), 0);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to create HTTP server on port " + port, e);
         }
 
         server.setExecutor(executor);
@@ -61,7 +69,7 @@ public class ProteuspKVService implements KVService {
     private void handleStatus(HttpExchange exchange) throws IOException {
         String method = exchange.getRequestMethod();
 
-        if (!"GET".equals(method)) {
+        if (!METHOD_GET.equals(method)) {
             exchange.sendResponseHeaders(405, -1);
             return;
         }
@@ -74,16 +82,16 @@ public class ProteuspKVService implements KVService {
         Map<String, String> params = HttpUtils.parseQueryParams(query);
 
         switch (method) {
-            case "GET" -> handleGetEntity(exchange, params);
-            case "PUT" -> handlePutEntity(exchange, params);
-            case "DELETE" -> handleDeleteEntity(exchange, params);
+            case METHOD_GET -> handleGetEntity(exchange, params);
+            case METHOD_PUT -> handlePutEntity(exchange, params);
+            case METHOD_DELETE -> handleDeleteEntity(exchange, params);
             default -> exchange.sendResponseHeaders(405, -1);
         }
     }
 
     private void handleDeleteEntity(HttpExchange exchange, Map<String, String> params)
             throws IOException, IllegalArgumentException {
-        String key = params.get("id");
+        String key = params.get(PARAM_ID);
         if (key == null || key.isEmpty()) {
             throw new IllegalArgumentException("Key cannot be null or empty");
         }
@@ -93,21 +101,22 @@ public class ProteuspKVService implements KVService {
 
     private void handleGetEntity(HttpExchange exchange, Map<String, String> params)
             throws IOException, IllegalArgumentException {
-        String key = params.get("id");
+        String key = params.get(PARAM_ID);
         if (key == null || key.isEmpty()) {
             throw new IllegalArgumentException("Key cannot be null or empty");
         }
 
-        byte[] data = dao.get(key);
-        if (data == null) {
-            throw new NoSuchElementException("Key not found: " + key);
+        try {
+            byte[] data = dao.get(key);
+            HttpUtils.sendResponse(exchange, 200, data);
+        } catch (NoSuchElementException e) {
+            throw new NoSuchElementException("Key not found: " + key, e);
         }
-        HttpUtils.sendResponse(exchange, 200, data);
     }
 
     private void handlePutEntity(HttpExchange exchange, Map<String, String> params)
             throws IOException, IllegalArgumentException {
-        String key = params.get("id");
+        String key = params.get(PARAM_ID);
         if (key == null || key.isEmpty()) {
             throw new IllegalArgumentException("Key cannot be null or empty");
         }
@@ -121,24 +130,34 @@ public class ProteuspKVService implements KVService {
     }
 
     @Override
-    public synchronized void start() {
-        server.start();
-        running = true;
+    public void start() {
+        lock.lock();
+        try {
+            server.start();
+            running = true;
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized void stop() {
-        if (!running) {
-            return;
+    public void stop() {
+        lock.lock();
+        try {
+            if (!running) {
+                return;
+            }
+            running = false;
+        } finally {
+            lock.unlock();
         }
-        running = false;
 
         server.stop(0);
 
         try {
             dao.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to close DAO", e);
         }
         executor.shutdown();
     }
