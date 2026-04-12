@@ -14,6 +14,7 @@ public class LillymegaKVService implements KVService {
     private static final String METHOD_PUT = "PUT";
     private static final String METHOD_DELETE = "DELETE";
     private static final String ID_PARAMETER = "id";
+    private static final int QUERY_PARTS_COUNT = 2;
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
@@ -91,8 +92,8 @@ public class LillymegaKVService implements KVService {
             return null;
         }
 
-        String[] parts = query.split("=", 2);
-        if (parts.length != 2) {
+        String[] parts = query.split("=", QUERY_PARTS_COUNT);
+        if (parts.length != QUERY_PARTS_COUNT) {
             return null;
         }
 
