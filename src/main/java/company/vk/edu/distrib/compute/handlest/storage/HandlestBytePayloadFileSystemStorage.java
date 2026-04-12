@@ -4,6 +4,7 @@ import company.vk.edu.distrib.compute.handlest.exceptions.FileException;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.NoSuchElementException;
 import java.util.stream.Stream;
 
 public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byte[]> {
@@ -40,14 +41,14 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
     @Override
     public byte[] get(String key) {
         Path file = resolveKey(key);
-        if (Files.exists(file)) {
-            try {
-                return Files.readAllBytes(file);
-            } catch (IOException e) {
-                throw new FileException("Failed to read file for key: " + key, e);
-            }
+        if (!Files.exists(file)) {
+            throw new NoSuchElementException("Key not found: " + key);
         }
-        return null;
+        try {
+            return Files.readAllBytes(file);
+        } catch (IOException e) {
+            throw new FileException("Failed to read file for key: " + key, e);
+        }
     }
 
     @Override

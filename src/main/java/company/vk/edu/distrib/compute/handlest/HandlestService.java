@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.handlest.enums.HandlestHttpStatus;
 import company.vk.edu.distrib.compute.handlest.exceptions.PortRangeException;
+import company.vk.edu.distrib.compute.handlest.exceptions.ServerStopException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -20,6 +21,7 @@ public class HandlestService implements KVService {
     private static final int MIN_PORT_VALUE = 1024; // values less than 1024 are reserved by system
     private static final int MAX_PORT_VALUE = 65535;
     private static final String PATH_TO_LOCAL_STORAGE_FOLDER = "handlest_storage";
+    private static final String ID_PARAM = "id";
 
     public HandlestService(int port) throws IOException {
         if (port < MIN_PORT_VALUE || port > MAX_PORT_VALUE) {
@@ -48,7 +50,7 @@ public class HandlestService implements KVService {
         try {
             dao.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new ServerStopException("Unexpected error occurred. Could not shutdown server", e);
         }
     }
 
@@ -88,6 +90,7 @@ public class HandlestService implements KVService {
                     break;
                 default:
                     exchange.sendResponseHeaders(HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
+                    break;
             }
         } catch (Exception e) {
             exchange.sendResponseHeaders(HandlestHttpStatus.INTERNAL_ERROR.getCode(), -1);
@@ -133,7 +136,7 @@ public class HandlestService implements KVService {
         String[] params = query.split("&");
         for (String param : params) {
             String[] keyValue = param.split("=", 2);
-            if (keyValue.length == 2 && "id".equals(keyValue[0])) {
+            if (keyValue.length == 2 && ID_PARAM.equals(keyValue[0])) {
                 return keyValue[1];
             }
         }

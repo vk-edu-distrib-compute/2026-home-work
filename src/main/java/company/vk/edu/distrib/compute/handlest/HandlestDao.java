@@ -20,13 +20,7 @@ public class HandlestDao implements Dao<byte[]> {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Key cannot be null or empty");
         }
-
-        byte[] value = storage.get(key);
-        if (value == null) {
-            throw new NoSuchElementException("Key not found: " + key);
-        }
-
-        return value;
+        return storage.get(key);
     }
 
     @Override
