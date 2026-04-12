@@ -24,17 +24,7 @@ public class EntityHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         try (exchange) {
             try {
-                String id = extractId(exchange.getRequestURI());
-                if (id == null) {
-                    exchange.sendResponseHeaders(400, 0);
-                    return;
-                }
-                switch (exchange.getRequestMethod()) {
-                    case "GET" -> handleGet(exchange, id);
-                    case "PUT" -> handlePut(exchange, id);
-                    case "DELETE" -> handleDelete(exchange, id);
-                    default -> exchange.sendResponseHeaders(405, 0);
-                }
+                handleRequest(exchange);
             } catch (IllegalArgumentException e) {
                 exchange.sendResponseHeaders(400, 0);
             } catch (NoSuchElementException e) {
@@ -46,6 +36,24 @@ public class EntityHandler implements HttpHandler {
                 log.error("Unexpected error while handling entity request", e);
                 exchange.sendResponseHeaders(500, 0);
             }
+        }
+    }
+
+    private void handleRequest(HttpExchange exchange) throws IOException {
+        String id = extractId(exchange.getRequestURI());
+        if (id == null) {
+            exchange.sendResponseHeaders(400, 0);
+            return;
+        }
+        handleByMethod(exchange, id);
+    }
+
+    private void handleByMethod(HttpExchange exchange, String id) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> handleGet(exchange, id);
+            case "PUT" -> handlePut(exchange, id);
+            case "DELETE" -> handleDelete(exchange, id);
+            default -> exchange.sendResponseHeaders(405, 0);
         }
     }
 
