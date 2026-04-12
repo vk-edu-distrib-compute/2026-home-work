@@ -28,7 +28,7 @@ public class KVServiceImpl implements KVService {
         server.stop(0);
     }
 
-    public void createContext() {
+    private void createContext() {
         server.createContext("/v0/status", http -> {
             String method = http.getRequestMethod();
             if ("GET".equals(method)) {
