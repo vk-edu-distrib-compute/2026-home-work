@@ -3,11 +3,12 @@ package company.vk.edu.distrib.compute.nst1610;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.nst1610.dao.InMemoryDao;
+import company.vk.edu.distrib.compute.nst1610.dao.FileDao;
 import company.vk.edu.distrib.compute.nst1610.http.EntityHandler;
 import company.vk.edu.distrib.compute.nst1610.http.StatusHandler;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,7 +19,7 @@ public class Nst1610KVService implements KVService {
 
     public Nst1610KVService(int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.dao = new InMemoryDao();
+        this.dao = new FileDao(Path.of("storage"));
         initServer();
     }
 
