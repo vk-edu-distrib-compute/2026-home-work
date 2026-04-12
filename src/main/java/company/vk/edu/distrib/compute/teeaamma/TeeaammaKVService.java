@@ -43,24 +43,23 @@ public class TeeaammaKVService implements KVService {
             final var query = http.getRequestURI().getQuery();
             final var id = parseId(query);
             switch (method) {
-                case "GET":
+                case "GET" -> {
                     final var value = dao.get(id);
                     http.sendResponseHeaders(200, value.length);
                     try (var responseBody = http.getResponseBody()) {
                         responseBody.write(value);
                     }
-                    break;
-                case "PUT":
+                }
+                case "PUT" -> {
                     final var bytes = http.getRequestBody().readAllBytes();
                     dao.upsert(id, bytes);
                     http.sendResponseHeaders(201, 0);
-                    break;
-                case "DELETE":
+                }
+                case "DELETE" -> {
                     dao.delete(id);
                     http.sendResponseHeaders(202, 0);
-                    break;
-                default:
-                    http.sendResponseHeaders(405, 0);
+                }
+                default -> http.sendResponseHeaders(405, 0);
             }
         }));
     }
