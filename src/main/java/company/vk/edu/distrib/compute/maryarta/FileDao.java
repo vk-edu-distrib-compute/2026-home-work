@@ -66,7 +66,7 @@ public class FileDao implements Dao<byte []> {
             byte[] hash = digest.digest(key.getBytes());
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("SHA-256 algorithm is not available", e);
         }
     }
 
