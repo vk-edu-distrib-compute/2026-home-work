@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class CeFelloFileSystemDaoTest {
+    private static final String TEST_KEY = "key";
 
     @TempDir
     Path tempDirectory;
@@ -20,11 +21,11 @@ class CeFelloFileSystemDaoTest {
         byte[] value = new byte[]{1, 2, 3};
 
         CeFelloFileSystemDao firstDao = new CeFelloFileSystemDao(tempDirectory);
-        firstDao.upsert("key", value);
+        firstDao.upsert(TEST_KEY, value);
         firstDao.close();
 
         CeFelloFileSystemDao secondDao = new CeFelloFileSystemDao(tempDirectory);
-        assertArrayEquals(value, secondDao.get("key"));
+        assertArrayEquals(value, secondDao.get(TEST_KEY));
     }
 
     @Test
@@ -38,29 +39,29 @@ class CeFelloFileSystemDaoTest {
     void upsertOverwritesValue() throws IOException {
         CeFelloFileSystemDao dao = new CeFelloFileSystemDao(tempDirectory);
 
-        dao.upsert("key", new byte[]{1});
-        dao.upsert("key", new byte[]{2, 3});
+        dao.upsert(TEST_KEY, new byte[]{1});
+        dao.upsert(TEST_KEY, new byte[]{2, 3});
 
-        assertArrayEquals(new byte[]{2, 3}, dao.get("key"));
+        assertArrayEquals(new byte[]{2, 3}, dao.get(TEST_KEY));
     }
 
     @Test
     void deleteRemovesValue() throws IOException {
         CeFelloFileSystemDao dao = new CeFelloFileSystemDao(tempDirectory);
 
-        dao.upsert("key", new byte[]{1});
-        dao.delete("key");
+        dao.upsert(TEST_KEY, new byte[]{1});
+        dao.delete(TEST_KEY);
 
-        assertThrows(NoSuchElementException.class, () -> dao.get("key"));
+        assertThrows(NoSuchElementException.class, () -> dao.get(TEST_KEY));
     }
 
     @Test
     void storesEmptyValue() throws IOException {
         CeFelloFileSystemDao dao = new CeFelloFileSystemDao(tempDirectory);
 
-        dao.upsert("key", new byte[0]);
+        dao.upsert(TEST_KEY, new byte[0]);
 
-        assertArrayEquals(new byte[0], dao.get("key"));
+        assertArrayEquals(new byte[0], dao.get(TEST_KEY));
     }
 
     @Test
