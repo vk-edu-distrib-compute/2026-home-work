@@ -50,14 +50,12 @@ public class PersistentDao implements Dao<byte[]> {
         saveToFile();
     }
 
-
     @Override
     public void delete(String key) throws IOException {
         validateKey(key);
         storage.remove(key);
         saveToFile();
     }
-
 
     @Override
     public void close() throws IOException {
@@ -91,7 +89,6 @@ public class PersistentDao implements Dao<byte[]> {
             }
         }
     }
-
 
     private void saveToFile() throws IOException {
         try (OutputStream os = Files.newOutputStream(file);
