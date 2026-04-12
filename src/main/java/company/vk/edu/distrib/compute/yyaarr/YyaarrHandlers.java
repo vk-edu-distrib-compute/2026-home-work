@@ -35,7 +35,6 @@ public class YyaarrHandlers {
 
         @Override
         public void handle(HttpExchange t) throws IOException {
-            logger.info("Received HTTP request");
             final String requestMethod = t.getRequestMethod();
             logger.info("requestMethod: {}", requestMethod);
             final String query = t.getRequestURI().getQuery();
@@ -45,7 +44,6 @@ public class YyaarrHandlers {
             if (id.isBlank()) {
                 t.sendResponseHeaders(400, 0);
                 t.getResponseBody().write("Missing query".getBytes());
-                t.getResponseBody().close();
             }
             switch (requestMethod) {
                 case "GET": {
@@ -53,11 +51,9 @@ public class YyaarrHandlers {
                         final var value = dao.get(id);
                         t.sendResponseHeaders(200, 0);
                         t.getResponseBody().write(value);
-                        t.getResponseBody().close();
                     } catch (IllegalArgumentException | NoSuchElementException | IOException exception) {
                         t.sendResponseHeaders(404, 0);
                         t.getResponseBody().write(exception.getMessage().getBytes());
-                        t.getResponseBody().close();
                     }
                     break;
                 }
@@ -65,11 +61,9 @@ public class YyaarrHandlers {
                     try {
                         dao.upsert(id, t.getRequestBody().readAllBytes());
                         t.sendResponseHeaders(201, 0);
-                        t.getResponseBody().close();
                     } catch (IllegalArgumentException | IOException exception) {
                         t.sendResponseHeaders(400, 0);
                         t.getResponseBody().write(exception.getMessage().getBytes());
-                        t.getResponseBody().close();
                     }
                     break;
                 }
@@ -77,17 +71,15 @@ public class YyaarrHandlers {
                     try {
                         dao.delete(id);
                         t.sendResponseHeaders(202, 0);
-                        t.getResponseBody().close();
                     } catch (IllegalArgumentException | IOException exception) {
                         t.sendResponseHeaders(404, 0);
                         t.getResponseBody().write(exception.getMessage().getBytes());
-                        t.getResponseBody().close();
                     }
                     break;
                 }
                 default: {
                     t.sendResponseHeaders(503, 0);
-                    t.getResponseBody().close();
+                    break;
                 }
             }
             t.close();

@@ -10,6 +10,7 @@ import java.util.NoSuchElementException;
 
 public class YyaarrFileDao implements Dao<byte[]> {
     private static final Path STORAGE_DIR = Paths.get("src/main/java/company/vk/edu/distrib/compute/yyaarr/data");
+    private static final String DATSUFFIX = ".dat";
 
     private void createDirectory() throws IOException {
         if (!Files.exists(STORAGE_DIR)) {
@@ -24,8 +25,8 @@ public class YyaarrFileDao implements Dao<byte[]> {
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         checkKey(key);
-        if (Files.exists(STORAGE_DIR.resolve(key + ".dat"))) {
-            return Files.readAllBytes(STORAGE_DIR.resolve(key + ".dat"));
+        if (Files.exists(STORAGE_DIR.resolve(key + DATSUFFIX))) {
+            return Files.readAllBytes(STORAGE_DIR.resolve(key + DATSUFFIX));
         }
         throw new NoSuchElementException("key not found");
     }
@@ -33,8 +34,8 @@ public class YyaarrFileDao implements Dao<byte[]> {
     @Override
     public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
         checkKey(key);
-        Files.write(STORAGE_DIR.resolve(key + ".dat"), value);
-        if (!Files.exists(STORAGE_DIR.resolve(key + ".dat"))) {
+        Files.write(STORAGE_DIR.resolve(key + DATSUFFIX), value);
+        if (!Files.exists(STORAGE_DIR.resolve(key + DATSUFFIX))) {
             throw new IOException("File with data has not been created");
         }
     }
@@ -42,10 +43,10 @@ public class YyaarrFileDao implements Dao<byte[]> {
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
         checkKey(key);
-        if (Files.exists(STORAGE_DIR.resolve(key + ".dat"))) {
-            Files.delete(STORAGE_DIR.resolve(key + ".dat"));
+        if (Files.exists(STORAGE_DIR.resolve(key + DATSUFFIX))) {
+            Files.delete(STORAGE_DIR.resolve(key + DATSUFFIX));
         }
-        if (Files.exists(STORAGE_DIR.resolve(key + ".dat"))) {
+        if (Files.exists(STORAGE_DIR.resolve(key + DATSUFFIX))) {
             throw new IOException("File has not been deleted");
         }
     }
