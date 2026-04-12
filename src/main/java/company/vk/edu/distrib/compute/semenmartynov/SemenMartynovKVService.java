@@ -47,7 +47,9 @@ public class SemenMartynovKVService implements KVService {
     @Override
     public void start() {
         server.start();
-        log.info("SemenMartynovKVService started on port {}", server.getAddress().getPort());
+        if (log.isInfoEnabled()) {
+            log.info("SemenMartynovKVService started on port {}", server.getAddress().getPort());
+        }
     }
 
     @Override
@@ -150,7 +152,9 @@ public class SemenMartynovKVService implements KVService {
      * @return the extracted ID, or null if not present
      */
     private String extractId(String query) {
-        if (query == null) return null;
+        if (query == null) {
+            return null;
+        }
         for (String param : query.split("&")) {
             if (param.startsWith("id=")) {
                 return param.substring(3);
@@ -162,16 +166,16 @@ public class SemenMartynovKVService implements KVService {
     /**
      * Helper to send HTTP responses cleanly.
      *
-     * @param exchange the HTTP exchange
-     * @param rCode    the HTTP response code
-     * @param body     the byte array body, or null if no body
+     * @param exchange     the HTTP exchange
+     * @param statusCode   the HTTP response code
+     * @param body         the byte array body, or null if no body
      * @throws IOException if sending fails
      */
-    private void sendResponse(HttpExchange exchange, int rCode, byte[] body) throws IOException {
+    private void sendResponse(HttpExchange exchange, int statusCode, byte[] body) throws IOException {
         if (body == null || body.length == 0) {
-            exchange.sendResponseHeaders(rCode, -1); // -1 means no body
+            exchange.sendResponseHeaders(statusCode, -1); // -1 means no body
         } else {
-            exchange.sendResponseHeaders(rCode, body.length);
+            exchange.sendResponseHeaders(statusCode, body.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }
