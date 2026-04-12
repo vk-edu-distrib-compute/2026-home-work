@@ -26,9 +26,11 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
                 String myUrl = "http://localhost:" + port;
                 Path storagePath = Paths.get("storage", "data_" + port);
                 
+                PersistentDao dao = createDao(storagePath);
+                
                 services.add(new SolntsevaKVService(
                         port,
-                        new PersistentDao(storagePath),
+                        dao,
                         topology,
                         myUrl
                 ));
@@ -38,5 +40,9 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
         }
 
         return new SolntsevaKVCluster(services, endpoints);
+    }
+
+    private PersistentDao createDao(Path path) throws IOException {
+        return new PersistentDao(path);
     }
 }
