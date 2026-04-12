@@ -10,12 +10,9 @@ import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.support.ParameterDeclarations;
 import org.junit.platform.commons.util.ReflectionUtils;
 
-import company.vk.edu.distrib.compute.semenmartynov.SemenMartynovKVServiceFactory;
-
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        // DummyKVServiceFactory.class
-        SemenMartynovKVServiceFactory.class
+    // DummyKVServiceFactory.class
     );
 
     @Override
