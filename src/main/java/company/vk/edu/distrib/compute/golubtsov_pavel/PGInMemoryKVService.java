@@ -26,7 +26,7 @@ public class PGInMemoryKVService implements KVService {
         initServer();
     }
 
-    public void initServer() {
+    private void initServer() {
         server.createContext("/v0/status", new ErrorHttpHandler(http -> {
             final var method = http.getRequestMethod();
             if (Objects.equals("GET", method)) {
@@ -40,24 +40,21 @@ public class PGInMemoryKVService implements KVService {
             final var method = http.getRequestMethod();
             final var query = http.getRequestURI().getQuery();
             final var id = parseId(query);
-            switch (method) {
-                case "GET":
-                    final var value = dao.get(id);
-                    http.sendResponseHeaders(200, value.length);
-                    http.getResponseBody().write(value);
-                    break;
-                case "PUT":
-                    byte[] body = http.getRequestBody().readAllBytes();
-                    dao.upsert(id, body);
-                    http.sendResponseHeaders(201,0);
-                    break;
-                case "DELETE":
-                    dao.delete(id);
-                    http.sendResponseHeaders(202,0);
-                    break;
-                default:
-                    http.sendResponseHeaders(405, 0);
+            if (Objects.equals("GET", method)) {
+                final var value = dao.get(id);
+                http.sendResponseHeaders(200, value.length);
+                http.getResponseBody().write(value);
+            } else if (Objects.equals("PUT", method)) {
+                byte[] body = http.getRequestBody().readAllBytes();
+                dao.upsert(id, body);
+                http.sendResponseHeaders(201, 0);
+            } else if (Objects.equals("DELETE", method)) {
+                dao.delete(id);
+                http.sendResponseHeaders(202, 0);
+            } else {
+                http.sendResponseHeaders(405, 0);
             }
+
         }));
     }
 
