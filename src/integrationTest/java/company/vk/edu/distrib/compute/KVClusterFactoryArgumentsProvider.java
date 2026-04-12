@@ -5,7 +5,6 @@ import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
-import org.junit.jupiter.params.support.ParameterDeclarations;
 import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.util.Set;
@@ -19,7 +18,6 @@ public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     @Override
     @NonNull
     public Stream<? extends Arguments> provideArguments(
-            @NonNull ParameterDeclarations parameters,
             @NonNull ExtensionContext context
     ) {
         return factories.stream()
