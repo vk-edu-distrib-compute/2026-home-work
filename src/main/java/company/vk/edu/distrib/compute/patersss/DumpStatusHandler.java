@@ -6,9 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public class DumpStatusHandler implements HttpHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(DumpStatusHandler.class);
+    public static final String GET_METHOD = "GET";
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -16,7 +18,7 @@ public class DumpStatusHandler implements HttpHandler {
             String method = exchange.getRequestMethod();
             LOGGER.debug("Handling /v0/status method={}", method);
 
-            if (!"GET".equals(method)) {
+            if (!Objects.equals(GET_METHOD, method)) {
                 exchange.sendResponseHeaders(405, -1);
                 return;
             }

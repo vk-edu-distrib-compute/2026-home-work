@@ -11,6 +11,9 @@ import java.util.NoSuchElementException;
 
 public class DumpEntityHandler implements HttpHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(DumpEntityHandler.class);
+    public static final String GET_METHOD = "GET";
+    public static final String PUT_METHOD = "PUT";
+    public static final String DELETE_METHOD = "DELETE";
 
     private final Dao<byte[]> dao;
 
@@ -40,9 +43,9 @@ public class DumpEntityHandler implements HttpHandler {
             }
 
             switch (method) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
+                case GET_METHOD -> handleGet(exchange, id);
+                case PUT_METHOD -> handlePut(exchange, id);
+                case DELETE_METHOD -> handleDelete(exchange, id);
                 default -> exchange.sendResponseHeaders(405, -1);
             }
         }
