@@ -1,8 +1,8 @@
 package company.vk.edu.distrib.compute;
 
 import module java.base;
+import company.vk.edu.distrib.compute.ce_fello.CeFelloKVServiceFactory;
 import company.vk.edu.distrib.compute.dummy.DummyKVClusterFactory;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
 import org.slf4j.LoggerFactory;
 
 public class Server {
@@ -17,7 +17,7 @@ public class Server {
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
         } else {
             var port = 8080;
-            KVService storage = new DummyKVServiceFactory().create(port);
+            KVService storage = new CeFelloKVServiceFactory().create(port);
             storage.start();
             log.info("Server started on port {}", port);
             Runtime.getRuntime().addShutdownHook(new Thread(storage::stop));
