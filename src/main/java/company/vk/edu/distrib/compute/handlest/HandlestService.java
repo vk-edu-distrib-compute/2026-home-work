@@ -62,7 +62,7 @@ public class HandlestService implements KVService {
                         : HandlestHttpStatus.SERVICE_UNAVAILABLE.getCode();
                 exchange.sendResponseHeaders(statusCode, -1);
             } else {
-                exchange.sendResponseHeaders(HandlestHttpStatus.SERVICE_UNAVAILABLE.getCode(), -1);
+                exchange.sendResponseHeaders(HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
             }
         }
     }

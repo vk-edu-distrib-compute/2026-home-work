@@ -46,6 +46,7 @@ public class HandlestDao implements Dao<byte[]> {
 
     @Override
     public void close() throws IOException {
-        storage.clear();
+        // storage.clear();
+        // Not deleting persisted data on shutdown.
     }
 }
