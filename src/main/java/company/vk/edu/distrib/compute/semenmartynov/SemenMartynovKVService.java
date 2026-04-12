@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,6 +22,14 @@ import java.util.concurrent.Executors;
  */
 public class SemenMartynovKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(SemenMartynovKVService.class);
+
+    private static final String GET_METHOD = "GET";
+    private static final String PUT_METHOD = "PUT";
+    private static final String DELETE_METHOD = "DELETE";
+
+    private static final String STATUS_PATH = "/v0/status";
+    private static final String ENTITY_PATH = "/v0/entity";
+    private static final String ID_PARAM_PREFIX = "id=";
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
@@ -41,8 +50,8 @@ public class SemenMartynovKVService implements KVService {
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.server.setExecutor(executor);
 
-        this.server.createContext("/v0/status", this::handleStatus);
-        this.server.createContext("/v0/entity", this::handleEntity);
+        this.server.createContext(STATUS_PATH, this::handleStatus);
+        this.server.createContext(ENTITY_PATH, this::handleEntity);
     }
 
     @Override
@@ -71,7 +80,7 @@ public class SemenMartynovKVService implements KVService {
      */
     private void handleStatus(HttpExchange exchange) {
         try (exchange) {
-            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            if (!GET_METHOD.equalsIgnoreCase(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, null); // Method Not Allowed
                 return;
             }
@@ -83,29 +92,23 @@ public class SemenMartynovKVService implements KVService {
 
     /**
      * Handles requests mapped to /v0/entity (GET, PUT, DELETE).
+     * Validates the request path and parameters before processing.
      */
     private void handleEntity(HttpExchange exchange) {
         try (exchange) {
             // Strictly match path (avoid handling /v0/entity/abracadabra here)
-            if (!"/v0/entity".equals(exchange.getRequestURI().getPath())) {
+            if (!ENTITY_PATH.equals(exchange.getRequestURI().getPath())) {
                 sendResponse(exchange, 404, null);
                 return;
             }
 
-            String method = exchange.getRequestMethod();
             String id = extractId(exchange.getRequestURI().getQuery());
-
             if (id == null || id.isEmpty()) {
                 sendResponse(exchange, 400, null); // Bad Request: missing or empty ID
                 return;
             }
 
-            switch (method.toUpperCase()) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
-                default -> sendResponse(exchange, 405, null); // Method Not Allowed
-            }
+            processEntityRequest(exchange, id);
         } catch (Exception e) {
             log.error("Internal Server Error handling request", e);
             try {
@@ -113,6 +116,23 @@ public class SemenMartynovKVService implements KVService {
             } catch (Exception ignored) {
                 // Ignore if response is already sent/closed
             }
+        }
+    }
+
+    /**
+     * Dispatches the validated entity request to the appropriate handler based on HTTP method.
+     *
+     * @param exchange the HTTP exchange
+     * @param id       the entity ID
+     * @throws IOException if an I/O error occurs
+     */
+    private void processEntityRequest(HttpExchange exchange, String id) throws IOException {
+        String method = exchange.getRequestMethod().toUpperCase(Locale.ROOT);
+        switch (method) {
+            case GET_METHOD -> handleGet(exchange, id);
+            case PUT_METHOD -> handlePut(exchange, id);
+            case DELETE_METHOD -> handleDelete(exchange, id);
+            default -> sendResponse(exchange, 405, null); // Method Not Allowed
         }
     }
 
@@ -157,8 +177,8 @@ public class SemenMartynovKVService implements KVService {
             return null;
         }
         for (String param : query.split("&")) {
-            if (param.startsWith("id=")) {
-                return param.substring(3);
+            if (param.startsWith(ID_PARAM_PREFIX)) {
+                return param.substring(ID_PARAM_PREFIX.length());
             }
         }
         return null;
@@ -167,9 +187,9 @@ public class SemenMartynovKVService implements KVService {
     /**
      * Helper to send HTTP responses cleanly.
      *
-     * @param exchange     the HTTP exchange
-     * @param statusCode   the HTTP response code
-     * @param body         the byte array body, or null if no body
+     * @param exchange   the HTTP exchange
+     * @param statusCode the HTTP response code
+     * @param body       the byte array body, or null if no body
      * @throws IOException if sending fails
      */
     private void sendResponse(HttpExchange exchange, int statusCode, byte[] body) throws IOException {
