@@ -10,8 +10,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 public class LillymegaKVService implements KVService {
-    private final HttpServer server;
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
+    private static final String ID_PARAMETER = "id";
 
+    private final HttpServer server;
     private final Dao<byte[]> dao;
 
     public LillymegaKVService(int port, Dao<byte[]> dao) throws IOException {
@@ -22,7 +26,7 @@ public class LillymegaKVService implements KVService {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        if (!METHOD_GET.equals(exchange.getRequestMethod())) {
             exchange.sendResponseHeaders(405, -1);
             exchange.close();
             return;
@@ -44,9 +48,9 @@ public class LillymegaKVService implements KVService {
 
         try {
             switch (method) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
+                case METHOD_GET -> handleGet(exchange, id);
+                case METHOD_PUT -> handlePut(exchange, id);
+                case METHOD_DELETE -> handleDelete(exchange, id);
                 default -> {
                     exchange.sendResponseHeaders(405, -1);
                     exchange.close();
@@ -92,7 +96,7 @@ public class LillymegaKVService implements KVService {
             return null;
         }
 
-        if (!"id".equals(parts[0])) {
+        if (!ID_PARAMETER.equals(parts[0])) {
             return null;
         }
 

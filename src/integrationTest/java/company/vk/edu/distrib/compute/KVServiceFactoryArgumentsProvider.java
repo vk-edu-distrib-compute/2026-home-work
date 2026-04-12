@@ -14,7 +14,6 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
             LillymegaKVServiceFactory.class
-            //DummyKVClusterFactory.class
     );
 
     @Override
