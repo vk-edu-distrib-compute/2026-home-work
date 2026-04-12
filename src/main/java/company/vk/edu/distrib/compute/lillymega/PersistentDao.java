@@ -2,10 +2,16 @@ package company.vk.edu.distrib.compute.lillymega;
 
 import company.vk.edu.distrib.compute.Dao;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -71,22 +77,28 @@ public class PersistentDao implements Dao<byte[]> {
              BufferedInputStream bis = new BufferedInputStream(is);
              DataInputStream dis = new DataInputStream(bis)) {
 
-            while (true) {
-                try {
-                    int keyLength = dis.readInt();
-                    byte[] keyBytes = new byte[keyLength];
-                    dis.readFully(keyBytes);
-
-                    int valueLength = dis.readInt();
-                    byte[] valueBytes = new byte[valueLength];
-                    dis.readFully(valueBytes);
-
-                    String key = new String(keyBytes, StandardCharsets.UTF_8);
-                    storage.put(key, valueBytes);
-                } catch (EOFException e) {
-                    break;
-                }
+            boolean hasNext = true;
+            while (hasNext) {
+                hasNext = readEntry(dis);
             }
+        }
+    }
+
+    private boolean readEntry(DataInputStream dis) throws IOException {
+        try {
+            int keyLength = dis.readInt();
+            byte[] keyBytes = new byte[keyLength];
+            dis.readFully(keyBytes);
+
+            int valueLength = dis.readInt();
+            byte[] valueBytes = new byte[valueLength];
+            dis.readFully(valueBytes);
+
+            String key = new String(keyBytes, StandardCharsets.UTF_8);
+            storage.put(key, valueBytes);
+            return true;
+        } catch (EOFException e) {
+            return false;
         }
     }
 

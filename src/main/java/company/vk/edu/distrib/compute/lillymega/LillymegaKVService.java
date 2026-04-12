@@ -69,7 +69,6 @@ public class LillymegaKVService implements KVService {
             exchange.close();
             return;
         }
-
         if (shouldProxy(exchange, id)) {
             proxyRequest(exchange, selectEndpoint(id));
             return;

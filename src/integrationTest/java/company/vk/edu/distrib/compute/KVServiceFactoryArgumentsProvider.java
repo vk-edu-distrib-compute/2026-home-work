@@ -51,7 +51,6 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
             Wolfram158KVServiceFactoryFileWithCacheImpl.class,
             CakeKVServiceFactory.class
     );
-    );
 
     @Override
     @NonNull
