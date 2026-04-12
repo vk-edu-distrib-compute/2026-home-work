@@ -74,6 +74,11 @@ public class DPKvService implements KVService {
     @Override
     public void stop() {
         server.stop(0);
+        try {
+            dao.close();
+        } catch (IOException e) {
+            log.error("Failed to close dao", e);
+        }
         log.info("Stopped");
     }
 
