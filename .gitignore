@@ -38,3 +38,6 @@ vitos23-storage
 ekaterina-gavrilova-storage/
 storage/
 src/main/java/company/vk/edu/distrib/compute/vredakon/storage/
+/data/
+/data_*/
+/.data/
