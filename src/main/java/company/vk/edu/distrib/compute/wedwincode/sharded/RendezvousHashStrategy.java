@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute.wedwincode.sharded;
 
 import java.util.List;
-import java.util.zip.CRC32;
 
 public class RendezvousHashStrategy implements HashStrategy {
     private final List<String> endpoints;
@@ -27,11 +26,5 @@ public class RendezvousHashStrategy implements HashStrategy {
         }
 
         return bestEndpoint;
-    }
-
-    private long hash(String input) {
-        CRC32 crc = new CRC32();
-        crc.update(input.getBytes());
-        return crc.getValue();
     }
 }
