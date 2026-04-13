@@ -36,7 +36,7 @@ public class ShardedKVCluster implements KVCluster {
             try {
                 node = new ShardedFileKVService(port);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException("Failed to start KV node at endpoint: " + endpoint, e);
             }
 
             node.setNodes(endpoints);

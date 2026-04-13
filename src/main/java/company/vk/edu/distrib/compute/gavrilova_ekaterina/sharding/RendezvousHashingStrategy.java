@@ -5,6 +5,7 @@ import java.util.List;
 public class RendezvousHashingStrategy {
 
     private static final long KNUTH_HASH_CONSTANT = 2654435761L;
+    private static final int SINGLE_ENDPOINT = 1;
 
     private List<String> endpoints = List.of();
 
@@ -17,7 +18,7 @@ public class RendezvousHashingStrategy {
             throw new IllegalStateException("Cluster has no nodes");
         }
 
-        if (endpoints.size() == 1) {
+        if (endpoints.size() == SINGLE_ENDPOINT) {
             return endpoints.getFirst();
         }
 
