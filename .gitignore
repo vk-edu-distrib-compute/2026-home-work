@@ -32,3 +32,9 @@ build/
 out/
 
 .vscode/
+
+# Локальные артефакты после ./gradlew check (чужие реализации + тесты)
+vitos23-storage
+ekaterina-gavrilova-storage/
+storage/
+src/main/java/company/vk/edu/distrib/compute/vredakon/storage/
