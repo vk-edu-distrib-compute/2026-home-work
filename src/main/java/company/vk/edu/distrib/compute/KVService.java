@@ -1,5 +1,7 @@
 package company.vk.edu.distrib.compute;
 
+import java.io.IOException;
+
 /**
  * A storage with HTTP API.
  *
@@ -31,7 +33,7 @@ public interface KVService {
      * <p>
      * May be called only once.
      */
-    void start();
+    void start() throws IOException;
 
     /**
      * Stop listening and free all the resources.
