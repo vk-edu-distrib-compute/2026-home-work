@@ -1,5 +1,7 @@
 # ДЗ 1 (jokeryga) — заметки для проверяющего
 
+Файл лежит в пакете `jokeryga` рядом с кодом. Команды `./gradlew …` ниже выполняются из **корня репозитория** (`2026-home-work/`), не из этой папки.
+
 ## Что относится к решению студента
 
 Реализация находится только в пакете `company.vk.edu.distrib.compute.jokeryga`:
@@ -8,7 +10,7 @@
 - `InMemoryDao.java` — in-memory `Dao<byte[]>`
 - `JokerygaKVServiceFactory.java` — фабрика для тестов
 
-Регистрация в интеграционных тестах: класс `JokerygaKVServiceFactory` добавлен в `Set` внутри [`KVServiceFactoryArgumentsProvider.java`](src/integrationTest/java/company/vk/edu/distrib/compute/KVServiceFactoryArgumentsProvider.java) (как требует задание).
+Регистрация в интеграционных тестах: класс `JokerygaKVServiceFactory` добавлен в `Set` внутри [`KVServiceFactoryArgumentsProvider.java`](../../../../../../../../../src/integrationTest/java/company/vk/edu/distrib/compute/KVServiceFactoryArgumentsProvider.java) (как требует задание).
 
 ## Как запустить проверку локально
 
