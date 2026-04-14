@@ -26,6 +26,11 @@ hs_err_pid*
 build/
 .data-11qfour
 datas
+data*/
+.data*/
+storage/
+ekaterina-gavrilova-storage/
+/vitos23-storage
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
