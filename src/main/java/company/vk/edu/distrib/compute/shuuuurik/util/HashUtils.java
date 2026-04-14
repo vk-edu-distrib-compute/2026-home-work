@@ -5,6 +5,18 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public final class HashUtils {
+
+    /**
+     * ThreadLocal кэш MessageDigest.
+     */
+    private static final ThreadLocal<MessageDigest> MD5 = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError("MD5 algorithm not available in this JVM", e);
+        }
+    });
+
     private HashUtils() {
     }
 
@@ -48,11 +60,8 @@ public final class HashUtils {
      * Подходит для равномерного распределения в хэш-таблицах.
      */
     private static byte[] md5(byte[] data) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            return md.digest(data);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("MD5 not available", e);
-        }
+        MessageDigest md = MD5.get();
+        md.reset();
+        return md.digest(data);
     }
 }

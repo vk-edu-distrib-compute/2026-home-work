@@ -11,19 +11,22 @@ import static company.vk.edu.distrib.compute.shuuuurik.util.HashUtils.hashToRing
  */
 public class ConsistentHashRouter implements NodeRouter {
 
+    // NavigableMap<позиция на кольце, endpoint ноды> - O(log n) поиск ближайшего элемента
+    private final NavigableMap<Long, String> ring;
+
+    public ConsistentHashRouter(List<String> nodes) {
+        if (nodes == null || nodes.isEmpty()) {
+            throw new IllegalArgumentException("nodes must not be null or empty");
+        }
+        this.ring = buildRing(nodes);
+    }
+
     /**
      * Выбирает ноду по принципу consistent hashing.
      * Строит кольцо из переданных нод и находит ближайшую по часовой стрелке.
      */
     @Override
     public String route(String key, List<String> nodes) {
-        if (nodes == null || nodes.isEmpty()) {
-            throw new IllegalArgumentException("nodes must not be null or empty");
-        }
-
-        // NavigableMap<позиция на кольце, endpoint ноды> - O(log n) поиск ближайшего элемента
-        NavigableMap<Long, String> ring = buildRing(nodes);
-
         long keyHash = hashToRing(key);
 
         NavigableMap<Long, String> tailMap = ring.tailMap(keyHash, true);

@@ -14,9 +14,11 @@ import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -49,11 +51,11 @@ public class KVServiceProxyImpl implements KVService {
     private final String selfEndpoint; // "http://localhost:8080" - адрес этого узла
     private final List<String> allEndpoints; // все ноды кластера
     private final NodeRouter router;
-    /**
-     * HTTP-клиент для проксирования запросов.
-     */
-    private final HttpClient httpClient;
     private final AtomicBoolean started = new AtomicBoolean(false);
+    /**
+     * HTTP-клиент для проксирования запросов. Пересоздаётся при каждом start() вместе с сервером.
+     */
+    private HttpClient httpClient;
     /**
      * Текущий экземпляр HttpServer. Пересоздаётся при каждом start().
      */
@@ -66,25 +68,23 @@ public class KVServiceProxyImpl implements KVService {
      * @param dao          локальное хранилище данного узла
      * @param allEndpoints список всех endpoint'ов кластера (включая свой)
      * @param router       алгоритм маршрутизации
-     * @throws IOException если не удалось создать HttpServer
      */
     public KVServiceProxyImpl(
             int port,
             Dao<byte[]> dao,
             List<String> allEndpoints,
             NodeRouter router
-    ) throws IOException {
+    ) {
         this.port = port;
         this.dao = dao;
         this.selfEndpoint = "http://localhost:" + port;
         this.allEndpoints = List.copyOf(allEndpoints);
         this.router = router;
-        this.httpClient = HttpClient.newHttpClient();
     }
 
     /**
-     * Запускает узел: создаёт новый HttpServer и биндит его на порт.
-     * Можно вызывать повторно после stop() - каждый раз создаётся свежий сервер.
+     * Запускает узел: создаёт новый HttpServer и HttpClient, биндит сервер на порт.
+     * Можно вызывать повторно после stop() - каждый раз создаётся свежий сервер и клиент.
      */
     @Override
     public void start() {
@@ -92,6 +92,8 @@ public class KVServiceProxyImpl implements KVService {
             throw new IllegalStateException("Service already started");
         }
         try {
+            this.httpClient = HttpClient.newHttpClient();
+
             HttpServer newServer = HttpServer.create();
             newServer.createContext(PATH_STATUS, this::handleStatus);
             newServer.createContext(PATH_ENTITY, this::handleEntity);
@@ -199,7 +201,8 @@ public class KVServiceProxyImpl implements KVService {
      * @param targetEndpoint endpoint ноды, ответственной за ключ
      */
     private void proxyRequest(HttpExchange exchange, String id, String targetEndpoint) throws IOException {
-        String targetUrl = targetEndpoint + "/v0/entity?id=" + id;
+        String encodedId = URLEncoder.encode(id, StandardCharsets.UTF_8).replace("+", "%20");
+        String targetUrl = targetEndpoint + "/v0/entity?id=" + encodedId;
         String method = exchange.getRequestMethod();
 
         try {
@@ -209,23 +212,35 @@ public class KVServiceProxyImpl implements KVService {
                     HttpResponse.BodyHandlers.ofByteArray()
             );
 
-            // Транслирует ответ обратно клиенту
-            int statusCode = proxyResponse.statusCode();
-            byte[] body = proxyResponse.body();
-
-            if (body != null && body.length > 0) {
-                exchange.sendResponseHeaders(statusCode, body.length);
-                try (OutputStream out = exchange.getResponseBody()) {
-                    out.write(body);
-                }
-            } else {
-                exchange.sendResponseHeaders(statusCode, -1);
-            }
+            sendProxyResponse(exchange, proxyResponse);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Proxy interrupted for key={} target={}", id, targetEndpoint);
             exchange.sendResponseHeaders(500, -1);
+        }
+    }
+
+    /**
+     * Транслирует ответ целевой ноды обратно клиенту.
+     *
+     * @param exchange      входящий HTTP-обмен (клиентское соединение)
+     * @param proxyResponse ответ от целевой ноды
+     */
+    private void sendProxyResponse(HttpExchange exchange, HttpResponse<byte[]> proxyResponse)
+            throws IOException {
+        int statusCode = proxyResponse.statusCode();
+        byte[] body = proxyResponse.body();
+
+        if (body != null) {
+            exchange.sendResponseHeaders(statusCode, body.length);
+            if (body.length > 0) {
+                try (OutputStream out = exchange.getResponseBody()) {
+                    out.write(body);
+                }
+            }
+        } else {
+            exchange.sendResponseHeaders(statusCode, -1);
         }
     }
 
