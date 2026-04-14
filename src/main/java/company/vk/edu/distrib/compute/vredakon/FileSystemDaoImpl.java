@@ -17,16 +17,19 @@ public class FileSystemDaoImpl implements Dao<byte[]> {
 
     private final Logger log = LoggerFactory.getLogger("FileSystemDao");
     private final AtomicBoolean isClosed;
+    private final String folder;
 
-    public FileSystemDaoImpl() throws IOException {
+    public FileSystemDaoImpl(String folder) throws IOException {
         createStorage();
+        createFolder(folder);
+        this.folder = folder;
         this.isClosed = new AtomicBoolean(false);
     }
 
     @Override
     public byte[] get(String key) throws IOException {
         if (!isClosed.get()) {
-            return Files.readAllBytes(Path.of(STORAGE_PATH, key));
+            return Files.readAllBytes(Path.of(STORAGE_PATH, folder + "/", key));
         }
         throw new IllegalStateException("Resource is closed");
     }
@@ -34,7 +37,7 @@ public class FileSystemDaoImpl implements Dao<byte[]> {
     @Override
     public void upsert(String key, byte[] value) throws IOException {
         if (!isClosed.get()) {
-            Files.write(Path.of(STORAGE_PATH, key), value);
+            Files.write(Path.of(STORAGE_PATH, folder + "/", key), value);
             return;
         }
         throw new IllegalStateException("Resource is closed");
@@ -43,7 +46,7 @@ public class FileSystemDaoImpl implements Dao<byte[]> {
     @Override
     public void delete(String key) throws IOException {
         if (!isClosed.get()) {
-            Files.deleteIfExists(Path.of(STORAGE_PATH, key));
+            Files.deleteIfExists(Path.of(STORAGE_PATH, folder + "/", key));
             return;
         }
         throw new IllegalStateException("Resource is closed");
@@ -59,7 +62,13 @@ public class FileSystemDaoImpl implements Dao<byte[]> {
 
     private static void createStorage() throws IOException {
         if (Files.notExists(Path.of(STORAGE_PATH))) {
-            Files.createDirectory(Path.of(STORAGE_PATH));
+            Files.createDirectories(Path.of(STORAGE_PATH));
+        }
+    }
+
+    private static void createFolder(String folder) throws IOException {
+        if (Files.notExists(Path.of(STORAGE_PATH, folder))) {
+            Files.createDirectories(Path.of(STORAGE_PATH, folder));
         }
     }
 }
