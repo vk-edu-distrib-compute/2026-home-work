@@ -49,15 +49,15 @@ public class KVServiceImpl implements KVService {
                         http.getResponseBody().write(value);
                     }
                     case "PUT" -> {
-                          byte[] newValue = http.getRequestBody().readAllBytes();
-                          dao.upsert(parseId(query), newValue);
-                          http.sendResponseHeaders(201, 0); // OK
+                        byte[] newValue = http.getRequestBody().readAllBytes();
+                        dao.upsert(parseId(query), newValue);
+                        http.sendResponseHeaders(201, 0); // OK
                     }
                     case "DELETE" -> {
                         dao.delete(parseId(query));
                         http.sendResponseHeaders(202, 0);
                     }
-                default -> http.sendResponseHeaders(405, 0);
+                    default -> http.sendResponseHeaders(405, 0);
                 }
             } catch (IllegalArgumentException e) {
                 http.sendResponseHeaders(400, 0); // Bad Request
