@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -19,51 +21,37 @@ import java.util.concurrent.locks.ReentrantLock;
  *     Сохраняет всю информацию в директорию storage в рабочей директории.
  *     Значение под каждым ключом хранится в файле вида storage/&ltkey>
  * </p>
- *
- * <p>
- *     Для кэширования запросов на получение значения по ключу дополнительно используется {@code CacheDao}.
- * </p>
  */
 public class FileDao implements Dao<byte[]> {
     private static final Logger log = LoggerFactory.getLogger("server");
 
-    private static final Path DEFAULT_ROOT_DIRECTORY = Path.of("storage");
-    private static final int DEFAULT_LIMIT = 200;
+    private static final Path DEFAULT_ROOT_DIRECTORY = Path.of(System.getProperty("user.home"), "highload-course");
 
     private final Path rootDirectory;
-    private final Dao<byte[]> cache;
-    private final Lock lock = new ReentrantLock();
+    private final Map<String, Lock> locks = new ConcurrentHashMap<>();
 
     public FileDao() throws IOException {
-        this(DEFAULT_ROOT_DIRECTORY, DEFAULT_LIMIT);
+        this(DEFAULT_ROOT_DIRECTORY);
     }
 
-    public FileDao(Path rootDirectory, int cacheLimit) throws IOException {
+    public FileDao(Path rootDirectory) throws IOException {
         if (!Files.exists(rootDirectory)) {
             Files.createDirectories(rootDirectory.normalize());
         }
 
         this.rootDirectory = rootDirectory.normalize();
-        this.cache = new CacheDao(cacheLimit);
     }
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+        Lock lock = lockKey(key);
         lock.lock();
 
         try {
-            try {
-                try {
-                    return cache.get(key);
-                } catch (NoSuchElementException e) {
-                    byte[] value = Files.readAllBytes(filePath(key));
-                    cache.upsert(key, value);
-                    return value;
-                }
-            } catch (NoSuchFileException e) {
-                log.error("Key \"{}\" doesn't exist in a file system.", key, e);
-                throw e;
-            }
+            return Files.readAllBytes(filePath(key));
+        } catch (NoSuchFileException e) {
+            log.error("Key \"{}\" doesn't exist in a file system.", key, e);
+            throw e;
         } finally {
             lock.unlock();
         }
@@ -71,11 +59,11 @@ public class FileDao implements Dao<byte[]> {
 
     @Override
     public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
+        Lock lock = lockKey(key);
         lock.lock();
 
         try {
             Files.write(filePath(key), value);
-            cache.upsert(key, value);
         } finally {
             lock.unlock();
         }
@@ -83,6 +71,7 @@ public class FileDao implements Dao<byte[]> {
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
+        Lock lock = lockKey(key);
         lock.lock();
 
         try {
@@ -91,12 +80,6 @@ public class FileDao implements Dao<byte[]> {
             } catch (NoSuchFileException e) {
                 log.warn("Key \"{}\" doesn't exist in file system.", key);
             }
-
-            try {
-                cache.delete(key);
-            } catch (NoSuchElementException e) {
-                log.debug("Key \"{}\" doesn't exist in cache.", key);
-            }
         } finally {
             lock.unlock();
         }
@@ -104,13 +87,7 @@ public class FileDao implements Dao<byte[]> {
 
     @Override
     public void close() throws IOException {
-        lock.lock();
-
-        try {
-            cache.close();
-        } finally {
-            lock.unlock();
-        }
+        //
     }
 
     private Path filePath(String pathWay) {
@@ -121,5 +98,9 @@ public class FileDao implements Dao<byte[]> {
         }
 
         return result;
+    }
+
+    private Lock lockKey(String key) {
+        return locks.computeIfAbsent(key, ignored -> new ReentrantLock());
     }
 }
