@@ -1,36 +1,35 @@
 package company.vk.edu.distrib.compute.maryarta;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 public class ShardedKVServiceImpl implements KVService {
     private HttpServer server;
-    private final HttpClient client = HttpClient.newHttpClient();
     private final Dao<byte[]> dao;
-    private final String selfEndpoint;
+    private final String endpoint;
+    private final List<String> endpoints;
+    boolean started;
     private final int port;
-    private boolean started;
-    private final ShardingStrategy shardingStrategy;
-    private ExecutorService executor;
 
-    public ShardedKVServiceImpl(int port, ShardingStrategy shardingStrategy) throws IOException {
+    public ShardedKVServiceImpl(int port, String endpoint, List<String> endpoints) throws IOException {
         this.port = port;
-        this.dao = new H2Dao("node-" + port);
-        this.selfEndpoint = "http://localhost:" + port;
-        this.shardingStrategy = shardingStrategy;
+        this.dao = new H2Dao("node-" + port); // пример
+        this.endpoint = endpoint;
+        this.endpoints = List.copyOf(endpoints);
     }
 
     @Override
@@ -40,13 +39,11 @@ public class ShardedKVServiceImpl implements KVService {
         }
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
-            executor = Executors.newVirtualThreadPerTaskExecutor();
-            server.setExecutor(executor);
             createContext();
             server.start();
             started = true;
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to start server on port " + port, e);
+            throw new RuntimeException("Failed to start server on port " + port, e);
         }
     }
 
@@ -56,99 +53,56 @@ public class ShardedKVServiceImpl implements KVService {
             return;
         }
         server.stop(0);
-        if (executor != null) {
-            executor.close();
-        }
+        server = null;
         started = false;
     }
 
     private void createContext() {
-        server.createContext("/v0/status", handleStatusRequest());
-        server.createContext("/v0/entity", handleEntityRequest());
-    }
-
-    private HttpHandler handleStatusRequest() {
-        return exchange -> {
-            String method = exchange.getRequestMethod();
+        // определить, кому принадлежит запрос,
+        server.createContext("/v0/status", http -> {
+            String method = http.getRequestMethod();
             if ("GET".equals(method)) {
-                exchange.sendResponseHeaders(200, -1);
+                http.sendResponseHeaders(200,-1);
             } else {
-                exchange.sendResponseHeaders(405, -1);
+                http.sendResponseHeaders(405,-1);
             }
-            exchange.close();
-        };
-    }
+            http.close();
+        });
+        server.createContext("/v0/entity", http -> {
+            try {
+                boolean internal = http.getRequestHeaders().containsKey("X-Internal-Request");
+            String method = http.getRequestMethod();
+            String query = http.getRequestURI().getQuery();
+            String target = resolve(parseId(query));
+            if (!internal && !target.equals(endpoint)) {
+                proxyRequest(http, target);
+                return;
+            }
 
-    private HttpHandler handleEntityRequest() {
-        return exchange -> {
-            try (exchange) {
-                try {
-                    String method = exchange.getRequestMethod();
-                    String query = exchange.getRequestURI().getQuery();
-                    String id = parseId(query);
-                    String target = shardingStrategy.getEndpoint(parseId(query));
-                    if (!target.equals(selfEndpoint)) {
-                        proxyRequest(exchange, target);
-                        return;
+                switch (method) {
+                    case "GET" -> {
+                        byte [] value = dao.get(parseId(query));
+                        http.sendResponseHeaders(200, value.length); // OK
+                        http.getResponseBody().write(value);
                     }
-                    switch (method) {
-                        case "GET" -> {
-                            byte[] value = dao.get(id);
-                            exchange.sendResponseHeaders(200, value.length);
-                            exchange.getResponseBody().write(value);
-                        }
-                        case "PUT" -> {
-                            byte[] newValue = exchange.getRequestBody().readAllBytes();
-                            dao.upsert(id, newValue);
-                            exchange.sendResponseHeaders(201, -1);
-                        }
-                        case "DELETE" -> {
-                            dao.delete(id);
-                            exchange.sendResponseHeaders(202, -1);
-                        }
-                        default -> exchange.sendResponseHeaders(405, -1);
+                    case "PUT" -> {
+                        byte[] newValue = http.getRequestBody().readAllBytes();
+                        dao.upsert(parseId(query), newValue);
+                        http.sendResponseHeaders(201, 0); // OK
                     }
-                } catch (IllegalArgumentException e) {
-                    exchange.sendResponseHeaders(400, -1);
-                } catch (NoSuchElementException e) {
-                    exchange.sendResponseHeaders(404, -1);
+                    case "DELETE" -> {
+                        dao.delete(parseId(query));
+                        http.sendResponseHeaders(202, 0);
+                    }
+                    default -> http.sendResponseHeaders(405, 0);
                 }
+            } catch (IllegalArgumentException e) {
+                http.sendResponseHeaders(400, 0); // Bad Request
+            } catch (NoSuchElementException e) {
+                http.sendResponseHeaders(404, 0); // Not Found
             }
-        };
-    }
-
-    private void proxyRequest(HttpExchange exchange, String target) throws IOException {
-        try {
-            URI uri = URI.create(target + exchange.getRequestURI());
-            HttpRequest.Builder request = HttpRequest.newBuilder(uri);
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> request.GET();
-                case "PUT" -> {
-                    byte[] requestBody = exchange.getRequestBody().readAllBytes();
-                    request.PUT(HttpRequest.BodyPublishers.ofByteArray(requestBody));
-                }
-                case "DELETE" -> request.DELETE();
-                default -> {
-                    exchange.sendResponseHeaders(405, -1);
-                    return;
-                }
-            }
-            HttpResponse<byte[]> response = client.send(
-                    request.build(),
-                    HttpResponse.BodyHandlers.ofByteArray()
-            );
-            byte[] responseBody = response.body();
-            if (responseBody == null) {
-                responseBody = new byte[0];
-            }
-            exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
-            exchange.getResponseBody().write(responseBody);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            exchange.sendResponseHeaders(500, -1);
-        } catch (IOException e) {
-            exchange.sendResponseHeaders(503, -1);
-        }
+            http.close();
+        });
     }
 
     private static String parseId(String query) {
@@ -156,6 +110,77 @@ public class ShardedKVServiceImpl implements KVService {
             return query.substring(3);
         } else {
             throw new IllegalArgumentException("Bad query");
+        }
+    }
+
+    private String resolve(String key){
+        long max = Long.MIN_VALUE;
+        String end = "";
+        for(String s: endpoints){
+            long score = score(key, s);
+            if(score > max){
+                max = score;
+                end = s;
+            }
+        }
+        return end;
+    }
+
+    private long score (String key, String endpoint){
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest((key + endpoint).getBytes());
+            long value = 0;
+            for (int i = 0; i < 8; i++) {
+                value = (value << 8) | (digest[i] & 0xffL);
+            }
+            return value;
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", e);
+        }
+    }
+
+    private final HttpClient client = HttpClient.newHttpClient();
+
+    private void proxyRequest(HttpExchange exchange, String target) throws IOException {
+        try {
+            URI uri = URI.create(target + exchange.getRequestURI());
+
+            byte[] requestBody = exchange.getRequestBody().readAllBytes();
+
+            HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                    .header("X-Internal-Request", "true");
+
+            String method = exchange.getRequestMethod();
+            switch (method) {
+                case "GET" -> builder.GET();
+                case "PUT" -> builder.PUT(HttpRequest.BodyPublishers.ofByteArray(requestBody));
+                case "DELETE" -> builder.DELETE();
+                default -> {
+                    exchange.sendResponseHeaders(405, -1);
+                    return;
+                }
+            }
+
+            HttpResponse<byte[]> response = client.send(
+                    builder.build(),
+                    HttpResponse.BodyHandlers.ofByteArray()
+            );
+
+            byte[] responseBody = response.body();
+            if (responseBody == null) {
+                responseBody = new byte[0];
+            }
+
+            exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(responseBody);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            exchange.sendResponseHeaders(500, -1);
+        } catch (IOException e) {
+            exchange.sendResponseHeaders(503, -1);
         }
     }
 }
