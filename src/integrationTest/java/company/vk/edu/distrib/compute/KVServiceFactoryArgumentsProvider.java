@@ -14,9 +14,11 @@ import company.vk.edu.distrib.compute.nesterukia.in_memory.NesterukiaInMemoryKVS
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.t1d333.T1d333KVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
+import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
 
+import company.vk.edu.distrib.compute.wolfram158.Wolfram158KVServiceFactoryFileWithCacheImpl;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -34,12 +36,14 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         InMemoryKVServiceFactory.class,
         Vitos23KVServiceFactory.class,
         NihuawayKVServiceFactory.class,
+        ShuuuurikFileKVServiceFactory.class,
         B10nicleKVServiceFactory.class,
         VredakonKVServiceFactory.class,
         PopovIgorKVServiceFactoryImpl.class,
         NesterukiaInMemoryKVServiceFactory.class,
         NesterukiaFileSystemKVServiceFactory.class,
-        T1d333KVServiceFactory.class
+        T1d333KVServiceFactory.class,
+        Wolfram158KVServiceFactoryFileWithCacheImpl.class
     );
 
     @Override
