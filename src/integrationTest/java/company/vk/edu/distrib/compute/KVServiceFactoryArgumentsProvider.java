@@ -16,6 +16,8 @@ import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
+import company.vk.edu.distrib.compute.mcfluffybottoms.McfluffybottomsFileKVServiceFactory;
+import company.vk.edu.distrib.compute.mcfluffybottoms.McfluffybottomsInMemoryKVServiceFactory;
 
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -38,6 +40,8 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         B10nicleKVServiceFactory.class,
         VredakonKVServiceFactory.class,
         PopovIgorKVServiceFactoryImpl.class,
+        McfluffybottomsFileKVServiceFactory.class,
+        McfluffybottomsInMemoryKVServiceFactory.class,
         NesterukiaInMemoryKVServiceFactory.class,
         NesterukiaFileSystemKVServiceFactory.class
     );
