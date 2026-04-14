@@ -9,7 +9,7 @@ public final class HashUtils {
     /**
      * ThreadLocal кэш MessageDigest.
      */
-    private static final ThreadLocal<MessageDigest> MD5 = ThreadLocal.withInitial(() -> {
+    private static final ThreadLocal<MessageDigest> MD5_DIGEST = ThreadLocal.withInitial(() -> {
         try {
             return MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException e) {
@@ -60,7 +60,7 @@ public final class HashUtils {
      * Подходит для равномерного распределения в хэш-таблицах.
      */
     private static byte[] md5(byte[] data) {
-        MessageDigest md = MD5.get();
+        MessageDigest md = MD5_DIGEST.get();
         md.reset();
         return md.digest(data);
     }
