@@ -3,6 +3,8 @@ package company.vk.edu.distrib.compute.wolfram158;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.KVServiceFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
@@ -11,6 +13,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Wolfram158KVClusterImpl implements KVCluster {
+    private static final Logger log = LoggerFactory.getLogger(Wolfram158KVClusterImpl.class);
     private final List<String> endpoints;
     private final Map<String, KVServiceImpl> endpointToKVService;
     private final KVServiceFactory factory;
@@ -41,23 +44,22 @@ public class Wolfram158KVClusterImpl implements KVCluster {
             try {
                 service.start();
             } catch (IllegalStateException ignored1) {
-                try {
-                    final var newService = (KVServiceImpl) factory.create(Utils.extractPort(endpoint));
-                    newService.setRouter(router);
-                    newService.start();
-                    endpointToKVService.put(endpoint, newService);
-                } catch (IOException ignored2) {
-                    // no op
-                }
+                createNewService(endpoint);
             }
         } else {
-            try {
-                final var newService = (KVServiceImpl) factory.create(Utils.extractPort(endpoint));
-                newService.setRouter(router);
-                newService.start();
-                endpointToKVService.put(endpoint, newService);
-            } catch (IOException ignored) {
-                // no op
+            createNewService(endpoint);
+        }
+    }
+
+    private void createNewService(String endpoint) {
+        try {
+            final var newService = (KVServiceImpl) factory.create(Utils.extractPort(endpoint));
+            newService.setRouter(router);
+            newService.start();
+            endpointToKVService.put(endpoint, newService);
+        } catch (IOException e) {
+            if (log.isWarnEnabled()) {
+                log.warn(e.getMessage());
             }
         }
     }
