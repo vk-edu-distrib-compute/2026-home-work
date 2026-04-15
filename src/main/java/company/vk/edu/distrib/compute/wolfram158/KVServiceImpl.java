@@ -10,17 +10,33 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
 public class KVServiceImpl implements KVService {
     private final HttpServer server;
+    private Router router = null;
+    private final HttpClient client;
+    private final String endpoint;
+    private static final String ENTITY_SUFFIX = "/v0/entity";
 
     public KVServiceImpl(final int port, final Dao<byte[]> dao) throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
+        endpoint = Utils.mapToLocalhostEndpoint(port);
+        client = HttpClient.newHttpClient();
         addStatusHandler();
         addEntityHandler(dao);
+    }
+
+    public void setRouter(Router router) {
+        this.router = router;
     }
 
     @Override
@@ -44,7 +60,20 @@ public class KVServiceImpl implements KVService {
     }
 
     private void addEntityHandler(final Dao<byte[]> dao) {
-        server.createContext("/v0/entity", exchange -> {
+        server.createContext(ENTITY_SUFFIX, exchange -> {
+            if (router != null) {
+                final Map<String, List<String>> queries = Utils.extractQueryParams(exchange.getRequestURI().getQuery());
+                final List<String> values = queries.get(QueryParamConstants.ID);
+                if (values.isEmpty() || values.getFirst().isEmpty()) {
+                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, -1);
+                    return;
+                }
+                final String workEndpoint = router.getNode(values.getFirst());
+                if (!workEndpoint.equals(endpoint)) {
+                    handleProxy(exchange, workEndpoint, values.getFirst());
+                    return;
+                }
+            }
             switch (exchange.getRequestMethod()) {
                 case HttpMethodConstants.GET: {
                     handleGetEntity(exchange, dao);
@@ -68,6 +97,47 @@ public class KVServiceImpl implements KVService {
                 }
             }
         });
+    }
+
+    private void handleProxy(
+            final HttpExchange exchange,
+            final String workEndpoint,
+            final String key
+
+    ) throws IOException {
+        try {
+            final String url = String.format(
+                    "%s%s?%s=%s",
+                    workEndpoint,
+                    ENTITY_SUFFIX,
+                    QueryParamConstants.ID,
+                    URLEncoder.encode(key, StandardCharsets.UTF_8)
+            );
+            final HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(url));
+            switch (exchange.getRequestMethod()) {
+                case HttpMethodConstants.GET -> builder.GET();
+                case HttpMethodConstants.PUT ->
+                        builder.PUT(HttpRequest.BodyPublishers.ofByteArray(exchange.getRequestBody().readAllBytes()));
+                case HttpMethodConstants.DELETE -> builder.DELETE();
+                default -> {
+                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_METHOD, -1);
+                    return;
+                }
+            }
+            final HttpResponse<byte[]> response = client.send(
+                    builder.build(),
+                    HttpResponse.BodyHandlers.ofByteArray()
+            );
+            exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response.body());
+            }
+        } catch (Exception e) {
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_INTERNAL_ERROR, -1);
+        } finally {
+            exchange.close();
+        }
     }
 
     @SuppressWarnings("PMD.UseTryWithResources")
