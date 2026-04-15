@@ -9,6 +9,10 @@ import java.util.Arrays;
 import java.util.List;
 
 public final class Server {
+    private static final String MODE_CLUSTER = "cluster";
+    private static final String ALGO_CONSISTENT = "consistent";
+    private static final String ALGO_RENDEZVOUS = "rendezvous";
+
     private Server() {
     }
 
@@ -32,12 +36,12 @@ public final class Server {
     }
 
     private static boolean isClusterMode(String... args) {
-        return Arrays.stream(args).anyMatch("cluster"::equalsIgnoreCase);
+        return Arrays.stream(args).anyMatch(MODE_CLUSTER::equalsIgnoreCase);
     }
 
     private static String resolveAlgorithm(String... args) {
         for (String arg : args) {
-            if ("consistent".equalsIgnoreCase(arg) || "rendezvous".equalsIgnoreCase(arg)) {
+            if (ALGO_CONSISTENT.equalsIgnoreCase(arg) || ALGO_RENDEZVOUS.equalsIgnoreCase(arg)) {
                 return arg;
             }
         }

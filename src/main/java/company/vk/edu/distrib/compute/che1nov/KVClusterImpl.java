@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class KVClusterImpl implements KVCluster {
     private final List<String> endpoints;
@@ -18,6 +19,7 @@ public class KVClusterImpl implements KVCluster {
     private final Set<String> startedEndpoints;
     private final ShardRouter shardRouter;
     private final ClusterProxyClient proxyClient;
+    private final ReentrantLock lifecycleLock;
 
     public KVClusterImpl(List<Integer> ports, String shardingAlgorithm) {
         validatePorts(ports);
@@ -27,22 +29,56 @@ public class KVClusterImpl implements KVCluster {
         this.startedEndpoints = new LinkedHashSet<>();
         this.shardRouter = KVClusterFactoryImpl.createRouter(endpoints, shardingAlgorithm);
         this.proxyClient = new ClusterProxyClient();
+        this.lifecycleLock = new ReentrantLock();
 
-        for (int port : ports) {
-            String endpoint = endpoint(port);
-            nodes.put(endpoint, new ClusterNode(port, endpoint, new InMemoryDao()));
+        initializeNodes(ports);
+    }
+
+    @Override
+    public void start() {
+        lifecycleLock.lock();
+        try {
+            for (String endpoint : endpoints) {
+                startInternal(endpoint);
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 
     @Override
-    public synchronized void start() {
-        for (String endpoint : endpoints) {
-            start(endpoint);
+    public void start(String endpoint) {
+        lifecycleLock.lock();
+        try {
+            startInternal(endpoint);
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 
     @Override
-    public synchronized void start(String endpoint) {
+    public void stop() {
+        lifecycleLock.lock();
+        try {
+            for (String endpoint : endpoints) {
+                stopInternal(endpoint);
+            }
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    @Override
+    public void stop(String endpoint) {
+        lifecycleLock.lock();
+        try {
+            stopInternal(endpoint);
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    private void startInternal(String endpoint) {
         ClusterNode node = getNode(endpoint);
         if (startedEndpoints.contains(endpoint)) {
             return;
@@ -52,15 +88,7 @@ public class KVClusterImpl implements KVCluster {
         startedEndpoints.add(endpoint);
     }
 
-    @Override
-    public synchronized void stop() {
-        for (String endpoint : endpoints) {
-            stop(endpoint);
-        }
-    }
-
-    @Override
-    public synchronized void stop(String endpoint) {
+    private void stopInternal(String endpoint) {
         ClusterNode node = getNode(endpoint);
         if (!startedEndpoints.contains(endpoint)) {
             return;
@@ -71,6 +99,18 @@ public class KVClusterImpl implements KVCluster {
         } finally {
             startedEndpoints.remove(endpoint);
         }
+    }
+
+    private void initializeNodes(List<Integer> ports) {
+        for (int port : ports) {
+            String endpoint = endpoint(port);
+            nodes.put(endpoint, createClusterNode(port, endpoint));
+        }
+    }
+
+    private ClusterNode createClusterNode(int port, String endpoint) {
+        InMemoryDao dao = new InMemoryDao();
+        return new ClusterNode(port, endpoint, dao);
     }
 
     @Override
@@ -138,7 +178,6 @@ public class KVClusterImpl implements KVCluster {
         private void stop() {
             if (service != null) {
                 service.stop();
-                service = null;
             }
         }
     }
