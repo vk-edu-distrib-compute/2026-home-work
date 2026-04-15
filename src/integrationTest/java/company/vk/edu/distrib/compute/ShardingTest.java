@@ -6,11 +6,8 @@ import org.junit.jupiter.params.Parameter;
 import org.junit.jupiter.params.ParameterizedClass;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -24,9 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 @ParameterizedClass
 @ArgumentsSource(KVClusterFactoryArgumentsProvider.class)
 class ShardingTest extends TestBase {
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
-    private static final Duration TIMEOUT = Duration.ofSeconds(5);
-    private static final int CLUSTER_SIZE = 2;
+    static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    static final int CLUSTER_SIZE = 2;
 
     @Parameter
     KVClusterFactory kvClusterFactory;
@@ -37,83 +33,227 @@ class ShardingTest extends TestBase {
     }
 
     @Test
-    void insertAndReadFromAnyNode() {
+    void insert() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
-            KVCluster cluster = kvClusterFactory.create(generateRandomPorts());
-            cluster.start();
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
             try {
                 String key = randomKey();
                 byte[] value = randomValue();
+                List<String> endpoints = storage.getEndpoints();
 
-                for (String endpoint : cluster.getEndpoints()) {
+                for (String endpoint : endpoints) {
                     assertEquals(201, upsert(endpoint, key, value).statusCode());
-                }
 
-                for (String endpoint : cluster.getEndpoints()) {
-                    HttpResponse<byte[]> response = get(endpoint, key);
-                    assertEquals(200, response.statusCode());
-                    assertArrayEquals(value, response.body());
+                    for (String readEndpoint : endpoints) {
+                        HttpResponse<byte[]> response = get(readEndpoint, key);
+                        assertEquals(200, response.statusCode());
+                        assertArrayEquals(value, response.body());
+                    }
                 }
             } finally {
-                cluster.stop();
+                storage.stop();
             }
         });
     }
 
     @Test
-    void keepsSingleReplicaAcrossNodes() {
+    void insertEmpty() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
-            KVCluster cluster = kvClusterFactory.create(generateRandomPorts());
-            cluster.start();
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
             try {
                 String key = randomKey();
-                byte[] value = randomValue();
+                byte[] value = new byte[0];
+                List<String> endpoints = storage.getEndpoints();
 
-                for (String endpoint : cluster.getEndpoints()) {
+                for (String endpoint : endpoints) {
                     assertEquals(201, upsert(endpoint, key, value).statusCode());
-                }
 
-                cluster.stop();
-
-                int successCount = 0;
-                for (String endpoint : cluster.getEndpoints()) {
-                    cluster.start(endpoint);
-                    HttpResponse<byte[]> response = get(endpoint, key);
-                    if (response.statusCode() == 200 && Arrays.equals(value, response.body())) {
-                        successCount++;
+                    for (String readEndpoint : endpoints) {
+                        HttpResponse<byte[]> response = get(readEndpoint, key);
+                        assertEquals(200, response.statusCode());
+                        assertArrayEquals(value, response.body());
                     }
-                    cluster.stop(endpoint);
                 }
-                assertEquals(1, successCount);
             } finally {
-                cluster.stop();
+                storage.stop();
             }
         });
     }
 
-    private static HttpResponse<byte[]> get(String endpoint, String key) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .GET()
-                .uri(URI.create(endpoint + "/v0/entity?id=" + key))
-                .timeout(Duration.ofSeconds(2))
-                .build();
-        return HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+    @Test
+    void upsert() {
+        assertTimeoutPreemptively(TIMEOUT, () -> {
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
+            try {
+                String key = randomKey();
+                byte[] value1 = randomValue();
+                byte[] value2 = randomValue();
+                List<String> endpoints = storage.getEndpoints();
+
+                assertEquals(201, upsert(endpoints.get(0), key, value1).statusCode());
+                assertEquals(201, upsert(endpoints.get(1), key, value2).statusCode());
+
+                for (String endpoint : endpoints) {
+                    HttpResponse<byte[]> response = get(endpoint, key);
+                    assertEquals(200, response.statusCode());
+                    assertArrayEquals(value2, response.body());
+                }
+            } finally {
+                storage.stop();
+            }
+        });
     }
 
-    private static HttpResponse<Void> upsert(String endpoint, String key, byte[] data) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(data))
-                .uri(URI.create(endpoint + "/v0/entity?id=" + key))
-                .timeout(Duration.ofSeconds(2))
-                .build();
-        return HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.discarding());
+    @Test
+    void upsertEmpty() {
+        assertTimeoutPreemptively(TIMEOUT, () -> {
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
+            try {
+                String key = randomKey();
+                byte[] value = randomValue();
+                byte[] empty = new byte[0];
+                List<String> endpoints = storage.getEndpoints();
+
+                assertEquals(201, upsert(endpoints.get(0), key, value).statusCode());
+                assertEquals(201, upsert(endpoints.get(1), key, empty).statusCode());
+
+                for (String endpoint : endpoints) {
+                    HttpResponse<byte[]> response = get(endpoint, key);
+                    assertEquals(200, response.statusCode());
+                    assertArrayEquals(empty, response.body());
+                }
+            } finally {
+                storage.stop();
+            }
+        });
     }
 
-    private static List<Integer> generateRandomPorts() {
-        Set<Integer> ports = new HashSet<>();
-        while (ports.size() < CLUSTER_SIZE) {
-            ports.add(randomPort());
+    @Test
+    void delete() {
+        assertTimeoutPreemptively(TIMEOUT, () -> {
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
+            try {
+                String key = randomKey();
+                byte[] value = randomValue();
+                List<String> endpoints = storage.getEndpoints();
+
+                for (String endpoint : endpoints) {
+                    assertEquals(201, upsert(endpoint, key, value).statusCode());
+                }
+
+                assertEquals(202, delete(endpoints.getFirst(), key).statusCode());
+
+                for (String endpoint : endpoints) {
+                    assertEquals(404, get(endpoint, key).statusCode());
+                }
+            } finally {
+                storage.stop();
+            }
+        });
+    }
+
+    @Test
+    void lifecycle2keys() {
+        assertTimeoutPreemptively(TIMEOUT, () -> {
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
+            try {
+                String key1 = randomKey();
+                byte[] value1 = randomValue();
+                String key2 = randomKey();
+                byte[] value2 = randomValue();
+                List<String> endpoints = storage.getEndpoints();
+
+                assertEquals(201, upsert(endpoints.get(0), key1, value1).statusCode());
+                for (String endpoint : endpoints) {
+                    assertArrayEquals(value1, get(endpoint, key1).body());
+                }
+
+                assertEquals(201, upsert(endpoints.get(1), key2, value2).statusCode());
+                for (String endpoint : endpoints) {
+                    assertArrayEquals(value1, get(endpoint, key1).body());
+                    assertArrayEquals(value2, get(endpoint, key2).body());
+                }
+
+                for (String endpoint : endpoints) {
+                    assertEquals(202, delete(endpoint, key1).statusCode());
+                }
+                for (String endpoint : endpoints) {
+                    assertEquals(404, get(endpoint, key1).statusCode());
+                    assertArrayEquals(value2, get(endpoint, key2).body());
+                }
+
+                for (String endpoint : endpoints) {
+                    assertEquals(202, delete(endpoint, key2).statusCode());
+                }
+                for (String endpoint : endpoints) {
+                    assertEquals(404, get(endpoint, key1).statusCode());
+                    assertEquals(404, get(endpoint, key2).statusCode());
+                }
+            } finally {
+                storage.stop();
+            }
+        });
+    }
+
+    @Test
+    void distribute() {
+        assertTimeoutPreemptively(TIMEOUT, () -> {
+            List<Integer> ports = generateRandomPorts();
+            KVCluster storage = kvClusterFactory.create(ports);
+            storage.start();
+            try {
+                String key = randomKey();
+                byte[] value = randomValue();
+                List<String> endpoints = storage.getEndpoints();
+
+                for (String endpoint : endpoints) {
+                    assertEquals(201, upsert(endpoint, key, value).statusCode());
+                }
+
+                storage.stop();
+
+                int successCount = 0;
+                for (String endpoint : endpoints) {
+                    storage.start(endpoint);
+
+                    HttpResponse<byte[]> response = get(endpoint, key);
+                    if (200 == response.statusCode() && Arrays.equals(value, response.body())) {
+                        successCount++;
+                    }
+
+                    storage.stop(endpoint);
+                }
+
+                assertEquals(1, successCount);
+            } finally {
+                storage.stop();
+            }
+        });
+    }
+
+    @Override
+    protected HttpClient getHttpClient() {
+        return HTTP_CLIENT;
+    }
+
+    private List<Integer> generateRandomPorts() {
+        Set<Integer> result = new HashSet<>();
+        while (result.size() != CLUSTER_SIZE) {
+            result.add(randomPort());
         }
-        return new ArrayList<>(ports);
+
+        return new ArrayList<>(result);
     }
 }
