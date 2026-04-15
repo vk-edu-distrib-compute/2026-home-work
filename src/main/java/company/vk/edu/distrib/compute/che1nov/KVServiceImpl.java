@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.che1nov.cluster.ClusterProxyClient;
+import company.vk.edu.distrib.compute.che1nov.cluster.ShardRouter;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,25 +21,41 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
+@SuppressWarnings("PMD.GodClass")
 public class KVServiceImpl implements KVService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
     private static final int MIN_PORT = 1;
     private static final int MAX_PORT = 65_535;
+    private static final String ENTITY_PATH = "/v0/entity";
     private static final String GET_METHOD = "GET";
     private static final String PUT_METHOD = "PUT";
     private static final String DELETE_METHOD = "DELETE";
 
     private final Dao<byte[]> dao;
+    private final String localEndpoint;
+    private final ShardRouter shardRouter;
+    private final ClusterProxyClient proxyClient;
 
     private final HttpServer server;
     private final InetSocketAddress listenAddress;
     private boolean started;
 
     public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
+        this(port, dao, null, null, null);
+    }
+
+    public KVServiceImpl(
+            int port,
+            Dao<byte[]> dao,
+            String localEndpoint,
+            ShardRouter shardRouter,
+            ClusterProxyClient proxyClient
+    ) throws IOException {
         this.dao = validateDao(dao);
+        this.localEndpoint = localEndpoint;
+        this.shardRouter = shardRouter;
+        this.proxyClient = proxyClient;
         this.listenAddress = createListenAddress(port);
         this.server = HttpServer.create();
         createContexts();
@@ -88,6 +106,12 @@ public class KVServiceImpl implements KVService {
         if (log.isDebugEnabled()) {
             log.debug("HTTP server stopped");
         }
+
+        try {
+            dao.close();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to close DAO", e);
+        }
     }
 
     private void createContexts() {
@@ -108,8 +132,18 @@ public class KVServiceImpl implements KVService {
         Map<String, String> params = parseQueryParams(exchange);
 
         String id = params.get("id");
-        if (Objects.isNull(id)) {
+        if (Objects.isNull(id) || id.isBlank()) {
             exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+
+        if (shouldProxyRequest(id)) {
+            try {
+                proxyRequest(exchange, id);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Proxy request interrupted", e);
+            }
             return;
         }
 
@@ -117,10 +151,7 @@ public class KVServiceImpl implements KVService {
         switch (requestMethod) {
             case GET_METHOD: {
                 byte[] value = dao.get(id);
-                exchange.sendResponseHeaders(200, value.length);
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(value);
-                }
+                writeResponse(exchange, 200, value);
                 break;
             }
             case PUT_METHOD: {
@@ -143,7 +174,7 @@ public class KVServiceImpl implements KVService {
 
     private static Map<String, String> parseQueryParams(HttpExchange exchange) {
         String rawQuery = exchange.getRequestURI().getRawQuery();
-        ConcurrentMap<String, String> params = new ConcurrentHashMap<>();
+        Map<String, String> params = new java.util.concurrent.ConcurrentHashMap<>();
 
         if (rawQuery == null || rawQuery.isEmpty()) {
             return params;
@@ -182,13 +213,41 @@ public class KVServiceImpl implements KVService {
         };
     }
 
+    private boolean shouldProxyRequest(String key) {
+        if (localEndpoint == null || shardRouter == null || proxyClient == null) {
+            return false;
+        }
+
+        return !localEndpoint.equals(shardRouter.endpointByKey(key));
+    }
+
+    private void proxyRequest(HttpExchange exchange, String key) throws IOException, InterruptedException {
+        byte[] requestBody = null;
+        if (PUT_METHOD.equals(exchange.getRequestMethod())) {
+            requestBody = exchange.getRequestBody().readAllBytes();
+        }
+
+        String targetEndpoint = shardRouter.endpointByKey(key);
+        var response = proxyClient.forward(exchange.getRequestMethod(), targetEndpoint, ENTITY_PATH, key, requestBody);
+        writeResponse(exchange, response.statusCode(), response.body());
+    }
+
+    private void writeResponse(HttpExchange exchange, int statusCode, byte[] body) throws IOException {
+        if (body == null || body.length == 0) {
+            exchange.sendResponseHeaders(statusCode, -1);
+            return;
+        }
+
+        exchange.sendResponseHeaders(statusCode, body.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(body);
+        }
+    }
+
     private void sendError(HttpExchange exchange, int statusCode, String message) throws IOException {
         String response = message == null ? "" : message;
         byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
-        }
+        writeResponse(exchange, statusCode, bytes);
     }
 
     private static Dao<byte[]> validateDao(Dao<byte[]> dao) {
