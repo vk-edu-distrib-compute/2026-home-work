@@ -1,8 +1,10 @@
-package company.vk.edu.distrib.compute;
+package company.vk.edu.distrib.compute.kruchinina;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.KVService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
@@ -14,7 +16,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static company.vk.edu.distrib.compute.ServerUtils.*;
+import static company.vk.edu.distrib.compute.kruchinina.ServerUtils.*;
 
 public class SimpleKVService implements KVService {
     private static final Logger LOG = LoggerFactory.getLogger(SimpleKVService.class);

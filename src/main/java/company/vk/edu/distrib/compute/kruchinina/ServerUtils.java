@@ -1,5 +1,6 @@
-package company.vk.edu.distrib.compute;
+package company.vk.edu.distrib.compute.kruchinina;
 
+import company.vk.edu.distrib.compute.Dao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;

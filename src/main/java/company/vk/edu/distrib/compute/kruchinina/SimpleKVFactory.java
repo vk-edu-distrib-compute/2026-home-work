@@ -1,4 +1,8 @@
-package company.vk.edu.distrib.compute;
+package company.vk.edu.distrib.compute.kruchinina;
+
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.KVServiceFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
