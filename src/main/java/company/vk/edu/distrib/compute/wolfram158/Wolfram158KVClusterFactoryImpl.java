@@ -16,7 +16,7 @@ public class Wolfram158KVClusterFactoryImpl extends KVClusterFactory {
                     new Wolfram158KVServiceFactoryFileWithCacheImpl()
             );
         } catch (IOException | NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException(String.format("Exception occurred when creating KVCluster: %s", e));
         }
     }
 }

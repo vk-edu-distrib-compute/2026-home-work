@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -68,9 +69,13 @@ public class KVServiceImpl implements KVService {
                     exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, -1);
                     return;
                 }
-                final String workEndpoint = router.getNode(values.getFirst());
-                if (!workEndpoint.equals(endpoint)) {
-                    handleProxy(exchange, workEndpoint, values.getFirst());
+                try {
+                    final String workEndpoint = router.getNode(values.getFirst());
+                    if (!workEndpoint.equals(endpoint)) {
+                        handleProxy(exchange, workEndpoint, values.getFirst());
+                        return;
+                    }
+                } catch (NoSuchAlgorithmException ignored) {
                     return;
                 }
             }

@@ -15,7 +15,7 @@ public class Rendezvous implements Router {
     }
 
     @Override
-    public String getNode(String key) {
+    public String getNode(String key) throws NoSuchAlgorithmException {
         var maxHash = MIN;
         String result = null;
         for (String endpoint : endpoints) {

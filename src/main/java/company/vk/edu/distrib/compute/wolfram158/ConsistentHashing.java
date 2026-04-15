@@ -21,7 +21,7 @@ public class ConsistentHashing implements Router {
         }
     }
 
-    private void addNode(String endpoint) {
+    private void addNode(String endpoint) throws NoSuchAlgorithmException {
         for (int i = 0; i < vnodesPerNode; i++) {
             final String vnodeKey = endpoint + i;
             final BigInteger hash = hashFunction.getHash(vnodeKey);
@@ -30,7 +30,7 @@ public class ConsistentHashing implements Router {
     }
 
     @Override
-    public String getNode(String key) {
+    public String getNode(String key) throws NoSuchAlgorithmException {
         if (ring.isEmpty()) {
             return null;
         }
