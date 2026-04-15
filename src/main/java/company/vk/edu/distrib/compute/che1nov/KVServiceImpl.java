@@ -21,6 +21,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @SuppressWarnings("PMD.GodClass")
 public class KVServiceImpl implements KVService {
@@ -174,7 +176,7 @@ public class KVServiceImpl implements KVService {
 
     private static Map<String, String> parseQueryParams(HttpExchange exchange) {
         String rawQuery = exchange.getRequestURI().getRawQuery();
-        Map<String, String> params = new java.util.concurrent.ConcurrentHashMap<>();
+        ConcurrentMap<String, String> params = new ConcurrentHashMap<>();
 
         if (rawQuery == null || rawQuery.isEmpty()) {
             return params;
