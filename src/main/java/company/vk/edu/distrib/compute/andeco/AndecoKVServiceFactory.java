@@ -10,6 +10,8 @@ public class AndecoKVServiceFactory extends KVServiceFactory {
     @Override
     protected KVService doCreate(int port) throws IOException {
         Path data = Path.of("..", "data");
-        return new KVServiceImpl(port, new FileDao(data));
+        KVServiceImpl service = new KVServiceImpl(port, new FileDao(data));
+        service.registerDefault();
+        return service;
     }
 }
