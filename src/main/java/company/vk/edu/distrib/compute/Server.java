@@ -3,7 +3,6 @@ package company.vk.edu.distrib.compute;
 import module java.base;
 import company.vk.edu.distrib.compute.teeaamma.TeeaammaKVServiceFactory;
 import company.vk.edu.distrib.compute.dummy.DummyKVClusterFactory;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
 import org.slf4j.LoggerFactory;
 
 public class Server {
