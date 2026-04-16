@@ -40,8 +40,14 @@ public class ConsistentHashRouter implements ShardRouter {
     }
 
     @Override
-    @SuppressWarnings("PMD.CyclomaticComplexity")
     public List<String> endpointsByKey(String key, int count) {
+        validateRequest(key, count);
+        Map.Entry<Long, String> startEntry = startEntryForKey(key);
+        Set<String> selected = collectDistinctEndpoints(startEntry, count);
+        return new ArrayList<>(selected);
+    }
+
+    private void validateRequest(String key, int count) {
         if (Objects.isNull(key) || key.isBlank()) {
             throw new IllegalArgumentException("key must not be null or blank");
         }
@@ -51,34 +57,44 @@ public class ConsistentHashRouter implements ShardRouter {
         if (count > endpointCount) {
             throw new IllegalArgumentException("count must not be greater than endpoints size");
         }
+    }
 
+    private Map.Entry<Long, String> startEntryForKey(String key) {
         long keyHash = hashToLong(key);
         Map.Entry<Long, String> entry = ring.ceilingEntry(keyHash);
-        if (entry == null) {
-            entry = ring.firstEntry();
+        if (entry != null) {
+            return entry;
         }
-        if (entry == null) {
+
+        Map.Entry<Long, String> firstEntry = ring.firstEntry();
+        if (firstEntry == null) {
             throw new IllegalStateException("ring is empty");
         }
+        return firstEntry;
+    }
 
+    private Set<String> collectDistinctEndpoints(Map.Entry<Long, String> startEntry, int count) {
         Set<String> selected = new LinkedHashSet<>();
-        selected.add(entry.getValue());
+        Map.Entry<Long, String> cursor = startEntry;
 
-        Map.Entry<Long, String> cursor = entry;
-        while (selected.size() < count) {
-            cursor = ring.higherEntry(cursor.getKey());
-            if (cursor == null) {
-                cursor = ring.firstEntry();
-            }
-            if (cursor == null) {
-                break;
-            }
+        while (selected.size() < count && selected.size() < endpointCount) {
             selected.add(cursor.getValue());
-            if (selected.size() == endpointCount) {
-                break;
-            }
+            cursor = nextEntry(cursor);
         }
-        return new ArrayList<>(selected);
+        return selected;
+    }
+
+    private Map.Entry<Long, String> nextEntry(Map.Entry<Long, String> currentEntry) {
+        Map.Entry<Long, String> nextEntry = ring.higherEntry(currentEntry.getKey());
+        if (nextEntry != null) {
+            return nextEntry;
+        }
+
+        Map.Entry<Long, String> firstEntry = ring.firstEntry();
+        if (firstEntry == null) {
+            throw new IllegalStateException("ring is empty");
+        }
+        return firstEntry;
     }
 
     private static long hashToLong(String input) {

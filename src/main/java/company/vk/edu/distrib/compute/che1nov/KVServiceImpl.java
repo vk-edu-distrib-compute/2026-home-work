@@ -260,7 +260,7 @@ public class KVServiceImpl implements KVService {
         if (PUT_METHOD.equals(requestMethod)) {
             return exchange.getRequestBody().readAllBytes();
         }
-        return null;
+        return new byte[0];
     }
 
     private ReplicaDecision executeReplicated(
@@ -305,7 +305,7 @@ public class KVServiceImpl implements KVService {
                     yield new ReplicaResponse(OK, value);
                 }
                 case PUT_METHOD -> {
-                    dao.upsert(id, requestBody == null ? new byte[0] : requestBody);
+                    dao.upsert(id, requestBody);
                     yield new ReplicaResponse(CREATED, null);
                 }
                 case DELETE_METHOD -> {
