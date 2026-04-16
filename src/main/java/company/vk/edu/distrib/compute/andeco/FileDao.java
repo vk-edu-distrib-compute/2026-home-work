@@ -11,6 +11,11 @@ public class FileDao implements Dao<byte[]> {
 
     private final Path baseDir;
 
+    public FileDao(String path) throws IOException {
+        this.baseDir = Path.of("..", "data_" + path);
+        Files.createDirectories(baseDir);
+    }
+
     public FileDao(Path baseDir) throws IOException {
         this.baseDir = baseDir;
         Files.createDirectories(baseDir);

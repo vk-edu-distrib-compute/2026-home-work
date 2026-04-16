@@ -11,20 +11,22 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 public class KVServiceImpl implements KVService {
-
-    private final HttpServer server;
+    protected EntityController entityController;
+    protected StatusController statusController;
+    protected final HttpServer server;
 
     public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
-        EntityController entityController = new EntityController(dao);
-        StatusController statusController = new StatusController();
-
+        entityController = new EntityController(dao);
+        statusController = new StatusController();
         server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    public void registerDefault() {
         server.createContext(ServerConfigConstants.API_PATH + ServerConfigConstants.ENTITY_PATH,
                 entityController::processRequest);
         server.createContext(ServerConfigConstants.API_PATH + ServerConfigConstants.STATUS_PATH,
                 statusController::processRequest);
-        server.setExecutor(Executors.newFixedThreadPool(
-                Runtime.getRuntime().availableProcessors()));
     }
 
     @Override
