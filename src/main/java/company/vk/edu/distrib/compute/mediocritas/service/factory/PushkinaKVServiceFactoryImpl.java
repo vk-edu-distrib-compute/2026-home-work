@@ -7,7 +7,7 @@ import company.vk.edu.distrib.compute.mediocritas.storage.FileByteDao;
 
 import java.io.IOException;
 
-public class KVServiceFactoryImpl extends KVServiceFactory {
+public class PushkinaKVServiceFactoryImpl extends KVServiceFactory {
     @Override
     protected KVService doCreate(int port) throws IOException {
         return new KvByteService(port, new FileByteDao());
