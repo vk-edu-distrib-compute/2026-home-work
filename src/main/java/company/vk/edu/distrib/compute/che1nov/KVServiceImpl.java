@@ -18,13 +18,18 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-@SuppressWarnings("PMD.GodClass")
+@SuppressWarnings({
+        "PMD.GodClass",
+        "PMD.CyclomaticComplexity"
+})
 public class KVServiceImpl implements KVService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
     private static final int MIN_PORT = 1;
@@ -33,18 +38,28 @@ public class KVServiceImpl implements KVService {
     private static final String GET_METHOD = "GET";
     private static final String PUT_METHOD = "PUT";
     private static final String DELETE_METHOD = "DELETE";
+    private static final int BAD_REQUEST = 400;
+    private static final int METHOD_NOT_ALLOWED = 405;
+    private static final int OK = 200;
+    private static final int CREATED = 201;
+    private static final int ACCEPTED = 202;
+    private static final int NOT_FOUND = 404;
+    private static final int UNAVAILABLE = 503;
+    private static final int GATEWAY_TIMEOUT = 504;
+    private static final int DEFAULT_ACK = 1;
 
     private final Dao<byte[]> dao;
     private final String localEndpoint;
     private final ShardRouter shardRouter;
     private final ClusterProxyClient proxyClient;
+    private final int replicationFactor;
 
     private final HttpServer server;
     private final InetSocketAddress listenAddress;
     private boolean started;
 
     public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
-        this(port, dao, null, null, null);
+        this(port, dao, null, null, null, 1);
     }
 
     public KVServiceImpl(
@@ -52,12 +67,14 @@ public class KVServiceImpl implements KVService {
             Dao<byte[]> dao,
             String localEndpoint,
             ShardRouter shardRouter,
-            ClusterProxyClient proxyClient
+            ClusterProxyClient proxyClient,
+            int replicationFactor
     ) throws IOException {
         this.dao = validateDao(dao);
         this.localEndpoint = localEndpoint;
         this.shardRouter = shardRouter;
         this.proxyClient = proxyClient;
+        this.replicationFactor = validateReplicationFactor(replicationFactor);
         this.listenAddress = createListenAddress(port);
         this.server = HttpServer.create();
         createContexts();
@@ -124,54 +141,50 @@ public class KVServiceImpl implements KVService {
     private void handleStatus(HttpExchange exchange) throws IOException {
         String requestMethod = exchange.getRequestMethod();
         if (!Objects.equals(requestMethod, GET_METHOD)) {
-            exchange.sendResponseHeaders(405, -1);
+            exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
             return;
         }
-        exchange.sendResponseHeaders(200, -1);
+        exchange.sendResponseHeaders(OK, -1);
     }
 
     private void handleEntity(HttpExchange exchange) throws IOException {
         Map<String, String> params = parseQueryParams(exchange);
+        String requestMethod = exchange.getRequestMethod();
+        if (!isSupportedMethod(requestMethod)) {
+            exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
+            return;
+        }
 
         String id = params.get("id");
         if (Objects.isNull(id) || id.isBlank()) {
-            exchange.sendResponseHeaders(400, -1);
+            exchange.sendResponseHeaders(BAD_REQUEST, -1);
             return;
         }
 
-        if (shouldProxyRequest(id)) {
-            try {
-                proxyRequest(exchange, id);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Proxy request interrupted", e);
-            }
+        boolean internalRequest = isInternalProxyRequest(exchange);
+        if (internalRequest || !isClusterMode()) {
+            byte[] requestBody = readRequestBodyIfNeeded(exchange, requestMethod);
+            ReplicaResponse response = executeLocal(requestMethod, id, requestBody);
+            writeResponse(exchange, response.statusCode(), response.body());
             return;
         }
 
-        String requestMethod = exchange.getRequestMethod();
-        switch (requestMethod) {
-            case GET_METHOD: {
-                byte[] value = dao.get(id);
-                writeResponse(exchange, 200, value);
-                break;
-            }
-            case PUT_METHOD: {
-                byte[] newValue = exchange.getRequestBody().readAllBytes();
-                dao.upsert(id, newValue);
-                exchange.sendResponseHeaders(201, -1);
-                break;
-            }
-            case DELETE_METHOD: {
-                dao.delete(id);
-                exchange.sendResponseHeaders(202, -1);
-                break;
-            }
-            default: {
-                exchange.sendResponseHeaders(405, -1);
-                break;
-            }
+        int ack = resolveAck(params, DEFAULT_ACK);
+        if (ack > replicationFactor) {
+            exchange.sendResponseHeaders(BAD_REQUEST, -1);
+            return;
         }
+
+        byte[] requestBody = readRequestBodyIfNeeded(exchange, requestMethod);
+        List<String> replicaEndpoints = shardRouter.endpointsByKey(id, replicationFactor);
+        ReplicaDecision decision;
+        try {
+            decision = executeReplicated(requestMethod, id, requestBody, ack, replicaEndpoints);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Replication request interrupted", e);
+        }
+        writeResponse(exchange, decision.statusCode(), decision.body());
     }
 
     private static Map<String, String> parseQueryParams(HttpExchange exchange) {
@@ -205,33 +218,151 @@ public class KVServiceImpl implements KVService {
                     }
                     handler.handle(exchange);
                 } catch (NoSuchElementException e) {
-                    sendError(exchange, 404, e.getMessage());
+                    sendError(exchange, NOT_FOUND, e.getMessage());
                 } catch (IllegalArgumentException e) {
-                    sendError(exchange, 400, e.getMessage());
+                    sendError(exchange, BAD_REQUEST, e.getMessage());
                 } catch (Exception e) {
-                    sendError(exchange, 503, e.getMessage());
+                    sendError(exchange, UNAVAILABLE, e.getMessage());
                 }
             }
         };
     }
 
-    private boolean shouldProxyRequest(String key) {
-        if (localEndpoint == null || shardRouter == null || proxyClient == null) {
-            return false;
+    private static int resolveAck(Map<String, String> params, int defaultAck) {
+        String rawAck = params.get("ack");
+        if (rawAck == null || rawAck.isBlank()) {
+            return defaultAck;
         }
 
-        return !localEndpoint.equals(shardRouter.endpointByKey(key));
+        int ack = Integer.parseInt(rawAck);
+        if (ack <= 0) {
+            throw new IllegalArgumentException("ack must be positive");
+        }
+        return ack;
     }
 
-    private void proxyRequest(HttpExchange exchange, String key) throws IOException, InterruptedException {
-        byte[] requestBody = null;
-        if (PUT_METHOD.equals(exchange.getRequestMethod())) {
-            requestBody = exchange.getRequestBody().readAllBytes();
+    private boolean isClusterMode() {
+        return localEndpoint != null && shardRouter != null && proxyClient != null;
+    }
+
+    private static boolean isInternalProxyRequest(HttpExchange exchange) {
+        String header = exchange.getRequestHeaders().getFirst(ClusterProxyClient.INTERNAL_REQUEST_HEADER);
+        return ClusterProxyClient.INTERNAL_REQUEST_VALUE.equalsIgnoreCase(header);
+    }
+
+    private static boolean isSupportedMethod(String requestMethod) {
+        return GET_METHOD.equals(requestMethod)
+                || PUT_METHOD.equals(requestMethod)
+                || DELETE_METHOD.equals(requestMethod);
+    }
+
+    private static byte[] readRequestBodyIfNeeded(HttpExchange exchange, String requestMethod) throws IOException {
+        if (PUT_METHOD.equals(requestMethod)) {
+            return exchange.getRequestBody().readAllBytes();
+        }
+        return null;
+    }
+
+    private ReplicaDecision executeReplicated(
+            String requestMethod,
+            String id,
+            byte[] requestBody,
+            int ack,
+            List<String> replicaEndpoints
+    ) throws IOException, InterruptedException {
+        int acknowledged = 0;
+        List<ReplicaResponse> successfulReads = new ArrayList<>();
+        int requiredSuccessStatus = successStatusForMethod(requestMethod);
+
+        for (String endpoint : replicaEndpoints) {
+            ReplicaResponse response = endpoint.equals(localEndpoint)
+                    ? executeLocal(requestMethod, id, requestBody)
+                    : executeRemote(requestMethod, endpoint, id, requestBody);
+
+            if (isAcknowledged(requestMethod, response.statusCode(), requiredSuccessStatus)) {
+                acknowledged++;
+                if (GET_METHOD.equals(requestMethod)) {
+                    successfulReads.add(response);
+                }
+            }
         }
 
-        String targetEndpoint = shardRouter.endpointByKey(key);
-        var response = proxyClient.forward(exchange.getRequestMethod(), targetEndpoint, ENTITY_PATH, key, requestBody);
-        writeResponse(exchange, response.statusCode(), response.body());
+        if (acknowledged < ack) {
+            return new ReplicaDecision(GATEWAY_TIMEOUT, null);
+        }
+
+        if (GET_METHOD.equals(requestMethod)) {
+            return chooseReadResponse(successfulReads);
+        }
+        return new ReplicaDecision(requiredSuccessStatus, null);
+    }
+
+    private ReplicaResponse executeLocal(String requestMethod, String id, byte[] requestBody) {
+        try {
+            return switch (requestMethod) {
+                case GET_METHOD -> {
+                    byte[] value = dao.get(id);
+                    yield new ReplicaResponse(OK, value);
+                }
+                case PUT_METHOD -> {
+                    dao.upsert(id, requestBody == null ? new byte[0] : requestBody);
+                    yield new ReplicaResponse(CREATED, null);
+                }
+                case DELETE_METHOD -> {
+                    dao.delete(id);
+                    yield new ReplicaResponse(ACCEPTED, null);
+                }
+                default -> new ReplicaResponse(METHOD_NOT_ALLOWED, null);
+            };
+        } catch (NoSuchElementException e) {
+            return new ReplicaResponse(NOT_FOUND, null);
+        } catch (Exception e) {
+            return new ReplicaResponse(UNAVAILABLE, null);
+        }
+    }
+
+    private ReplicaResponse executeRemote(
+            String requestMethod,
+            String targetEndpoint,
+            String key,
+            byte[] requestBody
+    ) throws IOException, InterruptedException {
+        ConcurrentMap<String, String> queryParams = new ConcurrentHashMap<>();
+        queryParams.put("id", key);
+        var response = proxyClient.forward(
+                requestMethod,
+                targetEndpoint,
+                ENTITY_PATH,
+                queryParams,
+                true,
+                requestBody
+        );
+        return new ReplicaResponse(response.statusCode(), response.body());
+    }
+
+    private static int successStatusForMethod(String requestMethod) {
+        return switch (requestMethod) {
+            case GET_METHOD -> OK;
+            case PUT_METHOD -> CREATED;
+            case DELETE_METHOD -> ACCEPTED;
+            default -> METHOD_NOT_ALLOWED;
+        };
+    }
+
+    private static boolean isAcknowledged(String requestMethod, int statusCode, int requiredSuccessStatus) {
+        if (GET_METHOD.equals(requestMethod)) {
+            return statusCode == OK || statusCode == NOT_FOUND;
+        }
+        return statusCode == requiredSuccessStatus;
+    }
+
+    private static ReplicaDecision chooseReadResponse(List<ReplicaResponse> responses) {
+        for (ReplicaResponse response : responses) {
+            if (response.statusCode() == OK) {
+                return new ReplicaDecision(OK, response.body());
+            }
+        }
+        return new ReplicaDecision(NOT_FOUND, null);
     }
 
     private void writeResponse(HttpExchange exchange, int statusCode, byte[] body) throws IOException {
@@ -260,6 +391,13 @@ public class KVServiceImpl implements KVService {
         return dao;
     }
 
+    private static int validateReplicationFactor(int replicationFactor) {
+        if (replicationFactor <= 0) {
+            throw new IllegalArgumentException("replicationFactor must be positive");
+        }
+        return replicationFactor;
+    }
+
     @SuppressFBWarnings(
             value = "URLCONNECTION_SSRF_FD",
             justification = "Local server bind only"
@@ -273,5 +411,11 @@ public class KVServiceImpl implements KVService {
         if (port < MIN_PORT || port > MAX_PORT) {
             throw new IllegalArgumentException("port must be in range 1..65535");
         }
+    }
+
+    private record ReplicaResponse(int statusCode, byte[] body) {
+    }
+
+    private record ReplicaDecision(int statusCode, byte[] body) {
     }
 }
