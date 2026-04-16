@@ -12,6 +12,8 @@ public final class Server {
     private static final String MODE_CLUSTER = "cluster";
     private static final String ALGO_CONSISTENT = "consistent";
     private static final String ALGO_RENDEZVOUS = "rendezvous";
+    private static final String REPLICATION_PREFIX_SHORT = "n=";
+    private static final String REPLICATION_PREFIX_LONG = "replicas=";
 
     private Server() {
     }
@@ -20,10 +22,15 @@ public final class Server {
         var log = LoggerFactory.getLogger("server");
         if (isClusterMode(args)) {
             String shardingAlgorithm = resolveAlgorithm(args);
+            int replicationFactor = resolveReplicationFactor(args);
             List<Integer> ports = List.of(8080, 8081);
-            KVCluster cluster = new KVClusterFactoryImpl(shardingAlgorithm).create(ports);
+            KVCluster cluster = new KVClusterFactoryImpl(shardingAlgorithm, replicationFactor).create(ports);
             cluster.start();
-            log.info("Cluster started on ports={} algorithm={}", ports, shardingAlgorithm);
+            log.info("Cluster started on ports={} algorithm={} replicationFactor={}",
+                    ports,
+                    shardingAlgorithm,
+                    replicationFactor
+            );
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
             return;
         }
@@ -46,5 +53,17 @@ public final class Server {
             }
         }
         return KVClusterFactoryImpl.ALGORITHM_RENDEZVOUS;
+    }
+
+    private static int resolveReplicationFactor(String... args) {
+        for (String arg : args) {
+            if (arg.regionMatches(true, 0, REPLICATION_PREFIX_SHORT, 0, REPLICATION_PREFIX_SHORT.length())) {
+                return Integer.parseInt(arg.substring(REPLICATION_PREFIX_SHORT.length()));
+            }
+            if (arg.regionMatches(true, 0, REPLICATION_PREFIX_LONG, 0, REPLICATION_PREFIX_LONG.length())) {
+                return Integer.parseInt(arg.substring(REPLICATION_PREFIX_LONG.length()));
+            }
+        }
+        return Integer.parseInt(System.getProperty(KVClusterFactoryImpl.REPLICATION_FACTOR_PROPERTY, "1"));
     }
 }

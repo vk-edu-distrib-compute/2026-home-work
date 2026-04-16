@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.che1nov.cluster.ClusterProxyClient;
 import company.vk.edu.distrib.compute.che1nov.cluster.ShardRouter;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -20,8 +21,13 @@ public class KVClusterImpl implements KVCluster {
     private final ShardRouter shardRouter;
     private final ClusterProxyClient proxyClient;
     private final ReentrantLock lifecycleLock;
+    private final int replicationFactor;
 
     public KVClusterImpl(List<Integer> ports, String shardingAlgorithm) {
+        this(ports, shardingAlgorithm, 1);
+    }
+
+    public KVClusterImpl(List<Integer> ports, String shardingAlgorithm, int replicationFactor) {
         validatePorts(ports);
 
         this.endpoints = toEndpoints(ports);
@@ -30,6 +36,7 @@ public class KVClusterImpl implements KVCluster {
         this.shardRouter = KVClusterFactoryImpl.createRouter(endpoints, shardingAlgorithm);
         this.proxyClient = new ClusterProxyClient();
         this.lifecycleLock = new ReentrantLock();
+        this.replicationFactor = validateReplicationFactor(replicationFactor, ports.size());
 
         initializeNodes(ports);
     }
@@ -109,8 +116,8 @@ public class KVClusterImpl implements KVCluster {
     }
 
     private ClusterNode createClusterNode(int port, String endpoint) {
-        InMemoryDao dao = new InMemoryDao();
-        return new ClusterNode(port, endpoint, dao);
+        Path dataPath = Path.of(".data", "node-" + port);
+        return new ClusterNode(port, endpoint, dataPath);
     }
 
     @Override
@@ -154,21 +161,32 @@ public class KVClusterImpl implements KVCluster {
         }
     }
 
+    private static int validateReplicationFactor(int replicationFactor, int clusterSize) {
+        if (replicationFactor <= 0) {
+            throw new IllegalArgumentException("replicationFactor must be positive");
+        }
+        if (replicationFactor > clusterSize) {
+            throw new IllegalArgumentException("replicationFactor must not be greater than cluster size");
+        }
+        return replicationFactor;
+    }
+
     private final class ClusterNode {
         private final int port;
         private final String endpoint;
-        private final InMemoryDao dao;
+        private final Path dataPath;
         private KVService service;
 
-        private ClusterNode(int port, String endpoint, InMemoryDao dao) {
+        private ClusterNode(int port, String endpoint, Path dataPath) {
             this.port = port;
             this.endpoint = endpoint;
-            this.dao = dao;
+            this.dataPath = dataPath;
         }
 
         private void start() {
             try {
-                service = new KVServiceImpl(port, dao, endpoint, shardRouter, proxyClient);
+                FSDao dao = new FSDao(dataPath);
+                service = new KVServiceImpl(port, dao, endpoint, shardRouter, proxyClient, replicationFactor);
                 service.start();
             } catch (java.io.IOException e) {
                 throw new java.io.UncheckedIOException("Failed to initialize node on port " + port, e);
