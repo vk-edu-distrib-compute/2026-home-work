@@ -1,8 +1,10 @@
 package company.vk.edu.distrib.compute.v11qfour.cluster;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RendezvousHashingTest {
     @Test
@@ -14,7 +16,7 @@ public class RendezvousHashingTest {
         );
         RendezvousHashing strategy = new RendezvousHashing();
 
-        Map<V11qfourNode, Integer> distribution = new HashMap<>();
+        Map<V11qfourNode, Integer> distribution = new ConcurrentHashMap<>();
 
         for (int i = 0; i < 10000; i++) {
             String key = "key-" + i;
@@ -23,5 +25,6 @@ public class RendezvousHashingTest {
         }
 
         System.out.println(distribution);
+        Assertions.assertNotNull(!distribution.isEmpty());
     }
 }

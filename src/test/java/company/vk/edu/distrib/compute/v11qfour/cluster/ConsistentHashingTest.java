@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ConsistentHashingTest {
     @Test
@@ -17,7 +18,7 @@ public class ConsistentHashingTest {
 
         ConsistentHashing strategy = new ConsistentHashing(nodes);
 
-        Map<V11qfourNode, Integer> distribution = new HashMap<>();
+        Map<V11qfourNode, Integer> distribution = new ConcurrentHashMap<>();
 
         for (int i = 0; i < 10000; i++) {
             String key = "key-" + i;

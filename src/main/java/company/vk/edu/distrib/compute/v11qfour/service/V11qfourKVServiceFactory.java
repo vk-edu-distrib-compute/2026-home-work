@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.concurrent.Executors;
 
 public class V11qfourKVServiceFactory implements KVService {
     private static final Logger log = LoggerFactory.getLogger(V11qfourKVServiceFactory.class);
