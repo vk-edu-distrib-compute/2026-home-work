@@ -1,17 +1,18 @@
-package company.vk.edu.distrib.compute.v11qfour;
+package company.vk.edu.distrib.compute.v11qfour.service;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.v11qfour.cluster.V11qfourNode;
+import company.vk.edu.distrib.compute.v11qfour.cluster.V11qfourRoutingStrategy;
+import company.vk.edu.distrib.compute.v11qfour.proxy.V11qfourProxyClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
-import java.net.InetSocketAddress;
-import java.util.NoSuchElementException;
+import java.io.*;
+import java.net.*;
+import java.util.*;
 
 public class V11qfourKVServiceFactory implements KVService {
     private static final Logger log = LoggerFactory.getLogger(V11qfourKVServiceFactory.class);
@@ -20,9 +21,22 @@ public class V11qfourKVServiceFactory implements KVService {
     private HttpServer server;
     private final InetSocketAddress address;
     private final Dao<byte[]> dao;
+    private final String selfUrl;
+    private final V11qfourProxyClient proxyClient;
+    private final V11qfourRoutingStrategy routingStrategy;
+    private final List<V11qfourNode> clusterNodes;
 
-    public V11qfourKVServiceFactory(int port, Dao<byte[]> dao) {
+    public V11qfourKVServiceFactory(int port,
+                                    Dao<byte[]> dao,
+                                    V11qfourRoutingStrategy routingStrategy,
+                                    List<V11qfourNode> clusterNodes,
+                                    String selfUrl,
+                                    V11qfourProxyClient proxyClient) {
         this.dao = dao;
+        this.routingStrategy = routingStrategy;
+        this.clusterNodes = clusterNodes;
+        this.selfUrl = selfUrl;
+        this.proxyClient = proxyClient;
         this.address = createInetSocketAddress(port);
     }
 
@@ -58,16 +72,21 @@ public class V11qfourKVServiceFactory implements KVService {
 
     private void handleEntityRequest(HttpExchange exchange) throws IOException {
         String query = exchange.getRequestURI().getQuery();
-        if (query == null || !query.contains("id=")) {
+        String id = validateId(query);
+        if (id == null) {
             exchange.sendResponseHeaders(400, -1);
             return;
         }
-        String id = validateId(exchange, query);
-        switch (exchange.getRequestMethod()) {
-            case "GET" -> handleGet(exchange, id);
-            case "PUT" -> handlePut(exchange, id);
-            case "DELETE" -> handleDelete(exchange, id);
-            default -> exchange.sendResponseHeaders(405, -1);
+        V11qfourNode responsibleNode = routingStrategy.getResponsibleNode(id, clusterNodes);
+        if (responsibleNode.url().equals(selfUrl)) {
+            switch (exchange.getRequestMethod()) {
+                case "GET" -> handleGet(exchange, id);
+                case "PUT" -> handlePut(exchange, id);
+                case "DELETE" -> handleDelete(exchange, id);
+                default -> exchange.sendResponseHeaders(405, -1);
+            }
+        } else {
+            proxyClient.proxy(exchange, responsibleNode);
         }
     }
 
@@ -95,18 +114,17 @@ public class V11qfourKVServiceFactory implements KVService {
         exchange.sendResponseHeaders(202, -1);
     }
 
-    private String validateId(HttpExchange exchange, String query) throws IOException {
-        String id = null;
+    private String validateId(String query) throws IOException {
+        if (query == null) {
+            return null;
+        }
         for (String param : query.split("&")) {
             if (param.startsWith("id=")) {
-                id = param.substring(3);
-                break;
+                String val = param.substring(3);
+                return val.isEmpty() ? null : val;
             }
         }
-        if (id == null || id.isEmpty()) {
-            exchange.sendResponseHeaders(400, -1);
-        }
-        return id;
+        return null;
     }
 
     private InetSocketAddress createInetSocketAddress(int port) {

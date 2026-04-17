@@ -17,7 +17,7 @@ import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
-import company.vk.edu.distrib.compute.v11qfour.V11qfourKVServiceFactoryImpl;
+import company.vk.edu.distrib.compute.v11qfour.service.V11qfourKVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevKVServiceFactory;
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevFileSystemKVServiceFactory;
 

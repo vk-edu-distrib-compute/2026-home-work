@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.v11qfour;
+package company.vk.edu.distrib.compute.v11qfour.dao;
 
 import company.vk.edu.distrib.compute.Dao;
 
