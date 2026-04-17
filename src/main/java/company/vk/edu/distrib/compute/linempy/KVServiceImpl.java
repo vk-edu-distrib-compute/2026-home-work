@@ -55,7 +55,7 @@ public class KVServiceImpl implements KVService {
         }
     }
 
-    private void entityHandler(HttpExchange exchange) throws IOException {
+    protected void entityHandler(HttpExchange exchange) throws IOException {
         String id = detachedId(exchange.getRequestURI().getQuery());
 
         switch (exchange.getRequestMethod()) {
@@ -66,24 +66,24 @@ public class KVServiceImpl implements KVService {
         }
     }
 
-    private void deleteById(HttpExchange exchange, String id) throws IOException {
+    protected void deleteById(HttpExchange exchange, String id) throws IOException {
         dao.delete(id);
         exchange.sendResponseHeaders(HttpCodes.ACCEPTED, -1);
     }
 
-    private void getById(HttpExchange exchange, String id) throws IOException {
+    protected void getById(HttpExchange exchange, String id) throws IOException {
         byte[] result = dao.get(id);
         exchange.sendResponseHeaders(HttpCodes.OK, result.length);
         exchange.getResponseBody().write(result);
     }
 
-    private void createById(HttpExchange exchange, String id) throws IOException {
+    protected void createById(HttpExchange exchange, String id) throws IOException {
         byte[] body = exchange.getRequestBody().readAllBytes();
         dao.upsert(id, body);
         exchange.sendResponseHeaders(HttpCodes.CREATED, -1);
     }
 
-    private String detachedId(String query) {
+    protected String detachedId(String query) {
         if (query.isBlank()) {
             throw new IllegalArgumentException("Пропущены query-параметры");
         }
