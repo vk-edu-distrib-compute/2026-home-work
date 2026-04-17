@@ -14,17 +14,23 @@ import java.util.concurrent.ConcurrentHashMap;
 public class V11qfourKVClusterFactory {
     public V11qfourKVCluster create(List<Integer> ports) throws IOException {
         Map<String, KVService> nodesMap = new ConcurrentHashMap<>();
-
+        String algo = System.getProperty("algo", "rendezvous");
         List<V11qfourNode> allNodes = ports.stream()
                 .map(p -> new V11qfourNode("http://localhost:" + p))
                 .toList();
+        V11qfourRoutingStrategy strategy;
+        if ("consistent".equals(algo)) {
+            strategy = new ConsistentHashing(allNodes);
+        } else {
+            strategy = new RendezvousHashing();
+        }
         for (int port : ports) {
             String selfUrl = "http://localhost:" + port;
             Dao<byte[]> dao = new V11qfourPersistentDao();
             V11qfourKVServiceFactory service = new V11qfourKVServiceFactory(
                     port,
                     dao,
-                    new RendezvousHashing(),
+                    strategy,
                     allNodes,
                     selfUrl,
                     new V11qfourProxyClient()
