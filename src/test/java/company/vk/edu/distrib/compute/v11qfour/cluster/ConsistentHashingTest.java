@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute.v11qfour.cluster;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -27,5 +28,6 @@ public class ConsistentHashingTest {
         }
 
         System.out.println(distribution);
+        Assertions.assertNotNull(!distribution.isEmpty());
     }
 }

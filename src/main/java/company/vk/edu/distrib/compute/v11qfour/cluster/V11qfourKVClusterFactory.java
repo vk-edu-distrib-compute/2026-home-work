@@ -23,7 +23,7 @@ public class V11qfourKVClusterFactory {
             strategy = new RendezvousHashing();
         }
         Map<String, KVService> nodesMap = ports.stream()
-                .collect(Collectors.toMap(
+                .collect(Collectors.toConcurrentMap(
                         port -> "http://localhost:" + port,
                         port -> {
                             try {

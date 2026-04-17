@@ -30,7 +30,7 @@ public class RendezvousHashing implements V11qfourRoutingStrategy {
             byte[] hash = messageDigest.digest(s.getBytes(StandardCharsets.UTF_8));
             return ByteBuffer.wrap(hash).getLong();
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException(e);
         }
     }
 
