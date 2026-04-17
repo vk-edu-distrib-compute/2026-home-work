@@ -36,7 +36,7 @@ public class LinempyKVClusterFactory extends KVClusterFactory {
             try {
                 nodes.put(endpoint, createNode(port, endpoints, router));
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException("Failed to create cluster node on port " + port, e);
             }
         }
 

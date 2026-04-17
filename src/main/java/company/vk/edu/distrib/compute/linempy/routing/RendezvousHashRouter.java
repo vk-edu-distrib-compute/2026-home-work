@@ -28,7 +28,7 @@ public class RendezvousHashRouter implements ShardingStrategy {
             }
             return hash & Long.MAX_VALUE;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("MD5 algorithm not available", e);
         }
     }
 
