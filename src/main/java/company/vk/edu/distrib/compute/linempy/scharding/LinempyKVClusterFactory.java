@@ -13,11 +13,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * LinempyKVClusterFactory — описание класса.
- *
- * <p>
- * TODO: добавить описание назначения и поведения класса.
- * </p>
+ * Фабрика кластера с шардированием.
  *
  * @author Linempy
  * @since 16.04.2026

@@ -10,11 +10,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * LinempyKVClusterImpl — описание класса.
- *
- * <p>
- * TODO: добавить описание назначения и поведения класса.
- * </p>
+ * Управление кластером: запуск и остановка всех нод.
  *
  * @author Linempy
  * @since 16.04.2026

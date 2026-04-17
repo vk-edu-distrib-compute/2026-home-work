@@ -6,11 +6,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
 /**
- * RendezvousHashRouter — описание класса.
+ * Rendezvous hashing (Highest Random Weight).
  *
  * <p>
- * TODO: добавить описание назначения и поведения класса.
- * </p>
+ * Для каждого ключа вычисляется хеш с каждой нодой, выбирается нода с максимальным значением.
  *
  * @author Linempy
  * @since 17.04.2026

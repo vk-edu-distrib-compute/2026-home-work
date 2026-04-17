@@ -14,6 +14,15 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 
+/**
+ * KV сервис с поддержкой шардирования.
+ * <p>
+ * Если ключ принадлежит текущей ноде - обрабатывает локально через родительский класс.
+ * Если нет - проксирует запрос на нужную ноду через HTTP клиент.
+ *
+ * @author Linempy
+ * @since 17.04.2026
+ */
 public class KVServiceProxyImpl extends KVServiceImpl {
     private static final Duration PROXY_TIMEOUT = Duration.ofSeconds(5);
     private final HttpClient httpClient = HttpClient.newHttpClient();
