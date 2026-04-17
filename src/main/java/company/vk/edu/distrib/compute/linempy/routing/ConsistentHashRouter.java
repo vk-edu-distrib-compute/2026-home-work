@@ -51,6 +51,7 @@ public class ConsistentHashRouter implements ShardingStrategy {
         }
     }
 
+
     @Override
     public String route(String key, List<String> nodes) {
         if (ring.isEmpty()) {
