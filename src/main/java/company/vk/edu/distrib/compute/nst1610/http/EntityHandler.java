@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.nst1610.http;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.nst1610.sharding.RendezvousStrategy;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -15,9 +16,20 @@ public class EntityHandler implements HttpHandler {
     private static final Logger log = LoggerFactory.getLogger(EntityHandler.class);
 
     private final Dao<byte[]> dao;
+    private final String localEndpoint;
+    private final RendezvousStrategy sharder;
+    private final ClusterProxy clusterProxy;
 
-    public EntityHandler(Dao<byte[]> dao) {
+    public EntityHandler(
+        Dao<byte[]> dao,
+        String localEndpoint,
+        RendezvousStrategy sharder,
+        ClusterProxy clusterProxy
+    ) {
         this.dao = dao;
+        this.localEndpoint = localEndpoint;
+        this.sharder = sharder;
+        this.clusterProxy = clusterProxy;
     }
 
     @Override
@@ -45,7 +57,33 @@ public class EntityHandler implements HttpHandler {
             exchange.sendResponseHeaders(400, 0);
             return;
         }
+        if (!isSupportedMethod(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, 0);
+            return;
+        }
+        String targetEndpoint = sharder.resolve(id);
+        if (!localEndpoint.equals(targetEndpoint)) {
+            proxyRequest(exchange, id, targetEndpoint);
+            return;
+        }
         handleByMethod(exchange, id);
+    }
+
+    private void proxyRequest(HttpExchange exchange, String id, String endpoint) throws IOException {
+        try {
+            ClusterProxy.ProxyResponse response = clusterProxy.forward(
+                endpoint,
+                id,
+                exchange
+            );
+            exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+            if (response.body().length > 0) {
+                exchange.getResponseBody().write(response.body());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Proxy request interrupted", e);
+        }
     }
 
     private void handleByMethod(HttpExchange exchange, String id) throws IOException {
@@ -71,6 +109,10 @@ public class EntityHandler implements HttpHandler {
     private void handleDelete(HttpExchange exchange, String id) throws IOException {
         dao.delete(id);
         exchange.sendResponseHeaders(202, 0);
+    }
+
+    private boolean isSupportedMethod(String method) {
+        return "GET".equals(method) || "PUT".equals(method) || "DELETE".equals(method);
     }
 
     private String extractId(URI uri) {
