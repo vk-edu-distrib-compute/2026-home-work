@@ -1,6 +1,5 @@
 package company.vk.edu.distrib.compute;
 
-import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.v11qfour.cluster.V11qfourKVClusterFactory;
 import org.junit.jupiter.api.*;
 
@@ -19,7 +18,6 @@ public class NotSingleV11qfourNodeTest {
 
     @BeforeAll
     static void setup() throws IOException {
-        // Создаем кластер на портах 8090 и 8091 (не используем 8080, чтобы не конфликтовать)
         cluster = new V11qfourKVClusterFactory().create(List.of(8090, 8091));
         cluster.start();
     }
@@ -34,21 +32,18 @@ public class NotSingleV11qfourNodeTest {
         String key = "testKey";
         String value = "hello-world";
 
-        // 1. PUT на одну ноду
         HttpRequest putRequest = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:8090/v0/entity?id=" + key))
                 .PUT(HttpRequest.BodyPublishers.ofString(value))
                 .build();
         client.send(putRequest, HttpResponse.BodyHandlers.discarding());
 
-        // 2. GET с другой ноды (чтобы проверить проксирование)
         HttpRequest getRequest = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:8091/v0/entity?id=" + key))
                 .GET()
                 .build();
         HttpResponse<String> response = client.send(getRequest, HttpResponse.BodyHandlers.ofString());
 
-        // 3. Проверяем, что получили то же самое
         assertEquals(200, response.statusCode());
         assertEquals(value, response.body());
     }

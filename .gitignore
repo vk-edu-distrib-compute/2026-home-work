@@ -32,6 +32,7 @@ storage/
 ekaterina-gavrilova-storage/
 /vitos23-storage
 kirillmedvedev23-storage
+request
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
