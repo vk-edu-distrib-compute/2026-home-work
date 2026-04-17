@@ -22,24 +22,31 @@ public class V11qfourKVClusterFactory {
         } else {
             strategy = new RendezvousHashing();
         }
+        V11qfourProxyClient proxyClient = new V11qfourProxyClient();
         Map<String, KVService> nodesMap = new ConcurrentHashMap<>();
         for (Integer port : ports) {
             String url = "http://localhost:" + port;
-            try {
-                nodesMap.put(
-                        url,
-                        new V11qfourKVServiceFactory(
-                                port,
-                                new V11qfourPersistentDao(),
-                                strategy,
-                                allNodes,
-                                url,
-                                new V11qfourProxyClient()
-                        ));
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
+            nodesMap.put(url, nodeService(port, url, strategy, allNodes, proxyClient));
         }
         return new V11qfourKVCluster(nodesMap);
+    }
+
+    private static V11qfourKVServiceFactory nodeService(
+            int port,
+            String url,
+            V11qfourRoutingStrategy strategy,
+            List<V11qfourNode> allNodes,
+            V11qfourProxyClient proxyClient) {
+        try {
+            return new V11qfourKVServiceFactory(
+                    port,
+                    new V11qfourPersistentDao(),
+                    strategy,
+                    allNodes,
+                    url,
+                    proxyClient);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }
