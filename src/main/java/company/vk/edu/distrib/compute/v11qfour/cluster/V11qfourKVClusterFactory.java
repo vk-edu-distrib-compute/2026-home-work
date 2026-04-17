@@ -8,7 +8,7 @@ import company.vk.edu.distrib.compute.v11qfour.service.V11qfourKVServiceFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class V11qfourKVClusterFactory {
     public V11qfourKVCluster create(List<Integer> ports) throws IOException {
@@ -22,24 +22,24 @@ public class V11qfourKVClusterFactory {
         } else {
             strategy = new RendezvousHashing();
         }
-        Map<String, KVService> nodesMap = ports.stream()
-                .collect(Collectors.toConcurrentMap(
-                        port -> "http://localhost:" + port,
-                        port -> {
-                            try {
-                                return new V11qfourKVServiceFactory(
-                                        port,
-                                        new V11qfourPersistentDao(),
-                                        strategy,
-                                        allNodes,
-                                        "http://localhost:" + port,
-                                        new V11qfourProxyClient()
-                                );
-                            } catch (IOException e) {
-                                throw new IllegalStateException(e);
-                            }
-                        }
-                ));
+        Map<String, KVService> nodesMap = new ConcurrentHashMap<>();
+        for (Integer port : ports) {
+            String url = "http://localhost:" + port;
+            try {
+                nodesMap.put(
+                        url,
+                        new V11qfourKVServiceFactory(
+                                port,
+                                new V11qfourPersistentDao(),
+                                strategy,
+                                allNodes,
+                                url,
+                                new V11qfourProxyClient()
+                        ));
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
         return new V11qfourKVCluster(nodesMap);
     }
 }

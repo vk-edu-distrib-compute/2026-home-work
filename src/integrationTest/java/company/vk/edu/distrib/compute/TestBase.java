@@ -7,7 +7,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,8 +21,8 @@ abstract class TestBase {
     public static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     static int randomPort() {
-        final var port = ThreadLocalRandom.current().nextInt(10000, 60000);
-        for (int i = 0; i < 100_000; i++) {
+        for (int i = 0; i < 10_000; i++) {
+            int port = ThreadLocalRandom.current().nextInt(10000, 60000);
             if (isTcpPortAvailable(port)) {
                 return port;
             }
@@ -34,7 +33,7 @@ abstract class TestBase {
     static boolean isTcpPortAvailable(int port) {
         try (ServerSocket serverSocket = new ServerSocket()) {
             serverSocket.setReuseAddress(false);
-            serverSocket.bind(new InetSocketAddress(InetAddress.getByName("localhost"), port), 1);
+            serverSocket.bind(new InetSocketAddress(port), 1);
             return true;
         } catch (Exception ex) {
             return false;
