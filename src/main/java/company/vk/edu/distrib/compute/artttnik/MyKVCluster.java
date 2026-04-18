@@ -25,13 +25,10 @@ public class MyKVCluster implements KVCluster {
         for (int i = 0; i < ports.size(); i++) {
             int port = ports.get(i);
             String endpoint = endpoints.get(i);
-            servicesByEndpoint.put(endpoint, createNodeService(port, shardingStrategy));
+            Path nodeStoragePath = CLUSTER_STORAGE_ROOT.resolve(String.valueOf(port));
+            KVService service = new MyKVService(port, new MyDao(nodeStoragePath), endpoints, shardingStrategy);
+            servicesByEndpoint.put(endpoint, service);
         }
-    }
-
-    private KVService createNodeService(int port, ShardingStrategy shardingStrategy) {
-        Path nodeStoragePath = CLUSTER_STORAGE_ROOT.resolve(String.valueOf(port));
-        return new MyKVService(port, new MyDao(nodeStoragePath), endpoints, shardingStrategy);
     }
 
     @Override
