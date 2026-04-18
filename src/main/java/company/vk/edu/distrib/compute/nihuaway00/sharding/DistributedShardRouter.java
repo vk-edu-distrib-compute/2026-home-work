@@ -3,6 +3,8 @@ package company.vk.edu.distrib.compute.nihuaway00.sharding;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -31,10 +33,13 @@ public class DistributedShardRouter implements ShardRouter {
                 .method(exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofInputStream(exchange::getRequestBody))
                 .build();
 
-        HttpResponse<byte[]> response = httpClient.send(proxyRequest, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<InputStream> response = httpClient.send(proxyRequest, HttpResponse.BodyHandlers.ofInputStream());
 
-        exchange.sendResponseHeaders(response.statusCode(), response.body().length);
-        exchange.getResponseBody().write(response.body());
+        exchange.sendResponseHeaders(response.statusCode(), 0);
+        try (InputStream is = response.body();
+             OutputStream os = exchange.getResponseBody()) {
+            is.transferTo(os);
+        }
     }
 
     @Override
