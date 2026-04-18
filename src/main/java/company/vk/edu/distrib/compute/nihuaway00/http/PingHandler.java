@@ -1,7 +1,8 @@
-package company.vk.edu.distrib.compute.nihuaway00;
+package company.vk.edu.distrib.compute.nihuaway00.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.nihuaway00.storage.EntityDao;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -10,7 +11,7 @@ public class PingHandler implements HttpHandler {
 
     private final EntityDao entityDao;
 
-    PingHandler(EntityDao dao) {
+    public PingHandler(EntityDao dao) {
         this.entityDao = dao;
     }
 
