@@ -1,10 +1,6 @@
 package company.vk.edu.distrib.compute.vitos23.shard;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
+import java.util.*;
 
 import static company.vk.edu.distrib.compute.vitos23.util.HashUtils.md5Hash;
 
@@ -47,16 +43,29 @@ public class ConsistentHashingShardResolver implements ShardResolver {
     public List<String> resolveNodes(String key, int count) {
         int replicaCount = Math.min(count, hashRing.size());
 
+        List<String> result = new ArrayList<>(replicaCount);
+        Set<String> seenNodes = new HashSet<>();
+
         long hash = md5Hash(key);
         SortedMap<Long, String> tailMap = hashRing.tailMap(hash);
 
-        List<String> result = tailMap.values().stream()
-                .limit(replicaCount)
-                .collect(Collectors.toCollection(() -> new ArrayList<>(replicaCount)));
-        hashRing.values().stream()
-                .limit(replicaCount - result.size())
-                .forEachOrdered(result::add);
+        for (SortedMap.Entry<Long, String> entry : tailMap.entrySet()) {
+            if (seenNodes.add(entry.getValue())) {
+                result.add(entry.getValue());
+                if (result.size() == replicaCount) {
+                    return result;
+                }
+            }
+        }
+        for (SortedMap.Entry<Long, String> entry : hashRing.entrySet()) {
+            if (seenNodes.add(entry.getValue())) {
+                result.add(entry.getValue());
+                if (result.size() == replicaCount) {
+                    return result;
+                }
+            }
+        }
 
-        return result;
+        throw new IllegalStateException("Failed to find all replicas for the key");
     }
 }
