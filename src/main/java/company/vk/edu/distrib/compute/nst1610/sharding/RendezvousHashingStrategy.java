@@ -2,10 +2,13 @@ package company.vk.edu.distrib.compute.nst1610.sharding;
 
 import java.util.List;
 
-public class RendezvousStrategy {
+public class RendezvousHashingStrategy implements HashingStrategy{
     private final List<String> endpoints;
 
-    public RendezvousStrategy(List<String> endpoints) {
+    public RendezvousHashingStrategy(List<String> endpoints) {
+        if (endpoints == null || endpoints.isEmpty()) {
+            throw new IllegalArgumentException("Endpoints must not be empty");
+        }
         this.endpoints = List.copyOf(endpoints);
     }
 

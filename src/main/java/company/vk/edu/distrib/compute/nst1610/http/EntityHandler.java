@@ -3,7 +3,7 @@ package company.vk.edu.distrib.compute.nst1610.http;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.nst1610.sharding.RendezvousStrategy;
+import company.vk.edu.distrib.compute.nst1610.sharding.HashingStrategy;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -17,18 +17,18 @@ public class EntityHandler implements HttpHandler {
 
     private final Dao<byte[]> dao;
     private final String localEndpoint;
-    private final RendezvousStrategy sharder;
+    private final HashingStrategy strategy;
     private final ClusterProxy clusterProxy;
 
     public EntityHandler(
         Dao<byte[]> dao,
         String localEndpoint,
-        RendezvousStrategy sharder,
+        HashingStrategy strategy,
         ClusterProxy clusterProxy
     ) {
         this.dao = dao;
         this.localEndpoint = localEndpoint;
-        this.sharder = sharder;
+        this.strategy = strategy;
         this.clusterProxy = clusterProxy;
     }
 
@@ -61,7 +61,7 @@ public class EntityHandler implements HttpHandler {
             exchange.sendResponseHeaders(405, 0);
             return;
         }
-        String targetEndpoint = sharder.resolve(id);
+        String targetEndpoint = strategy.resolve(id);
         if (!localEndpoint.equals(targetEndpoint)) {
             proxyRequest(exchange, id, targetEndpoint);
             return;
