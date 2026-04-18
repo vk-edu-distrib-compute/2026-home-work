@@ -16,11 +16,17 @@ public class DPKvCluster implements KVCluster {
 
     private final List<String> endpoints;
     private final Map<String, NodeState> nodesByEndpoint;
+    private final DPShardSelector shardSelector;
 
     public DPKvCluster(List<Integer> ports) {
+        this(ports, DPShardingAlgorithm.MODULO);
+    }
+
+    public DPKvCluster(List<Integer> ports, DPShardingAlgorithm algorithm) {
         this.endpoints = ports.stream()
             .map(port -> "http://localhost:" + port)
             .toList();
+        this.shardSelector = createSelector(algorithm, endpoints);
         this.nodesByEndpoint = new LinkedHashMap<>();
         for (String endpoint : endpoints) {
             this.nodesByEndpoint.put(endpoint, new NodeState(endpoint, new DPDao()));
@@ -63,7 +69,7 @@ public class DPKvCluster implements KVCluster {
             return;
         }
         try {
-            nodeState.service = new DPShardedNodeService(nodeState.endpoint, endpoints, nodeState.dao);
+            nodeState.service = new DPShardedNodeService(nodeState.endpoint, nodeState.dao, shardSelector);
             nodeState.service.start();
             nodeState.started = true;
             log.info("Node started. endpoint={}", nodeState.endpoint);
@@ -88,6 +94,13 @@ public class DPKvCluster implements KVCluster {
             throw new IllegalArgumentException("Unknown endpoint: " + endpoint);
         }
         return nodeState;
+    }
+
+    private static DPShardSelector createSelector(DPShardingAlgorithm algorithm, List<String> endpoints) {
+        if (DPShardingAlgorithm.RENDEZVOUS == algorithm) {
+            return DPShardSelector.rendezvous(endpoints);
+        }
+        return DPShardSelector.modulo(endpoints);
     }
 
     private static final class NodeState {

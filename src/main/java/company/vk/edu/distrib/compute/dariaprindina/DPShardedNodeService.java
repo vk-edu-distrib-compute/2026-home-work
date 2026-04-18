@@ -19,7 +19,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -29,19 +28,19 @@ public class DPShardedNodeService implements KVService {
     private static final Duration PROXY_TIMEOUT = Duration.ofSeconds(2);
 
     private final String localEndpoint;
-    private final List<String> endpoints;
     private final HttpServer server;
     private final HttpClient httpClient;
     private final Dao<byte[]> dao;
+    private final DPShardSelector shardSelector;
 
     public DPShardedNodeService(
         String localEndpoint,
-        List<String> endpoints,
-        Dao<byte[]> dao
+        Dao<byte[]> dao,
+        DPShardSelector shardSelector
     ) throws IOException {
         this.localEndpoint = Objects.requireNonNull(localEndpoint, "localEndpoint");
-        this.endpoints = List.copyOf(Objects.requireNonNull(endpoints, "endpoints"));
         this.dao = Objects.requireNonNull(dao, "dao");
+        this.shardSelector = Objects.requireNonNull(shardSelector, "shardSelector");
         this.httpClient = HttpClient.newHttpClient();
         this.server = createHttpServer(localEndpoint);
         initServer();
@@ -63,7 +62,7 @@ public class DPShardedNodeService implements KVService {
 
         server.createContext("/v0/entity", new ErrorHttpHandler(exchange -> {
             final String id = parseId(exchange.getRequestURI().getQuery());
-            final String ownerEndpoint = endpointForKey(id);
+            final String ownerEndpoint = shardSelector.ownerForKey(id);
             if (!localEndpoint.equals(ownerEndpoint)) {
                 proxyToOwner(exchange, ownerEndpoint, id);
                 return;
@@ -124,11 +123,6 @@ public class DPShardedNodeService implements KVService {
             throw new IOException("Proxy request interrupted", e);
         }
         sendResponse(exchange, response.statusCode(), response.body());
-    }
-
-    private String endpointForKey(String key) {
-        final int index = Math.floorMod(key.hashCode(), endpoints.size());
-        return endpoints.get(index);
     }
 
     private static String parseId(String query) {
