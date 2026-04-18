@@ -8,7 +8,6 @@ import company.vk.edu.distrib.compute.artttnik.shard.ShardingStrategy;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.nesterukia.utils.HttpUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +32,9 @@ import java.util.concurrent.Executors;
 
 public class MyKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(MyKVService.class);
+    private static final String GET_METHOD = "GET";
+    private static final String PUT_METHOD = "PUT";
+    private static final String DELETE_METHOD = "DELETE";
     private static final String ENTITY_PATH = "/v0/entity";
     private static final String INTERNAL_HEADER = "X-Internal-Shard-Request";
     private static final int HTTP_OK = 200;
@@ -41,8 +43,11 @@ public class MyKVService implements KVService {
     private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_NOT_FOUND = 404;
     private static final int HTTP_METHOD_NOT_ALLOWED = 405;
+    private static final int HTTP_INTERNAL_ERROR = 500;
     private static final int HTTP_BAD_GATEWAY = 502;
     private static final int DEFAULT_THREADS = 4;
+    private static final String CONTENT_TYPE_HEADER = "Content-Type";
+    private static final String OCTET_STREAM = "application/octet-stream";
 
     private final int port;
     private final Dao<byte[]> dao;
@@ -117,7 +122,7 @@ public class MyKVService implements KVService {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            if (GET_METHOD.equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(HTTP_OK, -1);
             } else {
                 if (log.isErrorEnabled()) {
@@ -165,7 +170,7 @@ public class MyKVService implements KVService {
                 exchange.sendResponseHeaders(HTTP_BAD_REQUEST, -1);
             } catch (Exception e) {
                 log.error("Internal error processing request", e);
-                exchange.sendResponseHeaders(HTTP_BAD_GATEWAY, -1);
+                exchange.sendResponseHeaders(HTTP_INTERNAL_ERROR, -1);
             }
         }
 
@@ -192,7 +197,7 @@ public class MyKVService implements KVService {
                     .header(INTERNAL_HEADER, "true");
 
             String method = exchange.getRequestMethod();
-            if ("PUT".equals(method)) {
+            if (PUT_METHOD.equals(method)) {
                 byte[] body;
                 try (InputStream is = exchange.getRequestBody()) {
                     body = is.readAllBytes();
@@ -206,6 +211,14 @@ public class MyKVService implements KVService {
                 HttpResponse<byte[]> response =
                         httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
                 byte[] body = response.body() == null ? new byte[0] : response.body();
+
+                response.headers().firstValue(CONTENT_TYPE_HEADER)
+                        .ifPresent(contentType -> exchange.getResponseHeaders().set(CONTENT_TYPE_HEADER, contentType));
+                if (GET_METHOD.equals(method)
+                        && body.length > 0
+                        && !exchange.getResponseHeaders().containsKey(CONTENT_TYPE_HEADER)) {
+                    exchange.getResponseHeaders().set(CONTENT_TYPE_HEADER, OCTET_STREAM);
+                }
 
                 if (body.length == 0) {
                     exchange.sendResponseHeaders(response.statusCode(), -1);
@@ -226,9 +239,9 @@ public class MyKVService implements KVService {
         private void dispatch(HttpExchange exchange, String id) throws IOException {
             var method = exchange.getRequestMethod();
             switch (method) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
+                case GET_METHOD -> handleGet(exchange, id);
+                case PUT_METHOD -> handlePut(exchange, id);
+                case DELETE_METHOD -> handleDelete(exchange, id);
                 default -> {
                     log.warn("Unsupported method: {}", method);
                     exchange.sendResponseHeaders(HTTP_METHOD_NOT_ALLOWED, -1);
@@ -239,8 +252,11 @@ public class MyKVService implements KVService {
         private void handleGet(HttpExchange exchange, String id) throws IOException {
             var value = dao.get(id);
 
-            exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
-            HttpUtils.sendResponse(exchange, HTTP_OK, value);
+            exchange.getResponseHeaders().add(CONTENT_TYPE_HEADER, OCTET_STREAM);
+            exchange.sendResponseHeaders(HTTP_OK, value.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(value);
+            }
         }
 
         private void handlePut(HttpExchange exchange, String id) throws IOException {
