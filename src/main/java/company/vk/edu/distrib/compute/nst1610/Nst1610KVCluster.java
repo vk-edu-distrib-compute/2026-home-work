@@ -18,14 +18,14 @@ public class Nst1610KVCluster implements KVCluster {
     }
 
     @Override
-    public synchronized void start() {
+    public void start() {
         for (String endpoint : endpoints) {
             start(endpoint);
         }
     }
 
     @Override
-    public synchronized void start(String endpoint) {
+    public void start(String endpoint) {
         try {
             int port = URI.create(endpoint).getPort();
             Nst1610KVService service = new Nst1610KVService(port, endpoints, endpoint);
@@ -39,14 +39,14 @@ public class Nst1610KVCluster implements KVCluster {
     }
 
     @Override
-    public synchronized void stop() {
+    public void stop() {
         for (String endpoint : List.copyOf(nodes.keySet())) {
             stop(endpoint);
         }
     }
 
     @Override
-    public synchronized void stop(String endpoint) {
+    public void stop(String endpoint) {
         Nst1610KVService service = nodes.remove(endpoint);
         if (service != null) {
             refreshClusterEndpoints();
