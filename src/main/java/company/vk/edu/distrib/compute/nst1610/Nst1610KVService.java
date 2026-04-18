@@ -32,7 +32,8 @@ public class Nst1610KVService implements KVService {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.dao = new FileDao(Path.of("storage", Integer.toString(port)));
         this.localEndpoint = localEndpoint;
-        this.strategy = new RendezvousHashingStrategy(clusterEndpoints);
+        this.strategy = new RendezvousHashingStrategy();
+        this.strategy.updateEndpoints(clusterEndpoints);
         this.clusterProxy = new ClusterProxy();
         initServer();
     }
@@ -56,5 +57,9 @@ public class Nst1610KVService implements KVService {
 
     private static String getEndpoint(int port) {
         return "http://localhost:" + port;
+    }
+
+    public void updateClusterEndpoints(List<String> clusterEndpoints) {
+        strategy.updateEndpoints(clusterEndpoints);
     }
 }

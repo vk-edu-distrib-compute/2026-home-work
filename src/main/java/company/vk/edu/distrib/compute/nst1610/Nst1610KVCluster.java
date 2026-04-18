@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute.nst1610;
 
 import company.vk.edu.distrib.compute.KVCluster;
-import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.net.URI;
 import java.util.LinkedHashMap;
@@ -10,7 +9,7 @@ import java.util.Map;
 
 public class Nst1610KVCluster implements KVCluster {
     private final List<String> endpoints;
-    private final Map<String, KVService> nodes = new LinkedHashMap<>();
+    private final Map<String, Nst1610KVService> nodes = new LinkedHashMap<>();
 
     public Nst1610KVCluster(List<Integer> ports) {
         this.endpoints = ports.stream()
@@ -29,10 +28,12 @@ public class Nst1610KVCluster implements KVCluster {
     public synchronized void start(String endpoint) {
         try {
             int port = URI.create(endpoint).getPort();
-            KVService service = new Nst1610KVService(port, endpoints, endpoint);
-            service.start();
+            Nst1610KVService service = new Nst1610KVService(port, endpoints, endpoint);
             nodes.put(endpoint, service);
+            refreshClusterEndpoints();
+            service.start();
         } catch (IOException e) {
+            nodes.remove(endpoint);
             throw new IllegalStateException("Failed to start node " + endpoint, e);
         }
     }
@@ -46,8 +47,9 @@ public class Nst1610KVCluster implements KVCluster {
 
     @Override
     public synchronized void stop(String endpoint) {
-        KVService service = nodes.remove(endpoint);
+        Nst1610KVService service = nodes.remove(endpoint);
         if (service != null) {
+            refreshClusterEndpoints();
             service.stop();
         }
     }
@@ -55,5 +57,12 @@ public class Nst1610KVCluster implements KVCluster {
     @Override
     public List<String> getEndpoints() {
         return endpoints;
+    }
+
+    private void refreshClusterEndpoints() {
+        List<String> activeEndpoints = List.copyOf(nodes.keySet());
+        for (Nst1610KVService service : nodes.values()) {
+            service.updateClusterEndpoints(activeEndpoints);
+        }
     }
 }
