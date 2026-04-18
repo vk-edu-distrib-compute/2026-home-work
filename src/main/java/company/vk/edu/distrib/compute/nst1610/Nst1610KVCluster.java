@@ -3,13 +3,13 @@ package company.vk.edu.distrib.compute.nst1610;
 import company.vk.edu.distrib.compute.KVCluster;
 import java.io.IOException;
 import java.net.URI;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Nst1610KVCluster implements KVCluster {
     private final List<String> endpoints;
-    private final Map<String, Nst1610KVService> nodes = new LinkedHashMap<>();
+    private final Map<String, Nst1610KVService> nodes = new ConcurrentHashMap<>();
 
     public Nst1610KVCluster(List<Integer> ports) {
         this.endpoints = ports.stream()
