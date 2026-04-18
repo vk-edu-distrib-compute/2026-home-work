@@ -3,15 +3,19 @@ package company.vk.edu.distrib.compute.vitos23;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.vitos23.exception.AcknowledgementException;
+import company.vk.edu.distrib.compute.vitos23.exception.NoReplicaAvailableException;
 import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
+import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.extractQueryParams;
 
 public class KVServiceImpl implements KVService {
 
@@ -40,6 +44,8 @@ public class KVServiceImpl implements KVService {
             exchange.sendResponseHeaders(HttpCodes.NOT_FOUND, NO_BODY_RESPONSE_LENGTH);
         } catch (IllegalArgumentException e) {
             exchange.sendResponseHeaders(HttpCodes.BAD_REQUEST, NO_BODY_RESPONSE_LENGTH);
+        } catch (NoReplicaAvailableException | AcknowledgementException e) {
+            exchange.sendResponseHeaders(HttpCodes.SERVICE_UNAVAILABLE, NO_BODY_RESPONSE_LENGTH);
         } catch (Exception e) {
             if (log.isErrorEnabled()) {
                 log.error("Failed to handle request", e);
@@ -51,31 +57,18 @@ public class KVServiceImpl implements KVService {
     }
 
     private void handleEntityRequest(HttpExchange exchange) throws IOException {
-        String id = extractId(exchange.getRequestURI().getQuery());
-
-        switch (exchange.getRequestMethod()) {
-            case "GET" -> entityRequestProcessor.handleGet(exchange, id);
-            case "PUT" -> entityRequestProcessor.handlePut(exchange, id);
-            case "DELETE" -> entityRequestProcessor.handleDelete(exchange, id);
-            case null, default -> exchange.sendResponseHeaders(HttpCodes.METHOD_NOT_ALLOWED, NO_BODY_RESPONSE_LENGTH);
-        }
-    }
-
-    private String extractId(String query) {
-        if (query == null || query.isEmpty()) {
+        Map<String, String> queryParams = extractQueryParams(exchange.getRequestURI().getQuery());
+        String id = queryParams.get("id");
+        if (id == null) {
             throw new IllegalArgumentException("Missing query parameter 'id'");
         }
-        String[] params = query.split("&");
-        for (String param : params) {
-            String[] kv = param.split("=", 2);
-            if ("id".equals(kv[0])) {
-                if (kv.length < 2 || kv[1].isEmpty()) {
-                    throw new IllegalArgumentException("Empty 'id' parameter");
-                }
-                return kv[1];
-            }
+
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> entityRequestProcessor.handleGet(exchange, id, queryParams);
+            case "PUT" -> entityRequestProcessor.handlePut(exchange, id, queryParams);
+            case "DELETE" -> entityRequestProcessor.handleDelete(exchange, id, queryParams);
+            case null, default -> exchange.sendResponseHeaders(HttpCodes.METHOD_NOT_ALLOWED, NO_BODY_RESPONSE_LENGTH);
         }
-        throw new IllegalArgumentException("Missing query parameter 'id'");
     }
 
     @Override

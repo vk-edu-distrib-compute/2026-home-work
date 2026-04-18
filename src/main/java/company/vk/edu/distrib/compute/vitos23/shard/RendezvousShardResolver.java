@@ -16,7 +16,18 @@ public class RendezvousShardResolver implements ShardResolver {
     }
 
     @Override
-    public String resolveNode(String key) {
+    public List<String> resolveNodes(String key, int count) {
+        if (count == 1) {
+            // Optimization to achieve linear performance
+            return List.of(resolveNode(key));
+        }
+        return shards.stream()
+                .sorted(Comparator.comparing(shard -> md5Hash(shard + key)).reversed())
+                .limit(count)
+                .toList();
+    }
+
+    private String resolveNode(String key) {
         return shards.stream().max(Comparator.comparing(shard -> md5Hash(shard + key))).orElseThrow();
     }
 }

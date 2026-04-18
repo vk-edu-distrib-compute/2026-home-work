@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.vitos23;
+package company.vk.edu.distrib.compute.vitos23.exception;
 
 import java.io.Serial;
 

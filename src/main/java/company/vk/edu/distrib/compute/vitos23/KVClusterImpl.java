@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.vitos23;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.KVServiceFactory;
+import company.vk.edu.distrib.compute.vitos23.exception.ServerException;
 import company.vk.edu.distrib.compute.vitos23.util.HttpUtils;
 
 import java.io.IOException;

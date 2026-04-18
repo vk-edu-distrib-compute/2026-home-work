@@ -5,9 +5,11 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
+import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.sendArray;
 
 public class DirectEntityRequestProcessor implements EntityRequestProcessor {
     private final Dao<byte[]> dao;
@@ -17,21 +19,20 @@ public class DirectEntityRequestProcessor implements EntityRequestProcessor {
     }
 
     @Override
-    public void handleGet(HttpExchange exchange, String id) throws IOException {
+    public void handleGet(HttpExchange exchange, String id, Map<String, String> queryParams) throws IOException {
         byte[] value = dao.get(id);
-        exchange.sendResponseHeaders(HttpCodes.OK, value.length);
-        exchange.getResponseBody().write(value);
+        sendArray(exchange, value);
     }
 
     @Override
-    public void handlePut(HttpExchange exchange, String id) throws IOException {
+    public void handlePut(HttpExchange exchange, String id, Map<String, String> queryParams) throws IOException {
         byte[] body = exchange.getRequestBody().readAllBytes();
         dao.upsert(id, body);
         exchange.sendResponseHeaders(HttpCodes.CREATED, NO_BODY_RESPONSE_LENGTH);
     }
 
     @Override
-    public void handleDelete(HttpExchange exchange, String id) throws IOException {
+    public void handleDelete(HttpExchange exchange, String id, Map<String, String> queryParams) throws IOException {
         dao.delete(id);
         exchange.sendResponseHeaders(HttpCodes.ACCEPTED, NO_BODY_RESPONSE_LENGTH);
     }

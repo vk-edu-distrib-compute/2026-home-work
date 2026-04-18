@@ -15,10 +15,12 @@ import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.getLocalEndp
 
 public class ShardedKVServiceFactory extends KVServiceFactory {
     private final ShardResolver shardResolver;
+    private final int replicationFactor;
 
-    public ShardedKVServiceFactory(ShardResolver shardResolver) {
+    public ShardedKVServiceFactory(ShardResolver shardResolver, int replicationFactor) {
         super();
         this.shardResolver = shardResolver;
+        this.replicationFactor = replicationFactor;
     }
 
     @Override
@@ -26,9 +28,11 @@ public class ShardedKVServiceFactory extends KVServiceFactory {
         Dao<byte[]> dao = new WalBackedDao("storage/vitos23/shard-" + port);
         EntityRequestProcessor shardedEntityRequestProcessor = new ShardedEntityRequestProcessor(
                 getLocalEndpoint(port),
-                shardResolver,
+                new ReplicaRequestExecutor(shardResolver, replicationFactor),
                 new DirectEntityRequestProcessor(dao),
-                HttpClient.newHttpClient()
+                dao,
+                HttpClient.newHttpClient(),
+                replicationFactor
         );
         return new KVServiceImpl(port, shardedEntityRequestProcessor);
     }
