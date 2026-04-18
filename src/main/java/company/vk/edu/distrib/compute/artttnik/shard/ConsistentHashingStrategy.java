@@ -17,6 +17,10 @@ public class ConsistentHashingStrategy implements ShardingStrategy {
 
     @Override
     public String resolveOwner(String key, List<String> endpoints) {
+        if (endpoints.isEmpty()) {
+            throw new IllegalArgumentException("Endpoints list cannot be empty");
+        }
+
         NavigableMap<Long, String> currentRing = getRing(endpoints);
         long keyHash = fnv1a(key.getBytes(StandardCharsets.UTF_8));
         NavigableMap<Long, String> tail = currentRing.tailMap(keyHash, true);
