@@ -29,7 +29,7 @@ public class DPKvCluster implements KVCluster {
         this.shardSelector = createSelector(algorithm, endpoints);
         this.nodesByEndpoint = new LinkedHashMap<>();
         for (String endpoint : endpoints) {
-            this.nodesByEndpoint.put(endpoint, new NodeState(endpoint, new DPDao()));
+            registerNode(endpoint);
         }
     }
 
@@ -83,9 +83,12 @@ public class DPKvCluster implements KVCluster {
             return;
         }
         nodeState.service.stop();
-        nodeState.service = null;
         nodeState.started = false;
         log.info("Node stopped. endpoint={}", nodeState.endpoint);
+    }
+
+    private void registerNode(String endpoint) {
+        this.nodesByEndpoint.put(endpoint, new NodeState(endpoint, new DPDao()));
     }
 
     private NodeState findNode(String endpoint) {
