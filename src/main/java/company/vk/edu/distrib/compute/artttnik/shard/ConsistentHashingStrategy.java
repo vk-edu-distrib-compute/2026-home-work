@@ -5,13 +5,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ConsistentHashingStrategy implements ShardingStrategy {
 
     private static final int VIRTUAL_NODES = 150;
 
-    private volatile List<String> cachedEndpoints = List.of();
-    private volatile NavigableMap<Long, String> ring = new TreeMap<>();
+    private final ReentrantLock lock = new ReentrantLock();
+    private List<String> cachedEndpoints = List.of();
+    private NavigableMap<Long, String> ring = new TreeMap<>();
 
     @Override
     public String resolveOwner(String key, List<String> endpoints) {
@@ -22,16 +24,16 @@ public class ConsistentHashingStrategy implements ShardingStrategy {
     }
 
     private NavigableMap<Long, String> getRing(List<String> endpoints) {
-        if (endpoints.equals(cachedEndpoints)) {
-            return ring;
-        }
-        synchronized (this) {
+        lock.lock();
+        try {
             if (!endpoints.equals(cachedEndpoints)) {
                 ring = buildRing(endpoints);
                 cachedEndpoints = new ArrayList<>(endpoints);
             }
+            return ring;
+        } finally {
+            lock.unlock();
         }
-        return ring;
     }
 
     private static NavigableMap<Long, String> buildRing(List<String> endpoints) {
