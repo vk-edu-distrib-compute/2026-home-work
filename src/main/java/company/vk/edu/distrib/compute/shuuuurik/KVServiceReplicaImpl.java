@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -350,6 +351,9 @@ public class KVServiceReplicaImpl implements KVService {
     }
 
     private static final class BadRequestException extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         public BadRequestException() {
             super();
         }
