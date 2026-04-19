@@ -6,6 +6,7 @@ import company.vk.edu.distrib.compute.KVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.sharding.ShardingStrategy;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -33,7 +34,7 @@ public class NihuawayKVCluster implements KVCluster {
             try {
                 return serviceFactory.create(port);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new UncheckedIOException(e);
             }
         });
 

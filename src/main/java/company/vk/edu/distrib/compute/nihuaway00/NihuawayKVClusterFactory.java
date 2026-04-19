@@ -47,7 +47,7 @@ public class NihuawayKVClusterFactory extends KVClusterFactory {
                 props.load(is);
                 return props.getProperty("strategy", "consistent");
             }
-        } catch (NullPointerException | IOException e) {
+        } catch (IOException e) {
             if (log.isErrorEnabled()) {
                 log.error("NihuawayKVClusterFactory loadStrategy error", e);
             }

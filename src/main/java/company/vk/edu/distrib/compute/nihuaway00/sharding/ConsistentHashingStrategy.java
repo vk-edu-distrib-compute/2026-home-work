@@ -73,7 +73,7 @@ public class ConsistentHashingStrategy implements ShardingStrategy {
         try {
             return MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new AssertionError(e);
         }
     }
 }

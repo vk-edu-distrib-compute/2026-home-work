@@ -20,17 +20,14 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
     }
 
     public NihuawayKVServiceFactory() {
-        super();
-        this.shardingStrategy = null;
-        this.httpClient = null;
+        this(null, null);
     }
 
     @Override
     protected KVService doCreate(int port) throws IOException {
         ShardRouter shardRouter = shardingStrategy != null && httpClient != null
-                ?
-                new DistributedShardRouter("http://localhost:" + port, shardingStrategy, httpClient) :
-                new LocalShardRouter("http://localhost:" + port);
+                ? new DistributedShardRouter("http://localhost:" + port, shardingStrategy, httpClient)
+                : new LocalShardRouter("http://localhost:" + port);
         return new NihuawayKVService(port, shardRouter);
     }
 }
