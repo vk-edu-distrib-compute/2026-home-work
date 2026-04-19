@@ -10,11 +10,10 @@ import java.nio.file.Path;
 
 public class MyKVServiceFactory extends KVServiceFactory {
     private static final Logger log = LoggerFactory.getLogger(MyKVServiceFactory.class);
-    private final MyKVCluster cluster;
+    private MyKVCluster cluster;
 
     public MyKVServiceFactory() {
         super();
-        this.cluster = null;
     }
 
     public MyKVServiceFactory(MyKVCluster cluster) {

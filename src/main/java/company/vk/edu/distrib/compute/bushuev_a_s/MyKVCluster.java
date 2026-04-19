@@ -4,6 +4,8 @@ import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 
 import java.io.IOException;
+import java.io.Serial;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,12 +23,16 @@ public class MyKVCluster implements KVCluster {
         factory = new MyKVServiceFactory(this);
     }
 
-    public String getEndpoint(String id) {
+    public String getEndpoint(String id) throws NoAlgorithmException {
         final List<String> endpoints = new ArrayList<>();
         for (int port : activePorts) {
             endpoints.add("http://localhost:" + port);
         }
-        return hashfunction.getEndpoint(id, endpoints);
+        try {
+            return hashfunction.getEndpoint(id, endpoints);
+        } catch (NoSuchAlgorithmException e) {
+            throw new NoAlgorithmException("Failed to find hash algorithm", e);
+        }
     }
 
     @Override
@@ -60,7 +66,7 @@ public class MyKVCluster implements KVCluster {
             activeServices.add(service);
             activePorts.add(port);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new StartException("Faild to start server", e);
         }
     }
 
@@ -96,5 +102,23 @@ public class MyKVCluster implements KVCluster {
             endpoints.add("http://localhost:" + port);
         }
         return endpoints;
+    }
+
+    public class StartException extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public StartException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    public class NoAlgorithmException extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public NoAlgorithmException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

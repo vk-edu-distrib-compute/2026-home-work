@@ -169,6 +169,7 @@ public class MyKVService implements KVService {
 
         /**
          * Создаёт обёртку для обработчика с перехватом исключений.
+         *
          * @param delegate делегируемый обработчик
          */
         private ErrorHttpHandler(HttpHandler delegate) {
@@ -191,6 +192,12 @@ public class MyKVService implements KVService {
                 exchange.sendResponseHeaders(500, -1);
             } catch (DaoException e) {
                 log.error("Storage error", e);
+                exchange.sendResponseHeaders(500, -1);
+            } catch (MyKVCluster.StartException e) {
+                log.error("Failed to start server", e);
+                exchange.sendResponseHeaders(500, -1);
+            } catch (MyKVCluster.NoAlgorithmException e) {
+                log.error("Hash algorithm not found", e);
                 exchange.sendResponseHeaders(500, -1);
             }
         }
