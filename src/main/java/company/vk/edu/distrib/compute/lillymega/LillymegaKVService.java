@@ -26,7 +26,6 @@ public class LillymegaKVService implements KVService {
     private static final Duration PROXY_TIMEOUT = Duration.ofSeconds(2);
 
     private final String selfEndpoint;
-    private final List<String> clusterEndpoints;
     private final HttpClient httpClient;
 
     private final HttpServer server;
@@ -34,11 +33,13 @@ public class LillymegaKVService implements KVService {
     private final LillymegaShardingSelector shardingSelector;
 
     public LillymegaKVService(int port, Dao<byte[]> dao) throws IOException {
-        this(port,
+        this(
+                port,
                 dao,
                 "http://localhost:" + port,
                 List.of("http://localhost:" + port),
-                HttpClient.newHttpClient());
+                HttpClient.newHttpClient()
+        );
     }
 
     public LillymegaKVService(
@@ -50,13 +51,11 @@ public class LillymegaKVService implements KVService {
     ) throws IOException {
         this.dao = dao;
         this.selfEndpoint = selfEndpoint;
-        this.clusterEndpoints = List.copyOf(clusterEndpoints);
         this.httpClient = httpClient;
         this.shardingSelector = new LillymegaShardingSelector(
-                this.clusterEndpoints,
+                List.copyOf(clusterEndpoints),
                 LillymegaShardingSelector.resolveStrategy()
         );
-
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/v0/status", this::handleStatus);
         this.server.createContext("/v0/entity", this::handleEntity);
