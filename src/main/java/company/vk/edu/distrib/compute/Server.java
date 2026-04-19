@@ -1,7 +1,7 @@
 package company.vk.edu.distrib.compute;
 
 import module java.base;
-import company.vk.edu.distrib.compute.bushuev_a_s.MyRendezvousHashing;
+import company.vk.edu.distrib.compute.bushuev_a_s.MyConsistentHashing;
 import company.vk.edu.distrib.compute.bushuev_a_s.MyKVClusterFactory;
 import company.vk.edu.distrib.compute.bushuev_a_s.MyKVServiceFactory;
 import org.slf4j.LoggerFactory;
@@ -12,7 +12,7 @@ public class Server {
         var log = LoggerFactory.getLogger("server");
         if (isClusterMode(args)) {
             List<Integer> ports = Arrays.asList(8080, 8081);
-            KVCluster cluster = new MyKVClusterFactory().create(ports, new MyRendezvousHashing());
+            KVCluster cluster = new MyKVClusterFactory().create(ports, new MyConsistentHashing());
             cluster.start();
             log.info("Cluster started on ports={}", ports);
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
