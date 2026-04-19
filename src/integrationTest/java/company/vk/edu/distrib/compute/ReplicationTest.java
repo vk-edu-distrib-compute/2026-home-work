@@ -12,7 +12,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Disabled
@@ -31,16 +30,15 @@ public class ReplicationTest extends TestBase {
     }
 
     /**
-     * Проверяем, что сервис поддерживает репликацию.
+     * Проверяем, что сервис поддерживает репликацию
      */
     @Test
     void serviceSupportsReplication() throws IOException {
-        assertInstanceOf(ReplicatedService.class, serviceFactory.create(randomPort()),
-                "Service does not support replication");
+        assertInstanceOf(ReplicatedService.class, serviceFactory.create(randomPort()), "Service does not support replication");
     }
 
     /**
-     * Проверяем, что как есть минимум 3 реплики (фактор репликации).
+     * Проверяем, что как есть минимум 3 реплики (фактор репликации)
      */
     @Test
     void replicationFactor() {
@@ -48,7 +46,7 @@ public class ReplicationTest extends TestBase {
     }
 
     /**
-     * Ошибка, в случае если параметр ack превышает фактор репликации.
+     * Ошибка, в случае если параметр ack превышает фактор репликации
      */
     @Test
     void badAckValue() {
@@ -59,19 +57,19 @@ public class ReplicationTest extends TestBase {
     }
 
     /**
-     * Простейший тест: пишем, потом читаем по одному и тому же ключу.
+     * Простейший тест: пишем, потом читаем по одному и тому же ключу
      */
     @Test
     void putAndGet() {
         doWithService(service -> {
-            upsert(endpoint(service.port()), "k1", "v1".getBytes(UTF_8));
-            String persistedValue = new String(get(endpoint(service.port()), "k1").body(), UTF_8);
+            upsert(endpoint(service.port()), "k1", "v1".getBytes(StandardCharsets.UTF_8));
+            String persistedValue = new String(get(endpoint(service.port()), "k1").body(), StandardCharsets.UTF_8);
             assertEquals("v1", persistedValue);
         });
     }
 
     /**
-     * Запись и чтение по кворуму (все узлы работают).
+     * Запись и чтение по кворуму (все узлы работают)
      */
     @Test
     void quorum() {
@@ -79,14 +77,14 @@ public class ReplicationTest extends TestBase {
             int n = service.numberOfReplicas();
             int w = n - 1;
             int r = n - w + 1;
-            upsert(endpoint(service.port()), "k2", "v2".getBytes(UTF_8), w);
-            String persistedValue = new String(get(endpoint(service.port()), "k2", r).body(), UTF_8);
+            upsert(endpoint(service.port()), "k2", "v2".getBytes(StandardCharsets.UTF_8), w);
+            String persistedValue = new String(get(endpoint(service.port()), "k2", r).body(), StandardCharsets.UTF_8);
             assertEquals("v2", persistedValue);
         });
     }
 
     /**
-     * Запись и чтение по кворуму (узлы выходят из строя).
+     * Запись и чтение по кворуму (узлы выходят из строя)
      */
     @Test
     void quorumWithFaultyNodes() {
@@ -95,15 +93,15 @@ public class ReplicationTest extends TestBase {
             int n = service.numberOfReplicas();
             int w = n - 1;
             int r = n - 2;
-            upsert(endpoint(service.port()), "k3", "v3".getBytes(UTF_8), w);
+            upsert(endpoint(service.port()), "k3", "v3".getBytes(StandardCharsets.UTF_8), w);
             service.disableReplica(1);
-            String persistedValue = new String(get(endpoint(service.port()), "k3", r).body(), UTF_8);
+            String persistedValue = new String(get(endpoint(service.port()), "k3", r).body(), StandardCharsets.UTF_8);
             assertEquals("v3", persistedValue);
         });
     }
 
     /**
-     * Если на разных узлах есть разные значения по ключу, то читаем самое свежее.
+     * Если на разных узлах есть разные значения по ключу, то читаем самое свежее
      */
     @Test
     void conflictResolution() {
@@ -112,25 +110,25 @@ public class ReplicationTest extends TestBase {
             int n = service.numberOfReplicas();
 
             // Пишем на все реплики
-            upsert(endpoint(service.port()), "k4", "v4_0".getBytes(UTF_8), n);
+            upsert(endpoint(service.port()), "k4", "v4_0".getBytes(StandardCharsets.UTF_8), n);
 
             // Пишем обновленное значение на все реплики, кроме двух
             service.disableReplica(0);
             service.disableReplica(1);
-            upsert(endpoint(service.port()), "k4", "v4_1".getBytes(UTF_8), n - 2);
+            upsert(endpoint(service.port()), "k4", "v4_1".getBytes(StandardCharsets.UTF_8), n - 2);
 
             // Восстанавливаем упавшие реплики
             service.enableReplica(0);
             service.enableReplica(1);
 
             // Читаем со всех реплик, ожидаем обновленное значение
-            String persistedValue = new String(get(endpoint(service.port()), "k4", n).body(), UTF_8);
+            String persistedValue = new String(get(endpoint(service.port()), "k4", n).body(), StandardCharsets.UTF_8);
             assertEquals("v4_1", persistedValue);
         });
     }
 
     /**
-     * Недостаточно доступных реплик для записи.
+     * Недостаточно доступных реплик для записи
      */
     @Test
     void faultyWrite() {
@@ -138,13 +136,13 @@ public class ReplicationTest extends TestBase {
             service.disableReplica(0);
             int n = service.numberOfReplicas();
             service.disableReplica(0);
-            HttpResponse<Void> result = upsert(endpoint(service.port()), "k5", "v5".getBytes(UTF_8), n);
+            HttpResponse<Void> result = upsert(endpoint(service.port()), "k5", "v5".getBytes(StandardCharsets.UTF_8), n);
             assertEquals(500, result.statusCode());
         });
     }
 
     /**
-     * Недостаточно доступных реплик для чтения.
+     * Недостаточно доступных реплик для чтения
      */
     @Test
     void faultyRead() {
@@ -152,29 +150,29 @@ public class ReplicationTest extends TestBase {
             service.disableReplica(0);
             int n = service.numberOfReplicas();
             service.disableReplica(0);
-            upsert(endpoint(service.port()), "k6", "v6".getBytes(UTF_8), n - 1);
+            upsert(endpoint(service.port()), "k6", "v6".getBytes(StandardCharsets.UTF_8), n - 1);
             HttpResponse<byte[]> result = get(endpoint(service.port()), "k6", n);
             assertEquals(500, result.statusCode());
         });
     }
 
     /**
-     * Пишем, потом удаляем по одному и тому же ключу, не должны читать удаленные данные.
+     * Пишем, потом удаляем по одному и тому же ключу, не должны читать удаленные данные
      */
     @Test
     void deletion() {
         doWithService(service -> {
             int n = service.numberOfReplicas();
-            upsert(endpoint(service.port()), "k7", "v7".getBytes(UTF_8), n);
+            int w = n - 2;
+            int r = n - w + 1;
+            upsert(endpoint(service.port()), "k7", "v7".getBytes(StandardCharsets.UTF_8), n);
 
             service.disableReplica(1);
             service.disableReplica(2);
-            int w = n - 2;
             delete(endpoint(service.port()), "k7", w);
 
             service.enableReplica(1);
             service.enableReplica(2);
-            int r = n - w + 1;
             HttpResponse<byte[]> result = get(endpoint(service.port()), "k7", r);
             assertEquals(404, result.statusCode());
         });
