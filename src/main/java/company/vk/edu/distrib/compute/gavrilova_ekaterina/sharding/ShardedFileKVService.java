@@ -32,14 +32,14 @@ public class ShardedFileKVService implements KVService {
     private final HttpServer server;
     private final Dao<byte[]> storage;
     private final String selfUrl;
-
-    private final RendezvousHashingStrategy hashingStrategy = new RendezvousHashingStrategy();
+    private final HashingStrategy hashingStrategy;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    public ShardedFileKVService(int port) throws IOException {
+    public ShardedFileKVService(int port, HashingStrategy hashingStrategy) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.storage = new FileDao(Path.of("ekaterina-gavrilova-storage"));
+        this.storage = new FileDao(Path.of("ekaterina-gavrilova-storage-" + port));
         this.selfUrl = LOCALHOST + port;
+        this.hashingStrategy = hashingStrategy;
 
         initServer();
     }

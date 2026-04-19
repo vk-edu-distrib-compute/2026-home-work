@@ -2,17 +2,19 @@ package company.vk.edu.distrib.compute.gavrilova_ekaterina.sharding;
 
 import java.util.List;
 
-public class RendezvousHashingStrategy {
+public class RendezvousHashingStrategy implements HashingStrategy {
 
     private static final long KNUTH_HASH_CONSTANT = 2654435761L;
     private static final int SINGLE_ENDPOINT = 1;
 
     private List<String> endpoints = List.of();
 
+    @Override
     public void setEndpoints(List<String> endpoints) {
         this.endpoints = List.copyOf(endpoints);
     }
 
+    @Override
     public String getNode(String key) {
         if (endpoints.isEmpty()) {
             throw new IllegalStateException("Cluster has no nodes");
