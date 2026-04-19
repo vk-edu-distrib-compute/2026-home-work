@@ -1,6 +1,6 @@
 package company.vk.edu.distrib.compute.bushuev_a_s;
 
-import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -11,18 +11,19 @@ public class MyRendezvousHashing implements MyHashingStrategy {
     public String getEndpoint(String key, List<String> endpoints) throws NoSuchAlgorithmException {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
 
-        BigInteger maxNumber = BigInteger.ZERO;
-        BigInteger hashNumber;
+        Long maxHash = Long.MIN_VALUE;
 
         int chosenNode = 0;
 
         for (int i = 0; i < endpoints.size(); i++) {
-            String endpoint = endpoints.get(i);
-            byte[] digest = md.digest((endpoint + key).getBytes(StandardCharsets.UTF_8));
-            hashNumber = new BigInteger(1, digest);
+            String combined = endpoints.get(i) + key;
+            byte[] digest = md.digest(combined.getBytes(StandardCharsets.UTF_8));
 
-            if (hashNumber.compareTo(maxNumber) > 0) {
-                maxNumber = hashNumber;
+            // Берем первые 8 байт из 32-байтного SHA-256 и превращаем их в long
+            long currentHash = ByteBuffer.wrap(digest).getLong();
+
+            if (currentHash > maxHash) {
+                maxHash = currentHash;
                 chosenNode = i;
             }
         }
