@@ -25,9 +25,9 @@ public class MyKVService implements KVService {
     private static final String ID_PREFIX = "id=";
 
     private final MyKVCluster cluster;
-    private final String myEndpoint; // Например, "http://localhost:8080"
+    private final String myEndpoint;
     private static final HttpClient httpClient = HttpClient.newBuilder()
-            .executor(Executors.newVirtualThreadPerTaskExecutor()) // Для Java 21+
+            .executor(Executors.newVirtualThreadPerTaskExecutor())
             .build();
 
     private final HttpServer server;
@@ -40,7 +40,7 @@ public class MyKVService implements KVService {
      * @throws IOException если не удаётся создать HTTP сервер
      */
     public MyKVService(int port, Dao<byte[]> dao, MyKVCluster cluster) throws IOException {
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
         this.dao = dao;
         this.cluster = cluster;
         this.myEndpoint = "http://localhost:" + port;
@@ -93,14 +93,17 @@ public class MyKVService implements KVService {
                     final byte[] upsertValue = is.readAllBytes();
                     dao.upsert(id, upsertValue);
                 }
-                http.sendResponseHeaders(201, -1);
+                http.sendResponseHeaders(201, 0);
+                http.getResponseBody().close();
                 break;
             case "DELETE":
                 dao.delete(id);
-                http.sendResponseHeaders(202, -1);
+                http.sendResponseHeaders(202, 0);
+                http.getResponseBody().close();
                 break;
             default:
-                http.sendResponseHeaders(405, -1);
+                http.sendResponseHeaders(405, 0);
+                http.getResponseBody().close();
                 break;
         }
     }
@@ -152,6 +155,7 @@ public class MyKVService implements KVService {
     @Override
     public void start() {
         log.info("Starting");
+        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();
     }
 
