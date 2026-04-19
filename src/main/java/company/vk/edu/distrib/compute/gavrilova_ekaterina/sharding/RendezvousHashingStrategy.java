@@ -4,7 +4,8 @@ import java.util.List;
 
 public class RendezvousHashingStrategy implements HashingStrategy {
 
-    private static final long KNUTH_HASH_CONSTANT = 2654435761L;
+    private static final long FNV_OFFSET_BASIS_64 = 1469598103934665603L;
+    private static final long FNV_PRIME_64 = 1099511628211L;
     private static final int SINGLE_ENDPOINT = 1;
 
     private List<String> endpoints = List.of();
@@ -25,20 +26,29 @@ public class RendezvousHashingStrategy implements HashingStrategy {
         }
 
         String bestNode = null;
-        long bestScore = Long.MIN_VALUE;
+        long bestScore = 0;
 
-        for (String endpoint : endpoints) {
-            long score = hash(key + endpoint);
-            if (score > bestScore) {
+        for (String node : endpoints) {
+            long score = hash(key, node);
+
+            if (bestNode == null || Long.compareUnsigned(score, bestScore) > 0) {
                 bestScore = score;
-                bestNode = endpoint;
+                bestNode = node;
             }
         }
         return bestNode;
     }
 
-    private long hash(String s) {
-        return s.hashCode() * KNUTH_HASH_CONSTANT;
+    private long hash(String key, String node) {
+        String s = key + ":" + node;
+
+        long hash = FNV_OFFSET_BASIS_64;
+
+        for (int i = 0; i < s.length(); i++) {
+            hash ^= s.charAt(i);
+            hash *= FNV_PRIME_64;
+        }
+        return hash;
     }
 
 }

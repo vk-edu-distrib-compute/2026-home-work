@@ -6,7 +6,8 @@ import java.util.TreeMap;
 
 public class ConsistentHashingStrategy implements HashingStrategy {
 
-    private static final long KNUTH_HASH_CONSTANT = 2654435761L;
+    private static final long FNV_OFFSET_BASIS_64 = 1469598103934665603L;
+    private static final long FNV_PRIME_64 = 1099511628211L;
     private static final int VIRTUAL_NODE_COUNT = 100;
     private final SortedMap<Long, String> ring = new TreeMap<>();
 
@@ -39,7 +40,14 @@ public class ConsistentHashingStrategy implements HashingStrategy {
     }
 
     private long hash(String s) {
-        return s.hashCode() * KNUTH_HASH_CONSTANT;
+        long hash = FNV_OFFSET_BASIS_64;
+
+        for (int i = 0; i < s.length(); i++) {
+            hash ^= s.charAt(i);
+            hash *= FNV_PRIME_64;
+        }
+
+        return hash;
     }
 
 }
