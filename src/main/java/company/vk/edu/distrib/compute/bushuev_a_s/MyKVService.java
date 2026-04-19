@@ -40,7 +40,7 @@ public class MyKVService implements KVService {
      * @throws IOException если не удаётся создать HTTP сервер
      */
     public MyKVService(int port, Dao<byte[]> dao, MyKVCluster cluster) throws IOException {
-        this.server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
+        this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.dao = dao;
         this.cluster = cluster;
         this.myEndpoint = "http://localhost:" + port;
