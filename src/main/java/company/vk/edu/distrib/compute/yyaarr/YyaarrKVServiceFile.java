@@ -60,19 +60,22 @@ public class YyaarrKVServiceFile implements KVService {
     }
 
     @Override
-    @SuppressWarnings("AssignmentToNull")
     public void stop() {
         if (!isRunning) {
             return;
         }
         server.stop(0);
-        server = null; // need to reset for restart
+        resetServer(); // need to reset for restart
         isRunning = false;
         LOGGER.info("Service stopped on port {}", port);
     }
 
     public int getPort() {
         return port;
+    }
+
+    private void resetServer() {
+        server = null; // reset for restart
     }
 
 }
