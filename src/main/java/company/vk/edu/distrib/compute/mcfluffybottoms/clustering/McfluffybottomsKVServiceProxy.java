@@ -47,8 +47,6 @@ public class McfluffybottomsKVServiceProxy implements KVService {
 
     public McfluffybottomsKVServiceProxy(int port, Dao<byte[]> dao, Hasher hasher, String url) {
         this.dao = dao;
-        this.server = null;
-        this.client = null;
         this.hasher = hasher;
         this.url = url;
         this.port = port;
