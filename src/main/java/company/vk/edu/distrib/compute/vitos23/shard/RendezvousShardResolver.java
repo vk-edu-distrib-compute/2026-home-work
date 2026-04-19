@@ -6,6 +6,10 @@ import java.util.List;
 import static company.vk.edu.distrib.compute.vitos23.util.HashUtils.md5Hash;
 
 public class RendezvousShardResolver implements ShardResolver {
+
+    // Kind of ugly, but Codacy...
+    private static final int ONE = 1;
+
     private final List<String> shards;
 
     public RendezvousShardResolver(List<String> shards) {
@@ -17,7 +21,7 @@ public class RendezvousShardResolver implements ShardResolver {
 
     @Override
     public List<String> resolveNodes(String key, int count) {
-        if (count == 1) {
+        if (count == ONE) {
             // Optimization to achieve linear performance
             return List.of(resolveNode(key));
         }

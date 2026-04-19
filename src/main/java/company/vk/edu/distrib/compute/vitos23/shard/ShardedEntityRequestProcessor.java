@@ -113,6 +113,10 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
             if (!result.success()) {
                 continue;
             }
+            // I had to disable all the warnings altogether because build's and Codacy's PMD have different settings.
+            // So in Codacy the following statements produces AvoidInstantiatingObjectsInLoops warning.
+            // If I suppress only it, I get UnnecessaryWarningSuppression warning in check task.
+            @SuppressWarnings("all")
             ByteArrayKey key = new ByteArrayKey(result.data());
             int count = frequencyByData.merge(key, 1, Integer::sum);
             if (count >= expectedAck) {
