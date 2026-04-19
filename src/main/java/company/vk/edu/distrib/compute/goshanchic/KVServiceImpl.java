@@ -124,7 +124,7 @@ public class KVServiceImpl implements KVService {
                 .header(PROXIED_HEADER, "true");
 
         String method = exchange.getRequestMethod();
-        if (METHOD_GET.equals(method) || METHOD_DELETE.equals(method)) {
+        if (isMethodWithoutBody(method)) {
             requestBuilder.method(method, HttpRequest.BodyPublishers.noBody());
         } else if (METHOD_PUT.equals(method)) {
             byte[] body = exchange.getRequestBody().readAllBytes();
@@ -134,6 +134,10 @@ public class KVServiceImpl implements KVService {
         }
 
         return requestBuilder.build();
+    }
+
+    private boolean isMethodWithoutBody(String method) {
+        return METHOD_GET.equals(method) || METHOD_DELETE.equals(method);
     }
 
     private void sendProxyResponse(HttpExchange exchange, HttpResponse<byte[]> response) throws IOException {
@@ -177,7 +181,9 @@ public class KVServiceImpl implements KVService {
         try {
             dao.close();
         } catch (IOException ex) {
-            // ignore
+            // Closing resources, exception can be safely ignored
         }
     }
 }
+
+

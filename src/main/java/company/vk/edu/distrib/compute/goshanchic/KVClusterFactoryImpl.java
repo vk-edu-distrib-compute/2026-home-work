@@ -15,14 +15,16 @@ public class KVClusterFactoryImpl implements KVClusterFactory {
 
             @Override
             public void start() throws IOException {
-                InMemoryDao dao;
-                KVService service;
                 for (int port : ports) {
-                    dao = new InMemoryDao();
-                    service = new KVServiceImpl(port, ports, dao);
-                    service.start();
-                    services.add(service);
+                    createAndStartService(port);
                 }
+            }
+
+            private void createAndStartService(int port) throws IOException {
+                InMemoryDao dao = new InMemoryDao();
+                KVService service = new KVServiceImpl(port, ports, dao);
+                service.start();
+                services.add(service);
             }
 
             @Override
@@ -34,3 +36,5 @@ public class KVClusterFactoryImpl implements KVClusterFactory {
         };
     }
 }
+
+
