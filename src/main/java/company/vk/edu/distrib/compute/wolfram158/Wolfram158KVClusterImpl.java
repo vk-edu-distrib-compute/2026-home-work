@@ -58,8 +58,8 @@ public class Wolfram158KVClusterImpl implements KVCluster {
             newService.start();
             endpointToKVService.put(endpoint, newService);
         } catch (IOException e) {
-            if (log.isWarnEnabled()) {
-                log.warn(e.getMessage());
+            if (log.isErrorEnabled()) {
+                log.error(e.getMessage());
             }
         }
     }
