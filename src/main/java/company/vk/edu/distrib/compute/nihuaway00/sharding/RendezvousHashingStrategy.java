@@ -46,7 +46,7 @@ public class RendezvousHashingStrategy implements ShardingStrategy {
     }
 
     private long computeHash(String key, String endpoint) {
-        byte[] hash = MD.get().digest((key + endpoint).getBytes(StandardCharsets.UTF_8));
+        byte[] hash = MD.get().digest((key + "\0" + endpoint).getBytes(StandardCharsets.UTF_8));
         return ByteBuffer.wrap(hash).getLong();
     }
 

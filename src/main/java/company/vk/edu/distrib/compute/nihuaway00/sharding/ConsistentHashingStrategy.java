@@ -39,7 +39,7 @@ public class ConsistentHashingStrategy implements ShardingStrategy {
                 return node;
             }
         }
-        throw new NoSuchElementException("No alive nodes");
+        throw new IllegalStateException("No nodes available");
     }
 
     @Override

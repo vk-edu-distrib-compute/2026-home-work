@@ -2,7 +2,6 @@ package company.vk.edu.distrib.compute.nihuaway00;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
-import company.vk.edu.distrib.compute.dummy.DummyKVService;
 import company.vk.edu.distrib.compute.nihuaway00.sharding.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +14,7 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class NihuawayKVClusterFactory extends KVClusterFactory {
-    private static final Logger log = LoggerFactory.getLogger(DummyKVService.class);
+    private static final Logger log = LoggerFactory.getLogger(NihuawayKVClusterFactory.class);
 
     @Override
     protected KVCluster doCreate(List<Integer> ports) {

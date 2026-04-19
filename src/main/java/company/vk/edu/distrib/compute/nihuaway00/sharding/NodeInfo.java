@@ -1,8 +1,10 @@
 package company.vk.edu.distrib.compute.nihuaway00.sharding;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public class NodeInfo {
     private final String endpoint;
-    private boolean alive;
+    private final AtomicBoolean alive = new AtomicBoolean(false);
 
     public NodeInfo(String endpoint) {
         this.endpoint = endpoint;
@@ -13,14 +15,14 @@ public class NodeInfo {
     }
 
     public boolean isEnabled() {
-        return alive;
+        return alive.get();
     }
 
     public void enable() {
-        this.alive = true;
+        alive.set(true);
     }
 
     public void disable() {
-        this.alive = false;
+        alive.set(false);
     }
 }
