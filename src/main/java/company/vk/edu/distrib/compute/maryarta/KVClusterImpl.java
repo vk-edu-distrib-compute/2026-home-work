@@ -12,15 +12,14 @@ import java.util.Map;
 public class KVClusterImpl implements KVCluster {
     private final List<Integer> ports;
     private final List<String> endpoints;// = getEndpoints();
-    private final Map<String, KVService> kvServicesS = new HashMap<>();
-//    private final Map<Integer, KVService> kvServices = new HashMap<>();
+    private final Map<String, KVService> kvServices = new HashMap<>();
 
     public KVClusterImpl(List<Integer> ports) {
         this.ports = ports;
         this.endpoints = getEndpoints();
         for (Integer port: ports) {
             try {
-                kvServicesS.put("http://localhost:" + port, new ShardedKVServiceImpl(port,"http://localhost:" + port, this.endpoints));
+                kvServices.put("http://localhost:" + port, new ShardedKVServiceImpl(port, this.endpoints));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -43,7 +42,7 @@ public class KVClusterImpl implements KVCluster {
 //        URI uri = URI.create(endpoint);
 //        int port = uri.getPort();
         try {
-            kvServicesS.get(endpoint).start();
+            kvServices.get(endpoint).start();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -58,7 +57,7 @@ public class KVClusterImpl implements KVCluster {
 
     @Override
     public void stop(String endpoint) {
-        kvServicesS.get(endpoint).stop();
+        kvServices.get(endpoint).stop();
     }
 
     @Override
