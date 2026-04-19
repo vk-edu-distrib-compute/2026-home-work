@@ -7,9 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class YyaarrFileDao implements Dao<byte[]> {
-    private static final Path STORAGE_DIR = Paths.get("src/main/java/company/vk/edu/distrib/compute/yyaarr/data");
+    private static final Path STORAGE_DIR = Paths.get("src/main/java/company/vk/edu/distrib/compute/yyaarr/data_"
+            + ThreadLocalRandom.current().nextInt(1_000_000, 10_000_000));
     private static final String DATSUFFIX = ".dat";
 
     private void createDirectory() throws IOException {
