@@ -12,12 +12,23 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.Executors;
 
 public class MyKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(MyKVService.class);
     private static final String ID_PREFIX = "id=";
+
+    private final MyKVCluster cluster;
+    private final String myEndpoint; // Например, "http://localhost:8080"
+    private static final HttpClient httpClient = HttpClient.newBuilder()
+            .executor(Executors.newVirtualThreadPerTaskExecutor()) // Для Java 21+
+            .build();
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
@@ -28,9 +39,11 @@ public class MyKVService implements KVService {
      * @param dao  DAO для работы с хранилищем данных
      * @throws IOException если не удаётся создать HTTP сервер
      */
-    public MyKVService(int port, Dao<byte[]> dao) throws IOException {
+    public MyKVService(int port, Dao<byte[]> dao, MyKVCluster cluster) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.dao = dao;
+        this.cluster = cluster;
+        this.myEndpoint = "http://localhost:" + port;
 
         server.createContext("/v0/status", new ErrorHttpHandler(
                 this::handleStatus));
@@ -38,6 +51,10 @@ public class MyKVService implements KVService {
         server.createContext("/v0/entity", new ErrorHttpHandler(
                 this::handleEntity
         ));
+    }
+
+    public MyKVService(int port, Dao<byte[]> dao) throws IOException {
+        this(port, dao, null);
     }
 
     private void handleStatus(HttpExchange http) throws IOException {
@@ -56,32 +73,33 @@ public class MyKVService implements KVService {
         final var query = http.getRequestURI().getQuery();
         final String id = parceId(query);
 
-        // No response body required for status check
+        String targetEndpoint = cluster.getEndpoint(id);
+
+        if (!myEndpoint.equals(targetEndpoint)) {
+            proxyRequest(http, targetEndpoint);
+            return;
+        }
+
         switch (method) {
             case "GET":
-                // No response body required for status check
                 final byte[] value = dao.get(id);
                 try (var os = http.getResponseBody()) {
                     http.sendResponseHeaders(200, value.length);
-                    os.write(value); // Запись данных в поток
+                    os.write(value);
                 }
                 break;
             case "PUT":
-                // No response body required for status check
                 try (InputStream is = http.getRequestBody()) {
-                    // No response body required for status check
                     final byte[] upsertValue = is.readAllBytes();
                     dao.upsert(id, upsertValue);
                 }
                 http.sendResponseHeaders(201, -1);
                 break;
             case "DELETE":
-                // No response body required for status check
                 dao.delete(id);
                 http.sendResponseHeaders(202, -1);
                 break;
             default:
-                // No response body required for status check
                 http.sendResponseHeaders(405, -1);
                 break;
         }
@@ -99,6 +117,35 @@ public class MyKVService implements KVService {
             return query.substring(ID_PREFIX.length());
         } else {
             throw new IllegalArgumentException("bad query");
+        }
+    }
+
+    private void proxyRequest(HttpExchange clientExchange, String targetEndpoint) throws IOException {
+        URI targetUri = URI.create(targetEndpoint + clientExchange.getRequestURI().getPath()
+                + "?" + clientExchange.getRequestURI().getQuery());
+
+        HttpRequest.BodyPublisher bodyPublisher = "PUT".equals(clientExchange.getRequestMethod())
+                ? HttpRequest.BodyPublishers.ofByteArray(clientExchange.getRequestBody().readAllBytes())
+                : HttpRequest.BodyPublishers.noBody();
+
+        HttpRequest proxyRequest = HttpRequest.newBuilder()
+                .uri(targetUri)
+                .method(clientExchange.getRequestMethod(), bodyPublisher)
+                .build();
+
+        try {
+            HttpResponse<byte[]> response = httpClient.send(proxyRequest, HttpResponse.BodyHandlers.ofByteArray());
+
+            clientExchange.sendResponseHeaders(response.statusCode(),
+                    response.body().length == 0 ? -1 : response.body().length);
+            if (response.body().length > 0) {
+                try (var os = clientExchange.getResponseBody()) {
+                    os.write(response.body());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            clientExchange.sendResponseHeaders(500, -1);
         }
     }
 
