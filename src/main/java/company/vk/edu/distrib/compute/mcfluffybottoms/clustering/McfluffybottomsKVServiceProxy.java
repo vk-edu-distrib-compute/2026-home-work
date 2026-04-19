@@ -56,6 +56,7 @@ public class McfluffybottomsKVServiceProxy implements KVService {
         try {
             HttpServer s;
             s = HttpServer.create(new InetSocketAddress(port), 0);
+
             s.createContext(PATH_STATUS, this::handleStatus);
             s.createContext(PATH_ENTITY, this::handleEntity);
             return s;
