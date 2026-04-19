@@ -10,26 +10,53 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.List;
 
 public class KVServiceSimple implements KVService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceSimple.class);
-    private final HttpServer httpServer;
+    private final int port;
+    private final Dao<byte[]> dao;
+    private final List<Integer> clusterPorts;
+    private HttpServer httpServer;
+    private boolean running;
 
-    public KVServiceSimple(int port, Dao<byte[]> dao) throws IOException {
-        httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-        httpServer.createContext("/v0/status", new StatusHandler());
-        httpServer.createContext("/v0/entity", new EntityHandler(dao));
+    public KVServiceSimple(int port, Dao<byte[]> dao, List<Integer> clusterPorts) throws IOException {
+        this.port = port;
+        this.dao = dao;
+        this.clusterPorts = clusterPorts;
+        this.httpServer = createServer();
+    }
+
+    private HttpServer createServer() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.createContext("/v0/status", new StatusHandler());
+        server.createContext("/v0/entity", new EntityHandler(dao, port, clusterPorts));
+        return server;
     }
 
     @Override
     public void start() {
-        log.info("Запуск сервиса");
-        httpServer.start();
+        if (!running) {
+            try {
+                if (httpServer == null) {
+                    httpServer = createServer();
+                }
+                log.info("Запуск сервиса на порту {}", port);
+                httpServer.start();
+                running = true;
+            } catch (IOException e) {
+                log.error("Ошибка при запуске", e);
+            }
+        }
     }
 
     @Override
     public void stop() {
-        log.info("Остановка сервиса");
-        httpServer.stop(0);
+        if (running) {
+            log.info("Остановка сервиса на порту {}", port);
+            httpServer.stop(0);
+            running = false;
+            httpServer = null;
+        }
     }
 }

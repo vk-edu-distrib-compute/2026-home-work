@@ -6,18 +6,31 @@ import company.vk.edu.distrib.compute.KVServiceFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public class KVServiceFactorySimple extends KVServiceFactory {
-    private static final String STORAGE_DIR = "storage";
+    private final String baseStorageDir;
+    private List<Integer> clusterPorts;
+
+    public KVServiceFactorySimple() {
+        super();
+        baseStorageDir = "storage";
+    }
+
+    public KVServiceFactorySimple(String baseStorageDir, List<Integer> clusterPorts) {
+        super();
+        this.baseStorageDir = baseStorageDir;
+        this.clusterPorts = clusterPorts;
+    }
 
     @Override
     protected KVService doCreate(int port) throws IOException {
-        Path pathOfStorage = Path.of(STORAGE_DIR);
+        Path pathOfStorage = Path.of(baseStorageDir);
 
         if (!Files.exists(pathOfStorage)) {
             Files.createDirectory(pathOfStorage);
         }
         Path filePath = pathOfStorage.resolve("storage_" + port + ".txt");
-        return new KVServiceSimple(port, new EntityDao(filePath));
+        return new KVServiceSimple(port, new EntityDao(filePath), clusterPorts);
     }
 }
