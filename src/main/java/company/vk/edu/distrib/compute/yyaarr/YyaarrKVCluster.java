@@ -26,7 +26,7 @@ public class YyaarrKVCluster implements KVCluster {
             nodes.put(port, node);
             LOGGER.info("Created node on port {}", port);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException("Failed to create node on port " + port, e);
             }
         }
     }

@@ -17,18 +17,15 @@ public class YyaarrKVServiceFile implements KVService {
     private final YyaarrKVCluster cluster;
     private boolean isRunning;
 
-    YyaarrKVServiceFile(int port, Dao<byte[]> dao) throws IOException {
-        this.port = port;
-        this.dao = dao;
-        this.cluster = null;
-        initServer();
-    }
-
     YyaarrKVServiceFile(int port, Dao<byte[]> dao, YyaarrKVCluster cluster) throws IOException {
         this.port = port;
         this.dao = dao;
         this.cluster = cluster;
         initServer();
+    }
+
+    YyaarrKVServiceFile(int port, Dao<byte[]> dao) throws IOException {
+        this(port, dao, null);
     }
 
     private void initServer() throws IOException {
@@ -53,7 +50,7 @@ public class YyaarrKVServiceFile implements KVService {
             try {
                 initServer();
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException("Failed to initialize server on port " + port, e);
             }
         }
         server.start();
@@ -63,12 +60,13 @@ public class YyaarrKVServiceFile implements KVService {
     }
 
     @Override
+    @SuppressWarnings("AssignmentToNull")
     public void stop() {
         if (!isRunning) {
             return;
         }
         server.stop(0);
-        server = null;
+        server = null; // need to reset for restart
         isRunning = false;
         LOGGER.info("Service stopped on port {}", port);
     }
