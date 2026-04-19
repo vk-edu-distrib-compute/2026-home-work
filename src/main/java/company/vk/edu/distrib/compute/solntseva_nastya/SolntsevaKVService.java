@@ -35,18 +35,33 @@ public class SolntsevaKVService implements KVService {
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
-    private final Set<String> topology;
     private final String myUrl;
     private final HttpClient httpClient;
+    private final SolnHashiStrategy strategy;
+    
+    private final SolnConsistentHashRouter consistentRouter;
+    private final SolnRendezvousHashRouter rendezvousRouter;
 
     public SolntsevaKVService(final int port, final Dao<byte[]> dao,
-                              final Set<String> topology, final String myUrl) throws IOException {
+                              final Set<String> topology, final String myUrl,
+                              final SolnHashiStrategy strategy) throws IOException {
         this.dao = dao;
-        this.topology = topology;
         this.myUrl = myUrl;
+        this.strategy = strategy;
+
+        // Инициализируем роутеры локально, используя переданную topology
+        if (strategy == SolnHashiStrategy.CONSISTENT) {
+            this.consistentRouter = new SolnConsistentHashRouter(topology);
+            this.rendezvousRouter = null;
+        } else {
+            this.consistentRouter = null;
+            this.rendezvousRouter = new SolnRendezvousHashRouter(topology);
+        }
+
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
+
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/v0/status", this::handleStatus);
         server.createContext("/v0/entity", this::handleEntity);
@@ -111,16 +126,10 @@ public class SolntsevaKVService implements KVService {
     }
 
     private String getResponsibleNode(final String id) {
-        String bestNode = null;
-        int maxHash = Integer.MIN_VALUE;
-        for (final String node : topology) {
-            final int hash = (node + id).hashCode();
-            if (hash > maxHash) {
-                maxHash = hash;
-                bestNode = node;
-            }
-        }
-        return bestNode;
+        return switch (strategy) {
+            case CONSISTENT -> consistentRouter.getNode(id);
+            case RENDEZVOUS -> rendezvousRouter.getNode(id);
+        };
     }
 
     private void proxyRequest(final HttpExchange exchange, final String targetUrl) throws IOException {
@@ -137,7 +146,7 @@ public class SolntsevaKVService implements KVService {
             }
             
             final HttpRequest request = rb.method(method,
-                HttpRequest.BodyPublishers.ofByteArray(body)).build();
+                    HttpRequest.BodyPublishers.ofByteArray(body)).build();
             final HttpResponse<byte[]> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
             final byte[] respBody = resp.body();
             

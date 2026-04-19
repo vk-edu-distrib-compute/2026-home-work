@@ -11,10 +11,11 @@ public class SolntsevaKVServiceFactory extends KVServiceFactory {
     protected KVService doCreate(int port) throws IOException {
         String myUrl = "http://localhost:" + port;
         return new SolntsevaKVService(
-            port, 
-            new PersistentDao(Paths.get("storage", "data_" + port)), 
-            Collections.singleton(myUrl), 
-            myUrl
+            port,
+            new PersistentDao(Paths.get("storage", "data_" + port)),
+            Collections.singleton(myUrl),
+            myUrl,
+            SolnHashiStrategy.RENDEZVOUS
         );
     }
 }
