@@ -34,15 +34,11 @@ public class LillymegaKVService implements KVService {
     private final LillymegaShardingSelector shardingSelector;
 
     public LillymegaKVService(int port, Dao<byte[]> dao) throws IOException {
-        this.dao = dao;
-        this.selfEndpoint = null;
-        this.clusterEndpoints = List.of();
-        this.httpClient = HttpClient.newHttpClient();
-        this.shardingSelector = null;
-
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.server.createContext("/v0/status", this::handleStatus);
-        this.server.createContext("/v0/entity", this::handleEntity);
+        this(port,
+                dao,
+                "http://localhost:" + port,
+                List.of("http://localhost:" + port),
+                HttpClient.newHttpClient());
     }
 
     public LillymegaKVService(
@@ -75,6 +71,7 @@ public class LillymegaKVService implements KVService {
         exchange.sendResponseHeaders(200, -1);
         exchange.close();
     }
+
     private void handleEntity(HttpExchange exchange) throws IOException {
         String id = extractId(exchange);
 
@@ -162,10 +159,6 @@ public class LillymegaKVService implements KVService {
     }
 
     private boolean shouldProxy(HttpExchange exchange, String id) {
-        if (selfEndpoint == null || clusterEndpoints.isEmpty() || shardingSelector == null) {
-            return false;
-        }
-
         return !exchange.getRequestHeaders().containsKey(INTERNAL_HEADER)
                 && !selfEndpoint.equals(shardingSelector.selectEndpoint(id));
     }
