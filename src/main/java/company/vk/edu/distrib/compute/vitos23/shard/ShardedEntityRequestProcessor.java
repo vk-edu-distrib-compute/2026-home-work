@@ -4,7 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.vitos23.EntityRequestProcessor;
 import company.vk.edu.distrib.compute.vitos23.exception.AcknowledgementException;
-import company.vk.edu.distrib.compute.vitos23.exception.NoReplicaAvailableException;
 import company.vk.edu.distrib.compute.vitos23.util.ByteArrayKey;
 import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
 
@@ -13,12 +12,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.sendArray;
@@ -30,6 +31,7 @@ import static company.vk.edu.distrib.compute.vitos23.util.ParseUtils.parseIntege
 public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
 
     private static final int DEFAULT_ACK = 1;
+    private static final int TIMEOUT_SECONDS = 3;
 
     private final String currentEndpoint;
     private final ReplicaRequestExecutor replicaRequestExecutor;
@@ -55,7 +57,11 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
     }
 
     @Override
-    public void handleGet(HttpExchange exchange, String id, Map<String, String> queryParams) throws IOException {
+    public void handleGet(
+            HttpExchange exchange,
+            String id,
+            Map<String, String> queryParams
+    ) throws IOException, InterruptedException {
         if (isDirectRequest(queryParams)) {
             directEntityRequestProcessor.handleGet(exchange, id, queryParams);
             return;
@@ -94,32 +100,34 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
     }
 
     /// Resolve aggregated GET result.
-    /// Since no timestamp is associated with the key, we simply use the most frequent value
+    /// Since no timestamp is associated with the key, we simply use the first value
     /// returned by at least `expectedAck` nodes.
     private byte[] aggregateGetResults(
             List<CompletableFuture<ReplicaResult<byte[]>>> futures,
             int expectedAck
-    ) {
-        Map<ByteArrayKey, Long> frequencyByData = futures.stream()
-                .map(CompletableFuture::join)
-                .filter(ReplicaResult::success)
-                .map(result -> new ByteArrayKey(result.data()))
-                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
-        if (frequencyByData.isEmpty()) {
-            throw new NoReplicaAvailableException();
+    ) throws InterruptedException {
+        @SuppressWarnings("PMD.UseConcurrentHashMap") // false positive
+        Map<ByteArrayKey, Integer> frequencyByData = new HashMap<>();
+        for (var future : futures) {
+            ReplicaResult<byte[]> result = awaitFuture(future);
+            if (!result.success()) {
+                continue;
+            }
+            ByteArrayKey key = new ByteArrayKey(result.data());
+            int count = frequencyByData.merge(key, 1, Integer::sum);
+            if (count >= expectedAck) {
+                return result.data();
+            }
         }
-
-        Map.Entry<ByteArrayKey, Long> mostFrequentEntry = frequencyByData.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .orElseThrow();
-        if (mostFrequentEntry.getValue() < expectedAck) {
-            throw new AcknowledgementException();
-        }
-        return mostFrequentEntry.getKey().data();
+        throw new AcknowledgementException();
     }
 
     @Override
-    public void handlePut(HttpExchange exchange, String id, Map<String, String> queryParams) throws IOException {
+    public void handlePut(
+            HttpExchange exchange,
+            String id,
+            Map<String, String> queryParams
+    ) throws IOException, InterruptedException {
         if (isDirectRequest(queryParams)) {
             directEntityRequestProcessor.handlePut(exchange, id, queryParams);
             return;
@@ -154,7 +162,11 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
     }
 
     @Override
-    public void handleDelete(HttpExchange exchange, String id, Map<String, String> queryParams) throws IOException {
+    public void handleDelete(
+            HttpExchange exchange,
+            String id,
+            Map<String, String> queryParams
+    ) throws IOException, InterruptedException {
         if (isDirectRequest(queryParams)) {
             directEntityRequestProcessor.handleDelete(exchange, id, queryParams);
             return;
@@ -192,10 +204,10 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
             int expectedAck,
             HttpExchange exchange,
             int successfulStatusCode
-    ) throws IOException {
+    ) throws IOException, InterruptedException {
         int successCount = 0;
         for (CompletableFuture<ReplicaResult<Boolean>> future : futures) {
-            if (future.join().success()) {
+            if (awaitFuture(future).success()) {
                 successCount++;
                 if (successCount >= expectedAck) {
                     exchange.sendResponseHeaders(successfulStatusCode, NO_BODY_RESPONSE_LENGTH);
@@ -225,6 +237,16 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
 
     private static URI getDirectUriForNode(String id, String newEndpoint) {
         return URI.create(newEndpoint + "/v0/entity?direct=true&id=" + id);
+    }
+
+    private static <T> ReplicaResult<T> awaitFuture(
+            CompletableFuture<ReplicaResult<T>> future
+    ) throws InterruptedException {
+        try {
+            return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (ExecutionException | TimeoutException e) {
+            return ReplicaResult.failed();
+        }
     }
 
 }

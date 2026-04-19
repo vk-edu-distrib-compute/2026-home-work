@@ -4,7 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.vitos23.exception.AcknowledgementException;
-import company.vk.edu.distrib.compute.vitos23.exception.NoReplicaAvailableException;
 import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +12,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.Executors;
 
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.extractQueryParams;
@@ -26,6 +26,7 @@ public class KVServiceImpl implements KVService {
 
     public KVServiceImpl(int port, EntityRequestProcessor entityRequestProcessor) throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         this.entityRequestProcessor = entityRequestProcessor;
         server.createContext("/v0/status", this::handleStatusCheck);
         server.createContext("/v0/entity", this::dispatchEntityRequest);
@@ -44,9 +45,12 @@ public class KVServiceImpl implements KVService {
             exchange.sendResponseHeaders(HttpCodes.NOT_FOUND, NO_BODY_RESPONSE_LENGTH);
         } catch (IllegalArgumentException e) {
             exchange.sendResponseHeaders(HttpCodes.BAD_REQUEST, NO_BODY_RESPONSE_LENGTH);
-        } catch (NoReplicaAvailableException | AcknowledgementException e) {
+        } catch (AcknowledgementException e) {
             exchange.sendResponseHeaders(HttpCodes.SERVICE_UNAVAILABLE, NO_BODY_RESPONSE_LENGTH);
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             if (log.isErrorEnabled()) {
                 log.error("Failed to handle request", e);
             }
@@ -56,7 +60,7 @@ public class KVServiceImpl implements KVService {
         }
     }
 
-    private void handleEntityRequest(HttpExchange exchange) throws IOException {
+    private void handleEntityRequest(HttpExchange exchange) throws IOException, InterruptedException {
         Map<String, String> queryParams = extractQueryParams(exchange.getRequestURI().getQuery());
         String id = queryParams.get("id");
         if (id == null) {
