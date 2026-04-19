@@ -175,6 +175,7 @@ public class McfluffybottomsKVServiceProxy implements KVService {
     private Map<String, String> parseQuery(String query) {
         Map<String, String> q = new ConcurrentHashMap<>();
         String[] pairs = query.split("&");
+
         for (String pair : pairs) {
             int idx = pair.indexOf('=');
             q.put(pair.substring(0, idx), pair.substring(idx + 1));
