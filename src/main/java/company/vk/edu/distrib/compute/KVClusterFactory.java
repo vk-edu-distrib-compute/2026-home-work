@@ -1,15 +1,10 @@
-package company.vk.edu.distrib.compute;
+package company.vk.edu.distrib.compute.goshanchic;
 
+import java.io.IOException;
 import java.util.List;
 
-public abstract class KVClusterFactory {
-    public KVCluster create(List<Integer> ports) {
-        if (ports == null || ports.isEmpty()) {
-            throw new IllegalArgumentException("Missing ports for the cluster");
-        }
+@FunctionalInterface
+public interface KVClusterFactory {
 
-        return doCreate(ports);
-    }
-
-    protected abstract KVCluster doCreate(List<Integer> ports);
+    KVCluster doCreate(List<Integer> ports) throws IOException;
 }
