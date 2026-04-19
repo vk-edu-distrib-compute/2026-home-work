@@ -6,14 +6,14 @@ import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class LillymegaKVCluster implements KVCluster {
     private final List<Integer> ports;
     private final List<String> endpoints;
-    private final Map<String, KVService> runningNodes = new LinkedHashMap<>();
+    private final Map<String, KVService> runningNodes = new ConcurrentHashMap<>();
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public LillymegaKVCluster(List<Integer> ports) {
@@ -63,7 +63,7 @@ public class LillymegaKVCluster implements KVCluster {
 
     private KVService createNode(String endpoint) {
         int port = extractPort(endpoint);
-        Path dataFile = Path.of("tmp", "dao-" + port + ".data");
+        Path dataFile = Path.of("data", "dao-" + port + ".data");
         try {
             return new LillymegaKVService(port, new PersistentDao(dataFile), endpoint, endpoints, httpClient);
         } catch (IOException e) {

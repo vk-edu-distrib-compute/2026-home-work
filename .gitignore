@@ -32,3 +32,10 @@ build/
 out/
 
 .vscode/
+data/
+tmp/
+benchmarks/
+loadtest/
+*.txt
+gradle.properties
+.gradle-user/
