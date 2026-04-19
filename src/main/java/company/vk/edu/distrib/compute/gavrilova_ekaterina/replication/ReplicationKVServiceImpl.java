@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -28,7 +29,6 @@ public class ReplicationKVServiceImpl implements KVService {
     private static final ExecutorService REPLICA_EXECUTOR = Executors.newCachedThreadPool();
     private static final Logger log = LoggerFactory.getLogger(ReplicationKVServiceImpl.class);
     private final HttpServer server;
-    private final String selfUrl;
     private final Dao<byte[]> localDao;
     private final List<String> clusterNodes;
     private final int replicationFactor;
@@ -36,10 +36,10 @@ public class ReplicationKVServiceImpl implements KVService {
 
     public ReplicationKVServiceImpl(int port, List<String> clusterNodes, int replicationFactor) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.selfUrl = LOCALHOST + port;
         this.clusterNodes = clusterNodes;
         this.replicationFactor = replicationFactor;
         this.localDao = new FileDao(Path.of("storage-" + port));
+        String selfUrl = LOCALHOST + port;
         this.replicaClient = new ReplicaClient(selfUrl, localDao);
 
         initServer();
@@ -82,31 +82,45 @@ public class ReplicationKVServiceImpl implements KVService {
 
     private void handleEntity(HttpExchange exchange) throws IOException {
         try {
-            String id = extractId(exchange);
-            if (id == null) {
-                sendResponse(exchange, 400, "Missing id parameter".getBytes());
-                return;
-            }
+            String id = validateId(exchange);
+
             if (isInternalRequest(exchange)) {
                 handleInternalRequest(exchange, id);
                 return;
             }
 
-            int ack = extractAck(exchange, replicationFactor);
-            if (ack <= 0 || ack > replicationFactor) {
-                sendResponse(exchange, 400, "Invalid ack".getBytes());
-                throw new IllegalArgumentException("Invalid ack: " + ack);
-            }
+            int ack = validateAck(exchange);
 
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> handleGet(exchange, id, ack);
-                case "PUT" -> handlePut(exchange, id, ack);
-                case "DELETE" -> handleDelete(exchange, id, ack);
-                default -> sendResponse(exchange, 405, new byte[0]);
-            }
+            dispatch(exchange, id, ack);
+
         } catch (IOException e) {
             log.error("Error handling /v0/entity", e);
             sendResponse(exchange, 500, "Internal Server Error".getBytes());
+        }
+    }
+
+    private String validateId(HttpExchange exchange) throws IOException {
+        String id = extractId(exchange);
+        if (id == null) {
+            sendResponse(exchange, 400, "Missing id parameter".getBytes());
+        }
+        return id;
+    }
+
+    private int validateAck(HttpExchange exchange) throws IOException {
+        int ack = extractAck(exchange, replicationFactor);
+        if (ack <= 0 || ack > replicationFactor) {
+            sendResponse(exchange, 400, "Invalid ack".getBytes());
+        }
+        return ack;
+    }
+
+    private void dispatch(HttpExchange exchange, String id, int ack) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> handleGet(exchange, id, ack);
+            case "PUT" -> handlePut(exchange, id, ack);
+            case "DELETE" -> handleDelete(exchange, id, ack);
+            default -> sendResponse(exchange, 405, new byte[0]);
         }
     }
 
@@ -124,7 +138,7 @@ public class ReplicationKVServiceImpl implements KVService {
             return;
         }
         for (ReplicaResponse r : responses) {
-            if (r.status() == 200) {
+            if (r.status() == HttpURLConnection.HTTP_OK) {
                 sendResponse(exchange, 200, r.body());
                 return;
             }
