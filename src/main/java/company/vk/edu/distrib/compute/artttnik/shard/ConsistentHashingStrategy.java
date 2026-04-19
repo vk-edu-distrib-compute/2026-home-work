@@ -55,6 +55,7 @@ public class ConsistentHashingStrategy implements ShardingStrategy {
         long hash = 0xcbf29ce484222325L;
         for (byte b : bytes) {
             hash ^= (b & 0xFF);
+
             hash *= 0x100000001b3L;
         }
         return hash;
