@@ -57,7 +57,7 @@ public class KVServiceReplicaImpl implements ReplicatedService {
      */
     private static final int DEFAULT_ACK = 1;
 
-    private final int port;
+    private final int serverPort;
 
     /**
      * Все узлы кластера (например 10 ReplicaNode).
@@ -81,12 +81,12 @@ public class KVServiceReplicaImpl implements ReplicatedService {
     /**
      * Создаёт HTTP-сервер с поддержкой репликации.
      *
-     * @param port   порт HTTP-сервера
+     * @param serverPort   порт HTTP-сервера
      * @param nodes  все узлы кластера (totalNodes штук, например 10)
      * @param router алгоритм выбора N реплик для ключа
      * @throws IllegalArgumentException если null/пуст или replicationFactor > nodes.length
      */
-    public KVServiceReplicaImpl(int port, ReplicaNode[] nodes, ReplicaRouter router) {
+    public KVServiceReplicaImpl(int serverPort, ReplicaNode[] nodes, ReplicaRouter router) {
         if (nodes == null || nodes.length == 0) {
             throw new IllegalArgumentException("nodes must not be null or empty");
         }
@@ -95,7 +95,7 @@ public class KVServiceReplicaImpl implements ReplicatedService {
                     "replicationFactor (" + router.getReplicationFactor()
                             + ") > totalNodes (" + nodes.length + ")");
         }
-        this.port = port;
+        this.serverPort = serverPort;
         this.nodes = nodes.clone();
         this.totalNodes = nodes.length;
         this.router = router;
@@ -104,7 +104,7 @@ public class KVServiceReplicaImpl implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return serverPort;
     }
 
     @Override
@@ -153,14 +153,14 @@ public class KVServiceReplicaImpl implements ReplicatedService {
             HttpServer newServer = HttpServer.create();
             newServer.createContext(PATH_STATUS, this::handleStatus);
             newServer.createContext(PATH_ENTITY, this::handleEntity);
-            newServer.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 0);
+            newServer.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), serverPort), 0);
             newServer.start();
             this.server = newServer;
             log.info("Started: port={}, totalNodes={}, replicationFactor={}",
-                    port, totalNodes, replicationFactor);
+                    serverPort, totalNodes, replicationFactor);
         } catch (IOException e) {
             started.set(false);
-            throw new UncheckedIOException("Failed to start server on port " + port, e);
+            throw new UncheckedIOException("Failed to start server on port " + serverPort, e);
         }
     }
 
@@ -170,7 +170,7 @@ public class KVServiceReplicaImpl implements ReplicatedService {
             throw new IllegalStateException("Service is not started");
         }
         server.stop(0);
-        log.info("Stopped replica service on port {}", port);
+        log.info("Stopped replica service on port {}", serverPort);
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
