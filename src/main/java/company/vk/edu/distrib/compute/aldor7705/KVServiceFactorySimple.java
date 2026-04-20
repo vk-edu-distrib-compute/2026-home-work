@@ -25,7 +25,7 @@ public class KVServiceFactorySimple extends KVServiceFactory {
 
     @Override
     protected KVService doCreate(int port) throws IOException {
-        Path pathOfStorage = Path.of(baseStorageDir);
+        Path pathOfStorage = Path.of(baseStorageDir + "_" + port);
 
         if (!Files.exists(pathOfStorage)) {
             Files.createDirectory(pathOfStorage);

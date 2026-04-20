@@ -19,13 +19,13 @@ public class DorogovKVCluster implements KVCluster {
 
     public DorogovKVCluster(List<Integer> ports) {
         try {
+            KVServiceFactory kvServiceFactory = new KVServiceFactorySimple("storage_for_node", ports);
             for (int port : ports) {
-                KVServiceFactory kvServiceFactory = new KVServiceFactorySimple("storage_for_node_" + port, ports);
                 services.put(port, kvServiceFactory.create(port));
                 endpoints.put(port, "http://localhost:" + port);
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException(e);
         }
     }
 
