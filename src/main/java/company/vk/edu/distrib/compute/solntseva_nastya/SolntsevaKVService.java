@@ -17,6 +17,9 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Single cluster node: handles local requests and proxies remote ones.
+ */
 public class SolntsevaKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(SolntsevaKVService.class);
 
@@ -37,17 +40,27 @@ public class SolntsevaKVService implements KVService {
     private final Dao<byte[]> dao;
     private final String myUrl;
     private final HttpClient httpClient;
-    
-    // Одно поле для роутера вместо двух — Codacy будет доволен
     private final Router router;
 
-    public SolntsevaKVService(final int port, final Dao<byte[]> dao,
-                              final Set<String> topology, final String myUrl,
-                              final SolnHashiStrategy strategy) throws IOException {
+    /**
+     * Creates a cluster node.
+     *
+     * @param port     HTTP port to listen on
+     * @param dao      storage backend
+     * @param topology all node URLs in the cluster
+     * @param myUrl    this node's own URL
+     * @param strategy hashing strategy to use
+     * @throws IOException if the HTTP server cannot be created
+     */
+    public SolntsevaKVService(
+            final int port,
+            final Dao<byte[]> dao,
+            final Set<String> topology,
+            final String myUrl,
+            final SolnHashiStrategy strategy) throws IOException {
         this.dao = dao;
         this.myUrl = myUrl;
 
-        // Инициализируем роутер сразу. Никаких null-assignment!
         if (strategy == SolnHashiStrategy.CONSISTENT) {
             this.router = new SolnConsistentHashRouter(topology);
         } else {
@@ -73,8 +86,8 @@ public class SolntsevaKVService implements KVService {
         server.stop(0);
         try {
             dao.close();
-        } catch (final IOException e) {
-            log.error("Error while closing DAO", e);
+        } catch (final IOException ex) {
+            log.error("Error while closing DAO", ex);
         }
     }
 
@@ -105,8 +118,8 @@ public class SolntsevaKVService implements KVService {
             }
 
             handleLocal(exchange, id);
-        } catch (final IOException e) {
-            log.error("Entity handling error", e);
+        } catch (final IOException ex) {
+            log.error("Entity handling error", ex);
         }
     }
 
@@ -124,29 +137,33 @@ public class SolntsevaKVService implements KVService {
         try {
             final URI uri = URI.create(targetUrl + exchange.getRequestURI().toString());
             final String method = exchange.getRequestMethod();
-            
-            final byte[] body = METHOD_PUT.equals(method) 
-                ? exchange.getRequestBody().readAllBytes() 
+
+            final byte[] body = METHOD_PUT.equals(method)
+                ? exchange.getRequestBody().readAllBytes()
                 : new byte[0];
-            
+
             final HttpRequest request = HttpRequest.newBuilder(uri)
                     .method(method, HttpRequest.BodyPublishers.ofByteArray(body))
                     .build();
-            
-            final HttpResponse<byte[]> resp = httpClient.send(request, 
-                    HttpResponse.BodyHandlers.ofByteArray());
-            
+
+            final HttpResponse<byte[]> resp = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofByteArray()
+            );
+
             final byte[] respBody = resp.body();
-            exchange.sendResponseHeaders(resp.statusCode(), 
-                    respBody.length == 0 ? NO_BODY : respBody.length);
-            
+            exchange.sendResponseHeaders(
+                    resp.statusCode(),
+                    respBody.length == 0 ? NO_BODY : respBody.length
+            );
+
             if (respBody.length > 0) {
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(respBody);
                 }
             }
-        } catch (final InterruptedException e) {
-            log.error("Proxy request interrupted", e);
+        } catch (final InterruptedException ex) {
+            log.error("Proxy request interrupted", ex);
             Thread.currentThread().interrupt();
         }
     }
@@ -158,7 +175,7 @@ public class SolntsevaKVService implements KVService {
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(value);
             }
-        } catch (final NoSuchElementException e) {
+        } catch (final NoSuchElementException ex) {
             exchange.sendResponseHeaders(STATUS_NOT_FOUND, NO_BODY);
         }
     }
@@ -174,7 +191,9 @@ public class SolntsevaKVService implements KVService {
     }
 
     private static String extractId(final String query) {
-        if (query == null) return null;
+        if (query == null) {
+            return null;
+        }
         for (final String param : query.split("&")) {
             final String[] kv = param.split("=", 2);
             if (kv.length == 2 && ID_PARAM.equals(kv[0])) {

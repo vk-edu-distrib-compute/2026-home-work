@@ -2,15 +2,16 @@ package company.vk.edu.distrib.compute.solntseva_nastya;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
-import company.vk.edu.distrib.compute.KVService; 
+import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class SolntsevaKVClusterFactory extends KVClusterFactory {
+
     @Override
     public KVCluster doCreate(List<Integer> ports) {
         try {
@@ -18,25 +19,23 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
                     .map(port -> "http://localhost:" + port)
                     .toList();
 
-            Set<String> topology = endpoints.stream().collect(Collectors.toSet());
+            Set<String> topology = new HashSet<>(endpoints);
 
             List<KVService> services = new ArrayList<>();
             for (int port : ports) {
                 String myUrl = "http://localhost:" + port;
-                java.nio.file.Path storagePath = java.nio.file.Paths.get("storage", "data_" + port);
-                PersistentDao dao = new PersistentDao(storagePath);
-                
+                PersistentDao dao = new PersistentDao(Paths.get("storage", "data_" + port));
                 services.add(new SolntsevaKVService(
-                        port, 
-                        dao, 
-                        topology, 
-                        myUrl, 
+                        port,
+                        dao,
+                        topology,
+                        myUrl,
                         SolnHashiStrategy.RENDEZVOUS
                 ));
             }
             return new SolntsevaKVCluster(services, endpoints);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to create cluster nodes", e);
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to create cluster nodes", ex);
         }
     }
 }

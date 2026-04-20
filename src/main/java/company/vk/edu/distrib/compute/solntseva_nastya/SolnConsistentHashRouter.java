@@ -11,12 +11,10 @@ import java.util.TreeMap;
  *
  * <p>Distributes keys across nodes using a virtual ring.
  */
-public final class SolnConsistentHashRouter {
+public final class SolnConsistentHashRouter implements Router {
 
-    // Количество виртуальных нод на каждый реальный узел
     private static final int VIRTUAL_NODES = 150;
 
-    // Кольцо: хэш → endpoint
     private final SortedMap<Integer, String> ring = new TreeMap<>();
 
     /**
@@ -36,12 +34,12 @@ public final class SolnConsistentHashRouter {
      * @param key the lookup key
      * @return the responsible node URL
      */
+    @Override
     public String getNode(String key) {
         if (ring.isEmpty()) {
             return null;
         }
         int hash = hash(key);
-        // Берём ближайший узел по часовой стрелке на кольце
         SortedMap<Integer, String> tail = ring.tailMap(hash);
         int nodeHash = tail.isEmpty() ? ring.firstKey() : tail.firstKey();
         return ring.get(nodeHash);
@@ -58,7 +56,6 @@ public final class SolnConsistentHashRouter {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] bytes = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            // Берём первые 4 байта как int
             return ((bytes[0] & 0xFF) << 24)
                 | ((bytes[1] & 0xFF) << 16)
                 | ((bytes[2] & 0xFF) << 8)
