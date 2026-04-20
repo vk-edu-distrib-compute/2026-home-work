@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.solntseva_nastya;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
-import company.vk.edu.distrib.compute.KVService; // Исправлен импорт
+import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,14 +25,17 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
 
             Set<String> topology = new HashSet<>(endpoints);
 
-            List<KVService> services = new ArrayList<>(); // Исправлена типизация
-            final String storageBase = "storage"; // Оптимизация для Codacy
+            List<KVService> services = new ArrayList<>();
+            final String storageBase = "storage";
 
             for (int port : ports) {
                 String myUrl = "http://localhost:" + port;
                 
-                // Теперь мы не создаем каждый раз новый объект Path для базовой директории
                 Path daoPath = Paths.get(storageBase, "data_" + port);
+                
+                // Аннотация подавляет предупреждение Codacy/PMD, 
+                // так как создание отдельного DAO для каждого узла необходимо.
+                @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
                 PersistentDao dao = new PersistentDao(daoPath);
                 
                 services.add(new SolntsevaKVService(
