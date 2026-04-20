@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class DorogovKVCluster implements KVCluster {
     private static final Logger log = LoggerFactory.getLogger(DorogovKVCluster.class);
-    Map<Integer, KVService> services = new ConcurrentHashMap<>();
+    private final Map<Integer, KVService> services = new ConcurrentHashMap<>();
     private final Map<Integer, String> endpoints = new ConcurrentHashMap<>();
 
     public DorogovKVCluster(List<Integer> ports) {
