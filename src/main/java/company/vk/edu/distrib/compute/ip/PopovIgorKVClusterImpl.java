@@ -1,6 +1,7 @@
 package company.vk.edu.distrib.compute.ip;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,7 @@ public class PopovIgorKVClusterImpl implements KVCluster {
                 int port = Integer.parseInt(endpoint.substring(endpoint.lastIndexOf(':') + 1));
                 nodes.put(endpoint, factory.doCreate(port));
             } catch (IOException e) {
-                throw new RuntimeException("Failed to init node: " + endpoint, e);
+                throw new UncheckedIOException("Failed to create node via factory for " + endpoint, e);
             }
         }
     }
