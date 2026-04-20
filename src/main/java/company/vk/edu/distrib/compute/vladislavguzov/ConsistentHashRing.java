@@ -14,7 +14,7 @@ public class ConsistentHashRing implements NodesRouter {
         this.virtualNodes = virtualNodes > 0 ? virtualNodes : 100;
     }
 
-    private long hash(String key) {
+    private long hash(String key) throws NoSuchAlgorithmException {
         try {
             byte[] digest = MessageDigest.getInstance("MD5")
                     .digest(key.getBytes(StandardCharsets.UTF_8));
@@ -24,26 +24,26 @@ public class ConsistentHashRing implements NodesRouter {
             }
             return h;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Unsupported algorithm", e);
+            throw new NoSuchAlgorithmException("Unsupported algorithm", e);
         }
     }
 
     @Override
-    public void add(ClusterNode node, String id) {
+    public void add(ClusterNode node, String id) throws NoSuchAlgorithmException {
         for (int i = 0; i < virtualNodes; i++) {
             ring.put(hash(id + "#" + i), node);
         }
     }
 
     @Override
-    public void remove(String id) {
+    public void remove(String id) throws NoSuchAlgorithmException {
         for (int i = 0; i < virtualNodes; i++) {
             ring.remove(hash(id + "#" + i));
         }
     }
 
     @Override
-    public ClusterNode get(String key) {
+    public ClusterNode get(String key) throws NoSuchAlgorithmException {
         if (ring.isEmpty()) {
             return null;
         }

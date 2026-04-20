@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,7 +71,7 @@ public class MyKVCluster implements KVCluster {
             mapOfNodes.put(endpoint, node);
             log.info("Node started on endpoint {}", endpoint);
 
-        } catch (IOException e) {
+        } catch (IOException | NoSuchAlgorithmException e) {
             log.error("Failed to start node on endpoint {}", endpoint, e);
             throw new IOException("Failed to start node on endpoint " + endpoint, e);
         }
@@ -101,7 +102,11 @@ public class MyKVCluster implements KVCluster {
         }
         log.info("Node stopped on endpoint {}", endpoint);
         mapOfNodes.remove(endpoint);
-        nodesRouter.remove(node.getUrl());
+        try {
+            nodesRouter.remove(node.getUrl());
+        } catch (NoSuchAlgorithmException e) {
+            log.error("Cant stop node");
+        }
     }
 
     @Override
