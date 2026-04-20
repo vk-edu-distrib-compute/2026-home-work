@@ -181,7 +181,7 @@ public class KVServiceImpl implements KVService {
         try {
             dao.close();
         } catch (IOException ex) {
-            // Closing resources, exception can be safely ignored
+            // Closing DAO resource, exception can be safely ignored during shutdown
         }
     }
 }
