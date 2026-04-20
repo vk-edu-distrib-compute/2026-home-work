@@ -56,7 +56,6 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
     @Override
     @NonNull
     public Stream<? extends Arguments> provideArguments(
-            @NonNull ParameterDeclarations parameters,
             @NonNull ExtensionContext context
     ) {
         return factories.stream()

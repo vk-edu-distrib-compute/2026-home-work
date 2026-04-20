@@ -33,9 +33,6 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
                 
                 Path daoPath = Paths.get(storageBase, "data_" + port);
                 
-                // Аннотация подавляет предупреждение Codacy/PMD, 
-                // так как создание отдельного DAO для каждого узла необходимо.
-                @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
                 PersistentDao dao = new PersistentDao(daoPath);
                 
                 services.add(new SolntsevaKVService(
