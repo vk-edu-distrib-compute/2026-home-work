@@ -24,7 +24,7 @@ public class ConsistentHashRing implements NodesRouter {
             }
             return h;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Unsupported algorithm", e);
         }
     }
 

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -107,7 +108,7 @@ public class ClusterProxyHandler implements HttpHandler {
                 builder.GET();
                 HttpResponse<byte[]> response = httpClient
                         .send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
-                if (response.statusCode() == 200) {
+                if (response.statusCode() == HttpURLConnection.HTTP_OK) {
                     byte[] responseBody = response.body();
                     exchange.sendResponseHeaders(200, responseBody.length);
                     exchange.getResponseBody().write(responseBody);

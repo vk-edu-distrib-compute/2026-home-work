@@ -32,7 +32,7 @@ public class MyKVCluster implements KVCluster {
     }
 
     @Override
-    public void start() {
+    public void start() throws IOException {
         if (clusterIsRunning) {
             return;
         }
@@ -49,7 +49,7 @@ public class MyKVCluster implements KVCluster {
     }
 
     @Override
-    public void start(String endpoint) {
+    public void start(String endpoint) throws IOException {
         if (mapOfNodes.containsKey(endpoint)) {
             log.info("Node on endpoint {} already running", endpoint);
             return;
@@ -72,7 +72,7 @@ public class MyKVCluster implements KVCluster {
 
         } catch (IOException e) {
             log.error("Failed to start node on endpoint {}", endpoint, e);
-            throw new RuntimeException("Failed to start node on endpoint " + endpoint, e);
+            throw new IOException("Failed to start node on endpoint " + endpoint, e);
         }
     }
 

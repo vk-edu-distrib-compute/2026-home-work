@@ -10,7 +10,7 @@ public class HRWNodesPool implements NodesRouter {
 
     private final Map<String, ClusterNode> nodes = new ConcurrentHashMap<>();
 
-    private long hash(String key, String nodeId) {
+    private long hash(String key, String nodeId) throws NoSuchAlgorithmException {
         try {
             byte[] digest = MessageDigest.getInstance("MD5")
                     .digest((key + "#" + nodeId).getBytes(StandardCharsets.UTF_8));
@@ -20,7 +20,7 @@ public class HRWNodesPool implements NodesRouter {
             }
             return h;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new NoSuchAlgorithmException("Unsupported algorithm", e);
         }
     }
 
@@ -35,7 +35,7 @@ public class HRWNodesPool implements NodesRouter {
     }
 
     @Override
-    public ClusterNode get(String key) {
+    public ClusterNode get(String key) throws NoSuchAlgorithmException {
         if (nodes.isEmpty()) {
             return null;
         }
