@@ -37,7 +37,7 @@ public class KVClusteredServiceGK extends KVServiceGK {
                 return;
             }
 
-            String id = extractId(exchange.getRequestURI().getQuery());
+            String id = extractId(exchange);
             if (id == null || id.isEmpty()) {
                 exchange.sendResponseHeaders(STATUS_BAD_REQUEST, -1);
                 return;

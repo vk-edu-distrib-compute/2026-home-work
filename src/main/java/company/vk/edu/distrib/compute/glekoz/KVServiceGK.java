@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
@@ -16,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class KVServiceGK implements KVService {
     protected static final Logger log = LoggerFactory.getLogger(KVServiceGK.class);
-
+    protected final int port;
     protected static final String ENTITY_PATH = "/v0/entity";
     protected static final String STATUS_PATH = "/v0/status";
     protected static final String ID_PARAM = "id";
@@ -37,14 +39,13 @@ public class KVServiceGK implements KVService {
     private static final int SERVER_BACKLOG = 512;
 
     private final HttpServer server;
-    private final int port;
     private final FileSystemDao dao;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
     public KVServiceGK(int port) {
         this.port = port;
         try {
-            this.dao = new FileSystemDao(Path.of(".data", "glekoz"));
+            this.dao = new FileSystemDao(Path.of(".data", "glekoz", Integer.toString(port)));
             this.server = HttpServer.create(new InetSocketAddress("localhost", this.port), SERVER_BACKLOG);
             initServerContexts();
         } catch (IOException e) {
@@ -72,7 +73,7 @@ public class KVServiceGK implements KVService {
                 return;
             }
 
-            String id = extractId(exchange.getRequestURI().getQuery());
+            String id = extractId(exchange);
             if (id == null || id.isEmpty()) {
                 exchange.sendResponseHeaders(STATUS_BAD_REQUEST, -1);
                 return;
@@ -91,14 +92,14 @@ public class KVServiceGK implements KVService {
         }
     }
 
-    protected String extractId(String query) {
-        if (query == null || query.isEmpty()) {
+    protected String extractId(HttpExchange exchange) {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || !query.contains("id=")) {
             return null;
         }
         for (String param : query.split("&")) {
-            int eqIdx = param.indexOf('=');
-            if (eqIdx != -1 && ID_PARAM.equals(param.substring(0, eqIdx))) {
-                return param.substring(eqIdx + 1);
+            if (param.startsWith("id=")) {
+                return URLDecoder.decode(param.substring(3), StandardCharsets.UTF_8);
             }
         }
         return null;
