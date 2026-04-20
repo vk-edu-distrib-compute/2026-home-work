@@ -270,7 +270,6 @@ public class MyKVService implements KVService {
 
         private void handleDelete(HttpExchange exchange, String id) throws IOException {
             dao.delete(id);
-
             exchange.sendResponseHeaders(HTTP_ACCEPTED, -1);
         }
 
