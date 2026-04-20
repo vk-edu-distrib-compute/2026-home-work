@@ -18,7 +18,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class MyKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(MyKVService.class);
@@ -32,6 +34,7 @@ public class MyKVService implements KVService {
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
+    private final ExecutorService executor;
 
     /**
      * Создаёт новый экземпляр сервиса хранения ключ-значение.
@@ -41,6 +44,7 @@ public class MyKVService implements KVService {
      */
     public MyKVService(int port, Dao<byte[]> dao, MyKVCluster cluster) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.dao = dao;
         this.cluster = cluster;
         this.myEndpoint = "http://localhost:" + port;
@@ -155,13 +159,28 @@ public class MyKVService implements KVService {
     @Override
     public void start() {
         log.info("Starting");
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+
+        server.setExecutor(executor);
         server.start();
     }
 
     @Override
     public void stop() {
         server.stop(1);
+
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                // Даем немного времени на завершение текущих задач
+                if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+
         log.info("Stopped");
     }
 
