@@ -18,7 +18,7 @@ public final class SolnRendezvousHashRouter {
         int maxHash = Integer.MIN_VALUE;
 
         for (String node : endpoints) {
-            // Вес ноды — это хэш от комбинации ключа и URL ноды
+            
             int currentHash = hash(key + node);
             if (currentHash > maxHash) {
                 maxHash = currentHash;
@@ -35,7 +35,7 @@ public final class SolnRendezvousHashRouter {
             return ((bytes[0] & 0xFF) << 24) | ((bytes[1] & 0xFF) << 16) 
                  | ((bytes[2] & 0xFF) << 8) | (bytes[3] & 0xFF);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("MD5 not found", e);
+            throw new IllegalStateException("MD5 hash algorithm not found", e);
         }
     }
 }

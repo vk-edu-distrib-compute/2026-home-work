@@ -37,25 +37,21 @@ public class SolntsevaKVService implements KVService {
     private final Dao<byte[]> dao;
     private final String myUrl;
     private final HttpClient httpClient;
-    private final SolnHashiStrategy strategy;
     
-    private final SolnConsistentHashRouter consistentRouter;
-    private final SolnRendezvousHashRouter rendezvousRouter;
+    // Одно поле для роутера вместо двух — Codacy будет доволен
+    private final Router router;
 
     public SolntsevaKVService(final int port, final Dao<byte[]> dao,
                               final Set<String> topology, final String myUrl,
                               final SolnHashiStrategy strategy) throws IOException {
         this.dao = dao;
         this.myUrl = myUrl;
-        this.strategy = strategy;
 
-        // Инициализируем роутеры локально, используя переданную topology
+        // Инициализируем роутер сразу. Никаких null-assignment!
         if (strategy == SolnHashiStrategy.CONSISTENT) {
-            this.consistentRouter = new SolnConsistentHashRouter(topology);
-            this.rendezvousRouter = null;
+            this.router = new SolnConsistentHashRouter(topology);
         } else {
-            this.consistentRouter = null;
-            this.rendezvousRouter = new SolnRendezvousHashRouter(topology);
+            this.router = new SolnRendezvousHashRouter(topology);
         }
 
         this.httpClient = HttpClient.newBuilder()
@@ -78,14 +74,13 @@ public class SolntsevaKVService implements KVService {
         try {
             dao.close();
         } catch (final IOException e) {
-            log.error("Close error", e);
+            log.error("Error while closing DAO", e);
         }
     }
 
     private void handleStatus(final HttpExchange exchange) throws IOException {
         try (exchange) {
-            final String method = exchange.getRequestMethod();
-            if (METHOD_GET.equals(method)) {
+            if (METHOD_GET.equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(STATUS_OK, NO_BODY);
             } else {
                 exchange.sendResponseHeaders(STATUS_NOT_ALLOWED, NO_BODY);
@@ -103,7 +98,7 @@ public class SolntsevaKVService implements KVService {
                 return;
             }
 
-            final String responsibleNode = getResponsibleNode(id);
+            final String responsibleNode = router.getNode(id);
             if (!myUrl.equals(responsibleNode)) {
                 proxyRequest(exchange, responsibleNode);
                 return;
@@ -111,7 +106,7 @@ public class SolntsevaKVService implements KVService {
 
             handleLocal(exchange, id);
         } catch (final IOException e) {
-            log.error("Entity handle error", e);
+            log.error("Entity handling error", e);
         }
     }
 
@@ -125,38 +120,33 @@ public class SolntsevaKVService implements KVService {
         }
     }
 
-    private String getResponsibleNode(final String id) {
-        return switch (strategy) {
-            case CONSISTENT -> consistentRouter.getNode(id);
-            case RENDEZVOUS -> rendezvousRouter.getNode(id);
-        };
-    }
-
     private void proxyRequest(final HttpExchange exchange, final String targetUrl) throws IOException {
         try {
             final URI uri = URI.create(targetUrl + exchange.getRequestURI().toString());
-            final HttpRequest.Builder rb = HttpRequest.newBuilder(uri);
             final String method = exchange.getRequestMethod();
             
-            final byte[] body;
-            if (METHOD_PUT.equals(method)) {
-                body = exchange.getRequestBody().readAllBytes();
-            } else {
-                body = new byte[0];
-            }
+            final byte[] body = METHOD_PUT.equals(method) 
+                ? exchange.getRequestBody().readAllBytes() 
+                : new byte[0];
             
-            final HttpRequest request = rb.method(method,
-                    HttpRequest.BodyPublishers.ofByteArray(body)).build();
-            final HttpResponse<byte[]> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            final HttpRequest request = HttpRequest.newBuilder(uri)
+                    .method(method, HttpRequest.BodyPublishers.ofByteArray(body))
+                    .build();
+            
+            final HttpResponse<byte[]> resp = httpClient.send(request, 
+                    HttpResponse.BodyHandlers.ofByteArray());
+            
             final byte[] respBody = resp.body();
+            exchange.sendResponseHeaders(resp.statusCode(), 
+                    respBody.length == 0 ? NO_BODY : respBody.length);
             
-            exchange.sendResponseHeaders(resp.statusCode(), respBody.length == 0 ? NO_BODY : respBody.length);
             if (respBody.length > 0) {
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(respBody);
                 }
             }
         } catch (final InterruptedException e) {
+            log.error("Proxy request interrupted", e);
             Thread.currentThread().interrupt();
         }
     }
@@ -184,9 +174,7 @@ public class SolntsevaKVService implements KVService {
     }
 
     private static String extractId(final String query) {
-        if (query == null) {
-            return null;
-        }
+        if (query == null) return null;
         for (final String param : query.split("&")) {
             final String[] kv = param.split("=", 2);
             if (kv.length == 2 && ID_PARAM.equals(kv[0])) {

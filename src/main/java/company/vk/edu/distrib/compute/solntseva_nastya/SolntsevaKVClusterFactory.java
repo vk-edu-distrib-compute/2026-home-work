@@ -23,9 +23,8 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
             List<KVService> services = new ArrayList<>();
             for (int port : ports) {
                 String myUrl = "http://localhost:" + port;
-                
-                // Вот здесь нужно создать DAO для конкретного порта
-                PersistentDao dao = new PersistentDao(Paths.get("storage", "data_" + port));
+                java.nio.file.Path storagePath = java.nio.file.Paths.get("storage", "data_" + port);
+                PersistentDao dao = new PersistentDao(storagePath);
                 
                 services.add(new SolntsevaKVService(
                         port, 
