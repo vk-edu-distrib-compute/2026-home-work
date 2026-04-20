@@ -9,9 +9,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.NoSuchFileException;
+import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 public class PopovIgorKVService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(PopovIgorKVService.class);
@@ -32,19 +38,39 @@ public class PopovIgorKVService implements KVService {
     private static final int STATUS_BAD_REQUEST = 400;
     private static final int STATUS_NOT_FOUND = 404;
     private static final int STATUS_METHOD_NOT_ALLOWED = 405;
-    
+    private static final int STATUS_SERVICE_UNAVAILABLE = 503;
+    private static final int STATUS_INTERNAL_ERROR = 500; 
+
     private static final int SERVER_BACKLOG = 512;
 
     private final HttpServer server;
     private final int port;
     private final PopovIgorKVDaoPersistent dao;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    
+    // Sharding vars
+    private final String myEP;
+    private final HttpClient httpClient;
+    private final Function<String, String> router;
 
+    // Standalone service constructor
     public PopovIgorKVService(int port) {
+        this(port, null);
+    }
+
+    // Sharding constructor
+    public PopovIgorKVService(int port, Function<String, String> router) {
         this.port = port;
+        this.router = router;
+        this.myEP = "http://[::]:" + port; // both IPv4 and IPv6
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
         try {
             this.dao = new PopovIgorKVDaoPersistent("data_" + port);
-            this.server = HttpServer.create(new InetSocketAddress("localhost", this.port), SERVER_BACKLOG);
+            // Listen on all network ifaces
+            this.server = HttpServer.create(new InetSocketAddress(port), SERVER_BACKLOG);
             initServerContexts();
         } catch (IOException e) {
             log.error("Failed to create HTTP server on port {}", port, e);
@@ -77,16 +103,66 @@ public class PopovIgorKVService implements KVService {
                 return;
             }
 
-            String method = exchange.getRequestMethod();
-            switch (method) {
-                case METHOD_GET -> handleGet(exchange, id);
-                case METHOD_PUT -> handlePut(exchange, id);
-                case METHOD_DELETE -> handleDelete(exchange, id);
-                default -> exchange.sendResponseHeaders(STATUS_METHOD_NOT_ALLOWED, -1);
+            // sharding via function
+            String target = (router == null) ? myEP : router.apply(id);
+            // cmp only ports
+            int targetPort = Integer.parseInt(target.substring(target.lastIndexOf(':') + 1));
+
+            if (this.port == targetPort) {
+                handleLocal(exchange, id);
+            } else {
+                proxyRequest(exchange, target);
             }
+
+            // String method = exchange.getRequestMethod();
+            // switch (method) {
+            //     case METHOD_GET -> handleGet(exchange, id);
+            //     case METHOD_PUT -> handlePut(exchange, id);
+            //     case METHOD_DELETE -> handleDelete(exchange, id);
+            //     default -> exchange.sendResponseHeaders(STATUS_METHOD_NOT_ALLOWED, -1);
+            // }
         } catch (Exception e) {
             log.error("Internal error during request handling", e);
             sendSafeResponse(exchange, STATUS_BAD_REQUEST);
+        }
+    }
+
+    private void handleLocal(HttpExchange exchange, String id) throws IOException {
+        String method = exchange.getRequestMethod();
+        switch (method) {
+            case METHOD_GET -> handleGet(exchange, id);
+            case METHOD_PUT -> handlePut(exchange, id);
+            case METHOD_DELETE -> handleDelete(exchange, id);
+            default -> exchange.sendResponseHeaders(STATUS_METHOD_NOT_ALLOWED, -1);
+        }
+    }
+
+    private void proxyRequest(HttpExchange exchange, String target) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String url = target + exchange.getRequestURI().getPath() + (query != null ? "?" + query : "");
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .method(exchange.getRequestMethod(), 
+                            HttpRequest.BodyPublishers.ofByteArray(exchange.getRequestBody().readAllBytes()))
+                    .build();
+
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            byte[] body = response.body();
+            exchange.sendResponseHeaders(response.statusCode(), body.length == 0 ? -1 : body.length);
+            if (body.length > 0) {
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(body);
+                }
+            }
+        } catch (java.net.ConnectException | java.net.http.HttpConnectTimeoutException e) {
+            log.warn("Target node {} is unreachable", target);
+            exchange.sendResponseHeaders(STATUS_SERVICE_UNAVAILABLE, -1);
+        } catch (Exception e) {
+            log.error("Proxy failure to {}", target, e);
+            sendSafeResponse(exchange, STATUS_INTERNAL_ERROR);
         }
     }
 
