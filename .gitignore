@@ -32,3 +32,4 @@ build/
 out/
 
 .vscode/
+/src/main/java/company/vk/edu/distrib/compute/andrey1af/data/
