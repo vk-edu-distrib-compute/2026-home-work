@@ -12,8 +12,10 @@ public class VersionedEntry implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    private static final byte[] EMPTY = new byte[0];
+
     /**
-     * Значение; null если tombstone.
+     * Значение; пустой массив если tombstone.
      */
     private final byte[] value;
 
@@ -34,7 +36,7 @@ public class VersionedEntry implements Serializable {
      * @param timestamp время записи
      */
     VersionedEntry(byte[] value, long timestamp) {
-        this.value = value == null ? null : value.clone();
+        this.value = value == null ? EMPTY : value.clone();
         this.timestamp = timestamp;
         this.tombstone = false;
     }
@@ -45,7 +47,7 @@ public class VersionedEntry implements Serializable {
      * @param timestamp время удаления
      */
     VersionedEntry(long timestamp) {
-        this.value = null;
+        this.value = EMPTY;
         this.timestamp = timestamp;
         this.tombstone = true;
     }
