@@ -23,6 +23,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.32")
     implementation("com.h2database:h2:2.4.240")
     implementation("com.zaxxer:HikariCP:7.0.2")
+    implementation("com.google.guava:guava:31.1-jre")
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
