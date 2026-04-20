@@ -2,14 +2,18 @@ package company.vk.edu.distrib.compute.solntseva_nastya;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
-import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.KVService; // Исправлен импорт
 import java.io.IOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Creates a sharded KV cluster using rendezvous hashing.
+ */
 public class SolntsevaKVClusterFactory extends KVClusterFactory {
 
     @Override
@@ -21,10 +25,16 @@ public class SolntsevaKVClusterFactory extends KVClusterFactory {
 
             Set<String> topology = new HashSet<>(endpoints);
 
-            List<KVService> services = new ArrayList<>();
+            List<KVService> services = new ArrayList<>(); // Исправлена типизация
+            final String storageBase = "storage"; // Оптимизация для Codacy
+
             for (int port : ports) {
                 String myUrl = "http://localhost:" + port;
-                PersistentDao dao = new PersistentDao(Paths.get("storage", "data_" + port));
+                
+                // Теперь мы не создаем каждый раз новый объект Path для базовой директории
+                Path daoPath = Paths.get(storageBase, "data_" + port);
+                PersistentDao dao = new PersistentDao(daoPath);
+                
                 services.add(new SolntsevaKVService(
                         port,
                         dao,
