@@ -8,33 +8,39 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class MyKVCluster implements KVCluster {
     private static final Logger log = LoggerFactory.getLogger(MyKVCluster.class);
 
-    private final ConsistentHashRing ring;
+    private final NodesRouter nodesRouter;
     private final String storageBasePath;
 
     private final List<Integer> portsList;
     private final Map<String, ClusterNode> mapOfNodes = new ConcurrentHashMap<>();
-    private boolean clusterIsRunning = false;
+    private boolean clusterIsRunning;
 
     public MyKVCluster(List<Integer> portsList) {
         this.portsList = portsList;
-        this.ring = new ConsistentHashRing(100);
+        this.nodesRouter = new ConsistentHashRing(100);
+        // alternative realisation
+        // this.nodesRouter = new HRWNodesPool();
         this.storageBasePath = "storage";
     }
 
     @Override
     public void start() {
-        if (clusterIsRunning) return;
+        if (clusterIsRunning) {
+            return;
+        }
 
+        if (log.isInfoEnabled()) {
         log.info("Starting cluster with {} nodes on ports {}", portsList.size(), portsList);
-        for(int port : this.portsList) {
+        }
+        for (int port : this.portsList) {
             String endpoint = "localhost:" + port;
             start(endpoint);
         }
@@ -48,11 +54,11 @@ public class MyKVCluster implements KVCluster {
             log.info("Node on endpoint {} already running", endpoint);
             return;
         }
-        String[] hostAndPort = endpoint.split(":");
+        String[] hostAndPort = endpoint.replace("http://", "").split(":");
         String host = hostAndPort[0];
         int port = Integer.parseInt(hostAndPort[1]);
         try {
-            String nodeStoragePath = storageBasePath + "/node-" + host + "-"+ port;
+            String nodeStoragePath = storageBasePath + "/node-" + host + "-" + port;
             Dao<byte[]> dao = new FileSystemDao(nodeStoragePath);
 
             HttpServer server = HttpServer.create(new InetSocketAddress(host, port), 0);
@@ -60,19 +66,21 @@ public class MyKVCluster implements KVCluster {
             server.start();
 
             ClusterNode node = new ClusterNode(port, server, dao);
-            ring.add(node, node.getUrl());
+            nodesRouter.add(node, node.getUrl());
             mapOfNodes.put(endpoint, node);
             log.info("Node started on endpoint {}", endpoint);
 
         } catch (IOException e) {
             log.error("Failed to start node on endpoint {}", endpoint, e);
-            throw new RuntimeException("Failed to start node on endpoint " + endpoint + e);
+            throw new RuntimeException("Failed to start node on endpoint " + endpoint, e);
         }
     }
 
     @Override
     public void stop() {
-        if (!clusterIsRunning) return;
+        if (!clusterIsRunning) {
+            return;
+        }
 
         log.info("Stopping cluster...");
         for (String endpoint : mapOfNodes.keySet()) {
@@ -93,12 +101,12 @@ public class MyKVCluster implements KVCluster {
         }
         log.info("Node stopped on endpoint {}", endpoint);
         mapOfNodes.remove(endpoint);
-        ring.remove(node.getUrl());
+        nodesRouter.remove(node.getUrl());
     }
 
     @Override
     public List<String> getEndpoints() {
-        return new ArrayList<>(mapOfNodes.keySet());
+        return mapOfNodes.keySet().stream().map(key -> "http://" + key).collect(Collectors.toList());
     }
 
     private void installHandlers(HttpServer server, int localPort, Dao<byte[]> dao) {
@@ -111,6 +119,6 @@ public class MyKVCluster implements KVCluster {
             exchange.close();
         });
 
-        server.createContext("/v0/entity", new ClusterProxyHandler(localPort, dao, ring));
+        server.createContext("/v0/entity", new ClusterProxyHandler(localPort, dao, nodesRouter));
     }
 }

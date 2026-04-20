@@ -7,8 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record ClusterPorts(String portsNumber) {
-    private final static Logger log = LoggerFactory.getLogger(ClusterPorts.class);
-    private final static int STARTING_CLUSTER_PORT = 8080;
+    private static final Logger log = LoggerFactory.getLogger(ClusterPorts.class);
+    private static final int STARTING_CLUSTER_PORT = 8080;
 
     public List<Integer> getPortsList() {
         int counter = 0;

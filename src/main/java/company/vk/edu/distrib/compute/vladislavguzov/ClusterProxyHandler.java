@@ -26,13 +26,13 @@ public class ClusterProxyHandler implements HttpHandler {
 
     private final int localPort;
     private final Dao<byte[]> localDao;
-    private final ConsistentHashRing ring;
+    private final NodesRouter nodesRouter;
     private static final String ID_PREFIX = "id=";
 
-    public ClusterProxyHandler(int localPort, Dao<byte[]> localDao, ConsistentHashRing ring) {
+    public ClusterProxyHandler(int localPort, Dao<byte[]> localDao, NodesRouter nodesRouter) {
         this.localPort = localPort;
         this.localDao = localDao;
-        this.ring = ring;
+        this.nodesRouter = nodesRouter;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class ClusterProxyHandler implements HttpHandler {
                 }
                 String key = query.substring(ID_PREFIX.length());
 
-                ClusterNode target = ring.get(key);
+                ClusterNode target = nodesRouter.get(key);
                 if (target == null) {
                     exchange.sendResponseHeaders(500, -1);
                     return;
@@ -101,7 +101,6 @@ public class ClusterProxyHandler implements HttpHandler {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(2));
-
 
         switch (method) {
             case "GET" -> {

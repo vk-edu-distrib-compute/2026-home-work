@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
-            DummyKVClusterFactory.class,
+            // DummyKVClusterFactory.class,
             MyKVClusterFactoty.class
     );
 

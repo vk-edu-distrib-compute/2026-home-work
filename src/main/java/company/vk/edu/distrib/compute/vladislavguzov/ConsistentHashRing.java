@@ -6,7 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class ConsistentHashRing {
+public class ConsistentHashRing implements NodesRouter {
     private final NavigableMap<Long, ClusterNode> ring = new TreeMap<>();
     private final int virtualNodes;
 
@@ -28,20 +28,25 @@ public class ConsistentHashRing {
         }
     }
 
+    @Override
     public void add(ClusterNode node, String id) {
         for (int i = 0; i < virtualNodes; i++) {
             ring.put(hash(id + "#" + i), node);
         }
     }
 
+    @Override
     public void remove(String id) {
         for (int i = 0; i < virtualNodes; i++) {
             ring.remove(hash(id + "#" + i));
         }
     }
 
+    @Override
     public ClusterNode get(String key) {
-        if (ring.isEmpty()) return null;
+        if (ring.isEmpty()) {
+            return null;
+        }
         long h = hash(key);
         var entry = ring.ceilingEntry(h);
         return entry != null ? entry.getValue() : ring.firstEntry().getValue();
