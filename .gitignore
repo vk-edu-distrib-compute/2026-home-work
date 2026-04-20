@@ -35,7 +35,7 @@ out/
 ### Специфика твоего задания (SRE/Sharding) ###
 # Игнорируем локальные папки с данными, которые создает твой PersistentDao
 # (тесты создают папки вида data_8080, data_8081 и т.д.)
-data_*/
+
 temp_*/
 
 ### Инструменты анализа (Checkstyle/PMD) ###
@@ -57,3 +57,14 @@ Thumbs.db
 ### Gradle Toolchains ###
 # Если Gradle скачивал JDK внутрь проекта
 .java/
+*-storage/
+storage/
+.data/
+vitos23-storage/
+ekaterina-gavrilova-storage/
+storage/
+*.storage/
+
+
+/data/
+/data_*/
