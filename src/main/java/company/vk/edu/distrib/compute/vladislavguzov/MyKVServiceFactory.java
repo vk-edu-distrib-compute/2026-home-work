@@ -1,14 +1,13 @@
-package company.vk.edu.distrib.compute.b10nicle;
+package company.vk.edu.distrib.compute.vladislavguzov;
 
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.KVServiceFactory;
 
 import java.io.IOException;
 
-public class B10nicleKVServiceFactory extends KVServiceFactory {
-
+public class MyKVServiceFactory extends KVServiceFactory {
     @Override
     protected KVService doCreate(int port) throws IOException {
-        return new B10nicleKVService(port, new InMemoryDao());
+         return new InFileSysKVService(port, new FileSystemDao("storage"));
     }
 }
