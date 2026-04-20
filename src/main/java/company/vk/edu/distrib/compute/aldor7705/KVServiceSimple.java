@@ -20,11 +20,10 @@ public class KVServiceSimple implements KVService {
     private HttpServer httpServer;
     private boolean running;
 
-    public KVServiceSimple(int port, Dao<byte[]> dao, List<Integer> clusterPorts) throws IOException {
+    public KVServiceSimple(int port, Dao<byte[]> dao, List<Integer> clusterPorts) {
         this.port = port;
         this.dao = dao;
         this.clusterPorts = clusterPorts;
-        this.httpServer = createServer();
     }
 
     private HttpServer createServer() throws IOException {
@@ -38,9 +37,7 @@ public class KVServiceSimple implements KVService {
     public void start() {
         if (!running) {
             try {
-                if (httpServer == null) {
-                    httpServer = createServer();
-                }
+                httpServer = createServer();
                 log.info("Запуск сервиса на порту {}", port);
                 httpServer.start();
                 running = true;
@@ -56,7 +53,6 @@ public class KVServiceSimple implements KVService {
             log.info("Остановка сервиса на порту {}", port);
             httpServer.stop(0);
             running = false;
-            httpServer = null;
         }
     }
 }
