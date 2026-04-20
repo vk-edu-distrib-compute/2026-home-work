@@ -32,3 +32,5 @@ build/
 out/
 
 .vscode/
+/storage/
+/gradle.properties
