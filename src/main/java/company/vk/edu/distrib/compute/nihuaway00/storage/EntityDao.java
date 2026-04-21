@@ -14,9 +14,17 @@ public class EntityDao implements Dao<byte[]> {
     private static final Logger log = LoggerFactory.getLogger(EntityDao.class);
     private final Path baseDir;
 
-    public EntityDao(Path baseDir) throws IOException {
+    public EntityDao(Path baseDir) {
         this.baseDir = baseDir;
-        Files.createDirectories(baseDir);
+    }
+
+    public static EntityDao create(Path path) throws IOException {
+        Files.createDirectories(path);
+        return new EntityDao(path);
+    }
+
+    public static EntityDao createReplica(int port, int index) throws IOException {
+        return EntityDao.create(Path.of("./storage/" + port + "/replica-" + index));
     }
 
     public boolean available() {
@@ -31,34 +39,59 @@ public class EntityDao implements Dao<byte[]> {
     }
 
     @Override
-    public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
-        if (key == null || key.isEmpty() || key.isBlank()) {
+        public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException();
         }
 
         try {
-            return Files.readAllBytes(baseDir.resolve(key));
+            byte[] data = Files.readAllBytes(baseDir.resolve(key));
+            VersionedEntry versioned = VersionedEntry.parse(data);
+
+            if (versioned.isTombstone()) {
+                throw new NoSuchElementException("Entity is not found in storage");
+            }
+
+            return versioned.getData();
         } catch (NoSuchFileException e) {
             throw new NoSuchElementException("Entity is not found in storage", e);
         }
     }
 
-    @Override
-    public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
-        if (key == null || key.isEmpty() || key.isBlank()) {
+    public VersionedEntry getVersioned(String key) {
+        if (key == null || key.isBlank()) {
             throw new IllegalArgumentException();
         }
 
-        Files.write(baseDir.resolve(key), value);
+        try {
+            byte[] data = Files.readAllBytes(baseDir.resolve(key));
+            return VersionedEntry.parse(data);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException();
+        }
+
+        VersionedEntry versionedEntry = new VersionedEntry(value);
+        Files.write(baseDir.resolve(key), versionedEntry.serialize());
     }
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
-        if (key == null || key.isEmpty() || key.isBlank()) {
-            throw new IllegalArgumentException();
+        VersionedEntry versionedEntry = getVersioned(key);
+
+        if(versionedEntry == null){
+            versionedEntry = new VersionedEntry(new byte[0]);
         }
+
         try {
-            Files.delete(baseDir.resolve(key));
+            versionedEntry.setTombstone();
+            Files.write(baseDir.resolve(key), versionedEntry.serialize());
         } catch (NoSuchFileException e) {
             if (log.isWarnEnabled()) {
                 log.warn("Entity is not found in storage. Nothing to delete", e);

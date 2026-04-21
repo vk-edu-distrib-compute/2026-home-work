@@ -2,8 +2,9 @@ package company.vk.edu.distrib.compute.nihuaway00.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.nihuaway00.replication.InsufficientReplicasException;
+import company.vk.edu.distrib.compute.nihuaway00.replication.ReplicaManager;
 import company.vk.edu.distrib.compute.nihuaway00.sharding.ShardRouter;
-import company.vk.edu.distrib.compute.nihuaway00.storage.EntityDao;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,10 +15,10 @@ import java.util.NoSuchElementException;
 
 public class EntityHandler implements HttpHandler {
     private final ShardRouter shardRouter;
-    private final EntityDao dao;
+    private final ReplicaManager replicaManager;
 
-    public EntityHandler(EntityDao dao, ShardRouter shardRouter) {
-        this.dao = dao;
+    public EntityHandler(ReplicaManager replicaManager, ShardRouter shardRouter) {
+        this.replicaManager = replicaManager;
         this.shardRouter = shardRouter;
     }
 
@@ -31,6 +32,13 @@ public class EntityHandler implements HttpHandler {
         if (id == null || id.isBlank()) {
             HttpUtils.sendError(exchange, 400, "id is required");
             return;
+        }
+
+        int ack;
+        try {
+            ack = Integer.parseInt(params.get("ack"));
+        } catch (NumberFormatException e) {
+            ack = 1;
         }
 
         try (exchange) {
@@ -51,13 +59,13 @@ public class EntityHandler implements HttpHandler {
 
                 switch (method) {
                     case "GET" -> {
-                        handleGetEntity(exchange, id);
+                        handleGetEntity(exchange, id, ack);
                     }
                     case "PUT" -> {
-                        handlePutEntity(exchange, id);
+                        handlePutEntity(exchange, id, ack);
                     }
                     case "DELETE" -> {
-                        handleDeleteEntity(exchange, id);
+                        handleDeleteEntity(exchange, id, ack);
                     }
                     default -> HttpUtils.sendError(exchange, 405, "Method not allowed");
                 }
@@ -65,34 +73,41 @@ public class EntityHandler implements HttpHandler {
                 HttpUtils.sendError(exchange, 404, err.getMessage());
             } catch (IllegalArgumentException err) {
                 HttpUtils.sendError(exchange, 400, err.getMessage());
+            } catch (InsufficientReplicasException err) {
+                HttpUtils.sendError(exchange, 500, err.getMessage());
             } catch (Exception err) {
                 HttpUtils.sendError(exchange, 503, err.getMessage());
             }
         }
     }
 
-    public void handleGetEntity(HttpExchange exchange, String id)
+    public void handleGetEntity(HttpExchange exchange, String id, int ack)
             throws IOException, NoSuchElementException, IllegalArgumentException {
-        byte[] data = dao.get(id);
+        byte[] data = replicaManager.get(id, ack);
+
+        if(data == null){
+            throw new NoSuchElementException();
+        }
+
         exchange.sendResponseHeaders(200, data.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(data);
         }
     }
 
-    public void handlePutEntity(HttpExchange exchange, String id)
+    public void handlePutEntity(HttpExchange exchange, String id, int ack)
             throws IOException, IllegalArgumentException {
 
         try (InputStream is = exchange.getRequestBody()) {
             var data = is.readAllBytes();
-            dao.upsert(id, data);
+            replicaManager.put(id, data, ack);
             exchange.sendResponseHeaders(201, -1);
         }
     }
 
-    public void handleDeleteEntity(HttpExchange exchange, String id)
+    public void handleDeleteEntity(HttpExchange exchange, String id, int ack)
             throws IOException, IllegalArgumentException {
-        dao.delete(id);
+        replicaManager.delete(id, ack);
         exchange.sendResponseHeaders(202, -1);
     }
 }
