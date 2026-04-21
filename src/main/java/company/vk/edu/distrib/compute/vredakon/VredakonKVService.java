@@ -27,7 +27,7 @@ public class VredakonKVService implements KVService {
     private final HttpClient client = HttpClient.newHttpClient();
     private final AtomicBoolean isStarted = new AtomicBoolean(false);
     private final int port;
-    private Map<String, KVService> otherNodes = new ConcurrentHashMap<>();
+    private Map<String, VredakonKVService> otherNodes = new ConcurrentHashMap<>();
 
     public VredakonKVService(int port) throws IOException {
         this.port = port;
@@ -44,7 +44,7 @@ public class VredakonKVService implements KVService {
         }
     }
 
-    public void setOtherNodes(Map<String, KVService> otherNodes) {
+    public void setOtherNodes(Map<String, VredakonKVService> otherNodes) {
         this.otherNodes = otherNodes;
     }
 
@@ -89,59 +89,30 @@ public class VredakonKVService implements KVService {
                 return;
             }
         }
-        String appropriateNode = Strategies.resolve(params.get("id"), otherNodes);
+
+        String appropriateNode = "http://localhost:" + server.getAddress().getPort();
+        if (!otherNodes.isEmpty()) {
+            appropriateNode = Strategies.resolve(params.get("id"), otherNodes);
+        }
+        
         boolean doProxy = !appropriateNode.equals("http://localhost:" + server.getAddress().getPort()) && !otherNodes.isEmpty();
 
         switch (exchange.getRequestMethod()) {
             case "GET":
-                try (OutputStream os = exchange.getResponseBody()) {
-                    if (doProxy) {
-                        HttpResponse<byte[]> response = proxyRequest(
-                                appropriateNode + "/v0/entity?id=" + params.get("id"),
-                                "GET", null);
-                        exchange.sendResponseHeaders(response.statusCode(), response.body().length);
-                        os.write(response.body());
-                        exchange.close();
-                        return;
-                    }
-                    byte[] data = dao.get(params.get("id"));
-                    exchange.sendResponseHeaders(200, data.length);
-                    os.write(data);
-                    exchange.close();
-                } catch (Exception e) {
-                    exchange.sendResponseHeaders(404, -1);
-                    exchange.close();
-                }
+                handleEntityGet(exchange, doProxy, appropriateNode, params);
                 break;
 
             case "PUT":
-                byte[] data = exchange.getRequestBody().readAllBytes();
-                if (doProxy) {
-                    exchange.sendResponseHeaders(proxyRequest(appropriateNode + "/v0/entity?id=" + params.get("id"),
-                            "PUT", data).statusCode(), -1);
-                    exchange.close();
-                    return;
-                }
-                dao.upsert(params.get("id"), data);
-                exchange.sendResponseHeaders(201, -1);
-                exchange.close();
+                handleEntityPut(exchange, doProxy, appropriateNode, params);
                 break;
 
             case "DELETE":
-                if (doProxy) {
-                    exchange.sendResponseHeaders(proxyRequest(appropriateNode + "/v0/entity?id=" + params.get("id"),
-                            "DELETE", null).statusCode(), -1);
-                    exchange.close();
-                    return;
-                }
-                dao.delete(params.get("id"));
-                exchange.sendResponseHeaders(202, -1);
-                exchange.close();
+                handleEntityDelete(exchange, doProxy, appropriateNode, params);
                 break;
-
             default:
                 break;
         }
+        exchange.close();
     }
 
     public void handleStatus(HttpExchange exchange) throws IOException {
@@ -164,5 +135,56 @@ public class VredakonKVService implements KVService {
             log.error("Some error");
         }
         return response;
+    }
+
+    private void handleEntityGet(HttpExchange exchange, 
+    boolean doProxy, 
+    String appropriateNode,
+    Map<String, String> params) throws IOException {
+        try (OutputStream os = exchange.getResponseBody()) {
+            if (doProxy) {
+                HttpResponse<byte[]> response = proxyRequest(
+                        appropriateNode + "/v0/entity?id=" + params.get("id"),
+                        "GET", null);
+                exchange.sendResponseHeaders(response.statusCode(), response.body().length);
+                os.write(response.body());
+                exchange.close();
+                return;
+            }
+            byte[] data = dao.get(params.get("id"));
+            exchange.sendResponseHeaders(200, data.length);
+            os.write(data);
+        } catch (Exception e) {
+            exchange.sendResponseHeaders(404, -1);
+        }
+    }
+
+    private void handleEntityPut(HttpExchange exchange, 
+    boolean doProxy, 
+    String appropriateNode,
+    Map<String, String> params) throws IOException {
+        byte[] data = exchange.getRequestBody().readAllBytes();
+        if (doProxy) {
+            exchange.sendResponseHeaders(proxyRequest(appropriateNode + "/v0/entity?id=" + params.get("id"),
+            "PUT", data).statusCode(), -1);
+            exchange.close();
+            return;
+        }
+        dao.upsert(params.get("id"), data);
+        exchange.sendResponseHeaders(201, -1);
+    }
+
+    private void handleEntityDelete(HttpExchange exchange, 
+    boolean doProxy, 
+    String appropriateNode,
+    Map<String, String> params) throws IOException {
+        if (doProxy) {
+            exchange.sendResponseHeaders(proxyRequest(appropriateNode + "/v0/entity?id=" + params.get("id"),
+            "DELETE", null).statusCode(), -1);
+            exchange.close();
+            return;
+        }
+        dao.delete(params.get("id"));
+        exchange.sendResponseHeaders(202, -1);
     }
 }

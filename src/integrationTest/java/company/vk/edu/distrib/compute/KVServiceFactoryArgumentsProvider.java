@@ -10,6 +10,7 @@ import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
+import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
 
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -21,13 +22,14 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
 
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        KVServiceFactoryImpl.class,
-        MyKVServiceFactory.class,
-        InMemoryKVServiceFactory.class,
-        Vitos23KVServiceFactory.class,
-        NihuawayKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
-        PopovIgorKVServiceFactoryImpl.class
+        // KVServiceFactoryImpl.class,
+        // MyKVServiceFactory.class,
+        // InMemoryKVServiceFactory.class,
+        // Vitos23KVServiceFactory.class,
+        // NihuawayKVServiceFactory.class,
+        // B10nicleKVServiceFactory.class,
+        // PopovIgorKVServiceFactoryImpl.class
+        VredakonKVServiceFactory.class
     );
 
     @Override

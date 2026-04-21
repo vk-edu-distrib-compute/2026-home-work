@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute.vredakon;
 
 import company.vk.edu.distrib.compute.KVCluster;
-import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.KVServiceFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class VredakonKVCluster implements KVCluster {
 
-    private final Map<String, KVService> nodes = new ConcurrentHashMap<>();
+    private final Map<String, VredakonKVService> nodes = new ConcurrentHashMap<>();
     private final KVServiceFactory factory = new VredakonKVServiceFactory();
     private final Logger log = LoggerFactory.getLogger(VredakonKVCluster.class);
 
@@ -24,17 +23,19 @@ public class VredakonKVCluster implements KVCluster {
         for (int port: ports) {
             try {
                 VredakonKVService node = (VredakonKVService)factory.create(port);
-                node.setOtherNodes(nodes);
                 nodes.put("http://localhost:" + port, node);
             } catch (IOException exc) {
                 log.error("Some error");
             }
         }
+        for (var node: nodes.values()) {
+            node.setOtherNodes(nodes);
+        }
     }
 
     @Override
     public void start() {
-        for (Map.Entry<String, KVService> node: nodes.entrySet()) {
+        for (var node: nodes.entrySet()) {
             node.getValue().start();
         }
     }
@@ -46,9 +47,10 @@ public class VredakonKVCluster implements KVCluster {
 
     @Override
     public void stop() {
-        for (Map.Entry<String, KVService> node: nodes.entrySet()) {
+        for (var node: nodes.entrySet()) {
             node.getValue().stop();
         }
+        Strategies.clear();
     }
 
     @Override
