@@ -1,10 +1,7 @@
 package company.vk.edu.distrib.compute;
 
-<<<<<<< maryarta-hw2
 import java.io.IOException;
-=======
 import java.util.concurrent.CompletableFuture;
->>>>>>> master
 
 /**
  * A storage with HTTP API.
