@@ -18,15 +18,18 @@ import java.util.List;
 public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVServiceFactory {
     private final ShardingStrategy shardingStrategy;
     private final HttpClient httpClient;
+    private final int replicaCount;
 
-    public NihuawayKVServiceFactory(ShardingStrategy shardingStrategy, HttpClient httpClient) {
+    public NihuawayKVServiceFactory(ShardingStrategy shardingStrategy, HttpClient httpClient, int replicaCount) {
         super();
         this.shardingStrategy = shardingStrategy;
         this.httpClient = httpClient;
+        this.replicaCount = replicaCount;
     }
 
     public NihuawayKVServiceFactory() {
-        this(null, null);
+        int replicaCountProps = Config.replicas();
+        this(null, null, replicaCountProps);
     }
 
     private ShardRouter buildShardRouter(int port) {
@@ -35,10 +38,9 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
                 : new LocalShardRouter("http://localhost:" + port);
     }
 
-    private ReplicaManager buildReplicaManager(int port) throws IOException {
-        int countReplicas = 3;
+    private ReplicaManager buildReplicaManager(int port, int replicaCount) throws IOException {
         List<ReplicaNode> replicas = new ArrayList<>();
-        for (int i = 0; i < countReplicas; i++) {
+        for (int i = 0; i < replicaCount; i++) {
             replicas.add(new ReplicaNode(i, EntityDao.createReplica(port, i)));
         }
 
@@ -50,7 +52,7 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
     @Override
     protected KVService doCreate(int port) throws IOException {
         ShardRouter shardRouter = buildShardRouter(port);
-        ReplicaManager replicaManager = buildReplicaManager(port);
+        ReplicaManager replicaManager = buildReplicaManager(port, replicaCount);
 
         return new NihuawayKVService(port, shardRouter, replicaManager);
     }
