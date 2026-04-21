@@ -22,9 +22,9 @@ abstract class TestBase {
     public static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     static int randomPort() {
-        final var port = ThreadLocalRandom.current().nextInt(10000, 60000);
         for (int j = 0; j < 5; j++) {
             for (int i = 0; i < 100_000; i++) {
+                final var port = ThreadLocalRandom.current().nextInt(10000, 60000);
                 if (isTcpPortAvailable(port)) {
                     return port;
                 }
@@ -41,7 +41,7 @@ abstract class TestBase {
     static boolean isTcpPortAvailable(int port) {
         try (ServerSocket serverSocket = new ServerSocket()) {
             serverSocket.setReuseAddress(false);
-            serverSocket.bind(new InetSocketAddress(InetAddress.getByName("localhost"), port), 1);
+            serverSocket.bind(new InetSocketAddress(port), 1);
             return true;
         } catch (Exception ex) {
             return false;
