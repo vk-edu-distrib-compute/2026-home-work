@@ -17,7 +17,6 @@ public class Martinez1337KVService implements KVService, ClusterAwareKVService {
     private final HttpServer server;
 
     private List<String> clusterEndpoints = List.of();
-    private int myNodeId = -1;
     private final ShardingStrategy sharding;
 
     private StatusHandler statusHandler;
@@ -54,13 +53,12 @@ public class Martinez1337KVService implements KVService, ClusterAwareKVService {
     @Override
     public void setCluster(List<String> allEndpoints, int myNodeId) {
         this.clusterEndpoints = List.copyOf(allEndpoints);
-        this.myNodeId = myNodeId;
 
         if (statusHandler != null) {
-            statusHandler.setClusterInfo(this.clusterEndpoints, this.myNodeId);
+            statusHandler.setClusterInfo(this.clusterEndpoints, myNodeId);
         }
         if (entityHandler != null) {
-            entityHandler.setClusterInfo(this.clusterEndpoints, this.myNodeId);
+            entityHandler.setClusterInfo(this.clusterEndpoints, myNodeId);
         }
     }
 }
