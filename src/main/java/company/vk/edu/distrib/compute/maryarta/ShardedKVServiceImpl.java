@@ -46,7 +46,7 @@ public class ShardedKVServiceImpl implements KVService {
             server.start();
             started = true;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start server on port " + port, e);
+            throw new IllegalStateException("Failed to start server on port " + port, e);
         }
     }
 
@@ -59,7 +59,6 @@ public class ShardedKVServiceImpl implements KVService {
         if (executor != null) {
             executor.close();
         }
-        server = null;
         started = false;
     }
 
