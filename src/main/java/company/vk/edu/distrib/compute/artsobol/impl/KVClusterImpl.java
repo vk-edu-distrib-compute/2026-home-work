@@ -24,7 +24,7 @@ public class KVClusterImpl implements KVCluster {
             baseDir = Files.createTempDirectory("vk-cluster-");
             initNodeConfig(ports);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to initialize cluster directory", e);
         }
     }
 

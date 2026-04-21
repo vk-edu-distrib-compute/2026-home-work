@@ -50,7 +50,7 @@ public class KVServiceImpl implements KVService {
         try {
             server = HttpServer.create();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException("Failed to create HTTP server", e);
         }
         this.dao = dao;
         this.port = port;
