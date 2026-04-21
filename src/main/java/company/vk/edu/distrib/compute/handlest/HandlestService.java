@@ -50,7 +50,7 @@ public class HandlestService implements KVService {
                     "Port must be between " + MIN_PORT_VALUE + " and " + MAX_PORT_VALUE + ", got: " + port);
         }
 
-        String storagePath = "handlest_storage_" + port;
+        String storagePath = "./handlest_storage/handlest_cell_" + port;
         this.dao = new HandlestDao(storagePath);
 
         this.selfEndpoint = selfEndpoint;
@@ -113,15 +113,17 @@ public class HandlestService implements KVService {
                 return;
             }
 
-            switch (method) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
-                default -> exchange.sendResponseHeaders(
-                        HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
+            try {
+                switch (method) {
+                    case "GET" -> handleGet(exchange, id);
+                    case "PUT" -> handlePut(exchange, id);
+                    case "DELETE" -> handleDelete(exchange, id);
+                    default -> exchange.sendResponseHeaders(
+                            HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
+                }
+            } catch (Exception e) {
+                exchange.sendResponseHeaders(HandlestHttpStatus.INTERNAL_ERROR.getCode(), -1);
             }
-        } catch (Exception e) {
-            exchange.sendResponseHeaders(HandlestHttpStatus.INTERNAL_ERROR.getCode(), -1);
         }
     }
 

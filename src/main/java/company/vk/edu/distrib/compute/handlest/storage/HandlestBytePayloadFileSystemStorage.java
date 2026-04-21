@@ -89,7 +89,7 @@ public class HandlestBytePayloadFileSystemStorage implements HandlestStorage<byt
 
     @Override
     public void remove(String key) {
-        Path file = basePath.resolve(key);
+        Path file = resolveKey(key);
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {
