@@ -28,7 +28,7 @@ public class ReplicaManager {
     }
 
     public boolean available() {
-        return replicas.stream().anyMatch(ReplicaNode::getEnabled);
+        return replicas.stream().anyMatch(ReplicaNode::isEnabled);
     }
 
     private void checkAckValue(int ack) {
@@ -51,7 +51,7 @@ public class ReplicaManager {
 
     private List<ReplicaNode> getEnabledReplicas(String key) {
         List<ReplicaNode> enabled = replicas.stream()
-                .filter(ReplicaNode::getEnabled)
+                .filter(ReplicaNode::isEnabled)
                 .toList();
         return replicaSelector.select(key, enabled);
     }
@@ -61,12 +61,16 @@ public class ReplicaManager {
         List<ReplicaNode> enabledReplicas = getEnabledReplicas(key);
 
         List<VersionedEntry> responses = readFromReplicas(key, enabledReplicas);
-        if (responses.size() < ack) throw new InsufficientReplicasException();
+        if (responses.size() < ack) {
+            throw new InsufficientReplicasException();
+        }
 
         VersionedEntry newest = responses.stream()
                 .max(Comparator.comparingLong(VersionedEntry::getTimestamp))
                 .orElseThrow();
-        if (newest.isTombstone()) throw new NoSuchElementException();
+        if (newest.isTombstone()) {
+            throw new NoSuchElementException();
+        }
         return newest.getData();
     }
 
@@ -76,8 +80,10 @@ public class ReplicaManager {
 
         List<Boolean> responses = writeToReplicas(key, data, enabledReplicas);
         if (responses.size() < ack) {
-            log.warn("Partial write for key={}: {}/{} replicas confirmed, ack={}",
-                    key, responses.size(), enabledReplicas.size(), ack);
+            if (log.isWarnEnabled()) {
+                log.warn("Partial write for key={}: {}/{} replicas confirmed, ack={}",
+                        key, responses.size(), enabledReplicas.size(), ack);
+            }
             throw new InsufficientReplicasException();
         }
     }
@@ -88,8 +94,10 @@ public class ReplicaManager {
 
         List<Boolean> responses = deleteToReplicas(key, enabledReplicas);
         if (responses.size() < ack) {
-            log.warn("Partial delete for key={}: {}/{} replicas confirmed, ack={}",
-                    key, responses.size(), enabledReplicas.size(), ack);
+            if (log.isWarnEnabled()) {
+                log.warn("Partial delete for key={}: {}/{} replicas confirmed, ack={}",
+                        key, responses.size(), enabledReplicas.size(), ack);
+            }
             throw new InsufficientReplicasException();
         }
     }
@@ -102,7 +110,9 @@ public class ReplicaManager {
                         VersionedEntry versioned = dao.getVersioned(key);
                         return versioned != null ? versioned : VersionedEntry.absent();
                     } catch (IOException e) {
-                        log.warn("Replica {} failed GET {}: {}", r.nodeId(), key, e.getMessage());
+                        if (log.isWarnEnabled()) {
+                            log.warn("Replica {} failed GET {}: {}", r.nodeId(), key, e.getMessage());
+                        }
                         return null;
                     }
                 }, EXECUTOR))
@@ -127,7 +137,9 @@ public class ReplicaManager {
                         r.dao().upsert(key, value);
                         return true;
                     } catch (IOException e) {
-                        log.warn("Replica {} failed PUT {}: {}", r.nodeId(), key, e.getMessage());
+                        if (log.isWarnEnabled()) {
+                            log.warn("Replica {} failed PUT {}: {}", r.nodeId(), key, e.getMessage());
+                        }
                         return null;
                     }
                 }, EXECUTOR))
@@ -152,7 +164,9 @@ public class ReplicaManager {
                         r.dao().delete(key);
                         return true;
                     } catch (IOException e) {
-                        log.warn("Replica {} failed DELETE {}: {}", r.nodeId(), key, e.getMessage());
+                        if (log.isWarnEnabled()) {
+                            log.warn("Replica {} failed DELETE {}: {}", r.nodeId(), key, e.getMessage());
+                        }
                         return null;
                     }
                 }, EXECUTOR))

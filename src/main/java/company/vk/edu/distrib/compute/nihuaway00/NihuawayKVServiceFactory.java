@@ -28,8 +28,7 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
     }
 
     public NihuawayKVServiceFactory() {
-        int replicaCountProps = Config.replicas();
-        this(null, null, replicaCountProps);
+        this(null, null, Config.replicas());
     }
 
     private ShardRouter buildShardRouter(int port) {
@@ -47,7 +46,6 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
         ReplicaSelector replicaSelector = new ReplicaSelector();
         return new ReplicaManager(replicas, replicaSelector);
     }
-
 
     @Override
     protected KVService doCreate(int port) throws IOException {

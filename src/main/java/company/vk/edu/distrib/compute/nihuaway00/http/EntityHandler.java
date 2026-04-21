@@ -85,7 +85,7 @@ public class EntityHandler implements HttpHandler {
             throws IOException, NoSuchElementException, IllegalArgumentException {
         byte[] data = replicaManager.get(id, ack);
 
-        if(data == null){
+        if (data == null) {
             throw new NoSuchElementException();
         }
 

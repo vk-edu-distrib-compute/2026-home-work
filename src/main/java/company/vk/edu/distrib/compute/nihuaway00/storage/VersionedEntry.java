@@ -14,13 +14,13 @@ public class VersionedEntry {
     public VersionedEntry(byte[] data) {
         actualizeTimestamp();
         this.tombstone = false;
-        this.data = data;
+        this.data = data == null ? null : data.clone();
     }
 
     private VersionedEntry(long timestamp, boolean tombstone, byte[] data) {
         this.timestamp = timestamp;
         this.tombstone = tombstone;
-        this.data = data;
+        this.data = data == null ? null : data.clone();
     }
 
     public byte[] serialize() {
@@ -66,11 +66,11 @@ public class VersionedEntry {
     }
 
     public byte[] getData() {
-        return data;
+        return data == null ? null : data.clone();
     }
 
     public void setData(byte[] data) {
         actualizeTimestamp();
-        this.data = data;
+        this.data = data == null ? null : data.clone();
     }
 }

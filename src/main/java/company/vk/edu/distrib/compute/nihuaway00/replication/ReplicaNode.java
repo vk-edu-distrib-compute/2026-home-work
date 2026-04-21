@@ -15,7 +15,7 @@ public class ReplicaNode {
         this.nodeId = nodeId;
     }
 
-    public boolean getEnabled() {
+    public boolean isEnabled() {
         return enabled.get();
     }
 

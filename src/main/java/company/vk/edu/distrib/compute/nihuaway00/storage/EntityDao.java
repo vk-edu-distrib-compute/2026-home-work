@@ -24,7 +24,7 @@ public class EntityDao implements Dao<byte[]> {
     }
 
     public static EntityDao createReplica(int port, int index) throws IOException {
-        return EntityDao.create(Path.of("./storage/" + port + "/replica-" + index));
+        return create(Path.of("./storage/" + port + "/replica-" + index));
     }
 
     public boolean available() {
@@ -39,7 +39,7 @@ public class EntityDao implements Dao<byte[]> {
     }
 
     @Override
-        public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+    public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException();
         }
@@ -85,7 +85,7 @@ public class EntityDao implements Dao<byte[]> {
     public void delete(String key) throws IllegalArgumentException, IOException {
         VersionedEntry versionedEntry = getVersioned(key);
 
-        if(versionedEntry == null){
+        if (versionedEntry == null) {
             versionedEntry = new VersionedEntry(new byte[0]);
         }
 

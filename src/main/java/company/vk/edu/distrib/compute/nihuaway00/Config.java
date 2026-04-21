@@ -6,9 +6,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Properties;
 
-public class Config {
+public final class Config {
     private static final Logger log = LoggerFactory.getLogger(Config.class);
     private static final Properties PROPS = load();
+
+    private Config() {
+    }
 
     static String strategy() {
         return PROPS.getProperty("strategy", "consistent");
@@ -16,7 +19,9 @@ public class Config {
 
     static int replicas() {
         int n = Integer.parseInt(PROPS.getProperty("replicas", "3"));
-        if (n < 1) throw new IllegalArgumentException("replicas must be >= 1");
+        if (n < 1) {
+            throw new IllegalArgumentException("replicas must be >= 1");
+        }
         return n;
     }
 

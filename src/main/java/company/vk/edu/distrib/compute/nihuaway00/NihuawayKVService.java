@@ -20,7 +20,6 @@ public class NihuawayKVService implements company.vk.edu.distrib.compute.Replica
     private final ShardRouter shardRouter;
     int port;
 
-
     NihuawayKVService(int port, ShardRouter shardRouter, ReplicaManager replicaManager) {
         this.port = port;
         this.shardRouter = shardRouter;

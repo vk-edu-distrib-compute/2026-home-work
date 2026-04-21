@@ -17,10 +17,7 @@ public class NihuawayKVClusterFactory extends KVClusterFactory {
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
         Map<String, NodeInfo> nodes = new ConcurrentHashMap<>();
-        ports.stream()
-                .map(this::buildEndpoint)
-                .forEach(endpoint -> nodes.put(endpoint, new NodeInfo(endpoint)));
-
+        ports.stream().map(this::buildEndpoint).forEach(endpoint -> nodes.put(endpoint, new NodeInfo(endpoint)));
 
         HttpClient httpClient = HttpClient.newHttpClient();
 
