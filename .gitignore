@@ -32,10 +32,3 @@ build/
 out/
 
 .vscode/
-
-# Data directories
-.data/
-data/
-storage/
-*storage/
-*_storage/
