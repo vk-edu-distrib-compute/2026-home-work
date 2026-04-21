@@ -25,12 +25,12 @@ public class HandlestKVCluster implements KVCluster {
 
         nodeByEndpoint = new HashMap<>(ports.size());
         for (int i = 0; i < ports.size(); i++) {
-            int port = ports.get(i);
-            String endpoint = endpoints.get(i);
-            // Each node gets: its own port, its own endpoint string, and the shared router
-            HandlestService service = new HandlestService(port, endpoint, router);
-            nodeByEndpoint.put(endpoint, service);
+            registerNode(ports.get(i), endpoints.get(i), router);
         }
+    }
+
+    private void registerNode(int port, String endpoint, HandlestRendezvousRouter router) throws IOException {
+        nodeByEndpoint.put(endpoint, new HandlestService(port, endpoint, router));
     }
 
     @Override
