@@ -117,12 +117,6 @@ public abstract class BaseHttpHandler implements HttpHandler {
             log.debug("Request: {}", req);
             HttpResponse<byte[]> response = httpClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
 
-            response.headers().map().forEach((name, values) -> {
-                if (!"transfer-encoding".equalsIgnoreCase(name) && !"content-length".equalsIgnoreCase(name)) {
-                    values.forEach(value -> exchange.getResponseHeaders().add(name, value));
-                }
-            });
-
             exchange.sendResponseHeaders(response.statusCode(),
                     response.body().length == 0 ? -1 : response.body().length);
 
