@@ -8,9 +8,7 @@ import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public class TadzhnahalKVService implements KVService {
     private static final String STATUS_PATH = "/v0/status";
@@ -21,8 +19,6 @@ public class TadzhnahalKVService implements KVService {
     private final int port;
     private final Dao<byte[]> dao;
     private final String localEndpoint;
-    private final List<String> clusterEndpoints;
-    private final TadzhnahalShardingAlgorithm shardingAlgorithm;
     private final TadzhnahalShardSelector shardSelector;
     private final TadzhnahalProxyClient proxyClient;
 
@@ -68,10 +64,10 @@ public class TadzhnahalKVService implements KVService {
         this.port = port;
         this.dao = dao;
         this.localEndpoint = buildEndpoint(port);
-        this.clusterEndpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
-        this.shardingAlgorithm = shardingAlgorithm;
-        this.shardSelector = createShardSelector(this.clusterEndpoints, this.shardingAlgorithm);
         this.proxyClient = new TadzhnahalProxyClient();
+
+        List<String> endpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
+        this.shardSelector = createShardSelector(endpoints, shardingAlgorithm);
     }
 
     @Override
@@ -107,7 +103,6 @@ public class TadzhnahalKVService implements KVService {
 
         server.stop(0);
         started = false;
-        server = null;
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -138,19 +133,23 @@ public class TadzhnahalKVService implements KVService {
             List<String> clusterEndpoints,
             String localEndpoint
     ) {
-        Set<String> uniqueEndpoints = new LinkedHashSet<>(clusterEndpoints);
-        uniqueEndpoints.add(localEndpoint);
-        return new ArrayList<>(uniqueEndpoints);
+        List<String> endpoints = new ArrayList<>(clusterEndpoints);
+
+        if (!endpoints.contains(localEndpoint)) {
+            endpoints.add(localEndpoint);
+        }
+
+        return List.copyOf(endpoints);
     }
 
     private static TadzhnahalShardSelector createShardSelector(
-            List<String> clusterEndpoints,
+            List<String> endpoints,
             TadzhnahalShardingAlgorithm shardingAlgorithm
     ) {
-        if (TadzhnahalShardingAlgorithm.CONSISTENT == shardingAlgorithm) {
-            return new TadzhnahalConsistentHashing(clusterEndpoints);
+        if (shardingAlgorithm == TadzhnahalShardingAlgorithm.CONSISTENT) {
+            return new TadzhnahalConsistentHashing(endpoints);
         }
 
-        return new TadzhnahalRendezvousHashing(clusterEndpoints);
+        return new TadzhnahalRendezvousHashing(endpoints);
     }
 }
