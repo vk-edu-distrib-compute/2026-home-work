@@ -8,7 +8,9 @@ import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class TadzhnahalKVService implements KVService {
     private static final String STATUS_PATH = "/v0/status";
@@ -20,17 +22,37 @@ public class TadzhnahalKVService implements KVService {
     private final Dao<byte[]> dao;
     private final String localEndpoint;
     private final List<String> clusterEndpoints;
-    private final TadzhnahalRendezvousHashing rendezvousHashing;
+    private final TadzhnahalShardingAlgorithm shardingAlgorithm;
+    private final TadzhnahalShardSelector shardSelector;
     private final TadzhnahalProxyClient proxyClient;
 
     private HttpServer server;
     private boolean started;
 
     public TadzhnahalKVService(int port, Dao<byte[]> dao) {
-        this(port, dao, List.of(buildEndpoint(port)));
+        this(
+                port,
+                dao,
+                List.of(buildEndpoint(port)),
+                TadzhnahalShardingAlgorithm.RENDEZVOUS
+        );
     }
 
     public TadzhnahalKVService(int port, Dao<byte[]> dao, List<String> clusterEndpoints) {
+        this(
+                port,
+                dao,
+                clusterEndpoints,
+                TadzhnahalShardingAlgorithm.RENDEZVOUS
+        );
+    }
+
+    public TadzhnahalKVService(
+            int port,
+            Dao<byte[]> dao,
+            List<String> clusterEndpoints,
+            TadzhnahalShardingAlgorithm shardingAlgorithm
+    ) {
         if (dao == null) {
             throw new IllegalArgumentException("Dao must not be null");
         }
@@ -39,11 +61,16 @@ public class TadzhnahalKVService implements KVService {
             throw new IllegalArgumentException("Cluster endpoints must not be empty");
         }
 
+        if (shardingAlgorithm == null) {
+            throw new IllegalArgumentException("Sharding algorithm must not be null");
+        }
+
         this.port = port;
         this.dao = dao;
         this.localEndpoint = buildEndpoint(port);
         this.clusterEndpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
-        this.rendezvousHashing = new TadzhnahalRendezvousHashing(this.clusterEndpoints);
+        this.shardingAlgorithm = shardingAlgorithm;
+        this.shardSelector = createShardSelector(this.clusterEndpoints, this.shardingAlgorithm);
         this.proxyClient = new TadzhnahalProxyClient();
     }
 
@@ -61,7 +88,7 @@ public class TadzhnahalKVService implements KVService {
                     new TadzhnahalEntityHandler(
                             localEndpoint,
                             dao,
-                            rendezvousHashing,
+                            shardSelector,
                             proxyClient
                     )
             );
@@ -111,12 +138,19 @@ public class TadzhnahalKVService implements KVService {
             List<String> clusterEndpoints,
             String localEndpoint
     ) {
-        List<String> endpoints = new ArrayList<>(clusterEndpoints);
+        Set<String> uniqueEndpoints = new LinkedHashSet<>(clusterEndpoints);
+        uniqueEndpoints.add(localEndpoint);
+        return new ArrayList<>(uniqueEndpoints);
+    }
 
-        if (!endpoints.contains(localEndpoint)) {
-            endpoints.add(localEndpoint);
+    private static TadzhnahalShardSelector createShardSelector(
+            List<String> clusterEndpoints,
+            TadzhnahalShardingAlgorithm shardingAlgorithm
+    ) {
+        if (TadzhnahalShardingAlgorithm.CONSISTENT == shardingAlgorithm) {
+            return new TadzhnahalConsistentHashing(clusterEndpoints);
         }
 
-        return List.copyOf(endpoints);
+        return new TadzhnahalRendezvousHashing(clusterEndpoints);
     }
 }

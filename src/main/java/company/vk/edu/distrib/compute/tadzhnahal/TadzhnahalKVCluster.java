@@ -18,7 +18,18 @@ public class TadzhnahalKVCluster implements KVCluster {
     private final Map<String, KVService> startedNodes;
 
     public TadzhnahalKVCluster(List<Integer> ports) {
-        this.factory = new TadzhnahalKVServiceFactory();
+        this(ports, TadzhnahalShardingAlgorithm.RENDEZVOUS);
+    }
+
+    public TadzhnahalKVCluster(
+            List<Integer> ports,
+            TadzhnahalShardingAlgorithm shardingAlgorithm
+    ) {
+        if (ports == null || ports.isEmpty()) {
+            throw new IllegalArgumentException("Ports must not be empty");
+        }
+
+        this.factory = new TadzhnahalKVServiceFactory(shardingAlgorithm);
         this.endpoints = new ArrayList<>();
         this.portsByEndpoint = new LinkedHashMap<>();
         this.startedNodes = new LinkedHashMap<>();
@@ -57,7 +68,7 @@ public class TadzhnahalKVCluster implements KVCluster {
         }
 
         try {
-            KVService service = factory.createClusterNode(port, endpoints);
+            KVService service = factory.create(port, endpoints);
             service.start();
             startedNodes.put(endpoint, service);
         } catch (IOException e) {

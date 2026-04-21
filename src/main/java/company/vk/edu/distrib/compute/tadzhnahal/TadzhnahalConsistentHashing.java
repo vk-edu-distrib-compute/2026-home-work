@@ -2,16 +2,23 @@ package company.vk.edu.distrib.compute.tadzhnahal;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
-public class TadzhnahalRendezvousHashing implements TadzhnahalShardSelector {
+public class TadzhnahalConsistentHashing implements TadzhnahalShardSelector {
+    private static final int VIRTUAL_NODE_COUNT = 128;
+
     private final List<String> endpoints;
+    private final NavigableMap<Long, String> ring;
 
-    public TadzhnahalRendezvousHashing(List<String> endpoints) {
+    public TadzhnahalConsistentHashing(List<String> endpoints) {
         if (endpoints == null || endpoints.isEmpty()) {
             throw new IllegalArgumentException("Endpoints must not be empty");
         }
 
         this.endpoints = List.copyOf(endpoints);
+        this.ring = new TreeMap<>();
+        buildRing();
     }
 
     @Override
@@ -20,18 +27,23 @@ public class TadzhnahalRendezvousHashing implements TadzhnahalShardSelector {
             throw new IllegalArgumentException("Key must not be empty");
         }
 
-        String bestEndpoint = null;
-        long bestWeight = Long.MIN_VALUE;
+        long hash = hash(key);
+        var entry = ring.ceilingEntry(hash);
 
-        for (String endpoint : endpoints) {
-            long weight = hash(endpoint + '#' + key);
-            if (bestEndpoint == null || weight > bestWeight) {
-                bestEndpoint = endpoint;
-                bestWeight = weight;
-            }
+        if (entry != null) {
+            return entry.getValue();
         }
 
-        return bestEndpoint;
+        return ring.firstEntry().getValue();
+    }
+
+    private void buildRing() {
+        for (String endpoint : endpoints) {
+            for (int i = 0; i < VIRTUAL_NODE_COUNT; i++) {
+                long hash = hash(endpoint + "#virtual-node#" + i);
+                ring.put(hash, endpoint);
+            }
+        }
     }
 
     private long hash(String value) {
@@ -45,3 +57,4 @@ public class TadzhnahalRendezvousHashing implements TadzhnahalShardSelector {
         return result & Long.MAX_VALUE;
     }
 }
+

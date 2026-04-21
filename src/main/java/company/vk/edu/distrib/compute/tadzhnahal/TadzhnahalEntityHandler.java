@@ -19,18 +19,18 @@ public class TadzhnahalEntityHandler implements HttpHandler {
 
     private final String localEndpoint;
     private final Dao<byte[]> dao;
-    private final TadzhnahalRendezvousHashing rendezvousHashing;
+    private final TadzhnahalShardSelector shardSelector;
     private final TadzhnahalProxyClient proxyClient;
 
     public TadzhnahalEntityHandler(
             String localEndpoint,
             Dao<byte[]> dao,
-            TadzhnahalRendezvousHashing rendezvousHashing,
+            TadzhnahalShardSelector shardSelector,
             TadzhnahalProxyClient proxyClient
     ) {
         this.localEndpoint = localEndpoint;
         this.dao = dao;
-        this.rendezvousHashing = rendezvousHashing;
+        this.shardSelector = shardSelector;
         this.proxyClient = proxyClient;
     }
 
@@ -50,7 +50,7 @@ public class TadzhnahalEntityHandler implements HttpHandler {
                     return;
                 }
 
-                String targetEndpoint = rendezvousHashing.select(id);
+                String targetEndpoint = shardSelector.select(id);
 
                 if (localEndpoint.equals(targetEndpoint)) {
                     handleLocal(exchange, id);
@@ -101,30 +101,31 @@ public class TadzhnahalEntityHandler implements HttpHandler {
             String id
     ) throws IOException {
         String method = exchange.getRequestMethod();
+        TadzhnahalProxyClient.ProxyResponse response;
 
         try {
             if (METHOD_GET.equals(method)) {
-                TadzhnahalProxyClient.ProxyResponse response = proxyClient.get(targetEndpoint, id);
+                response = proxyClient.get(targetEndpoint, id);
                 sendResponse(exchange, response.statusCode(), response.body());
                 return;
             }
 
             if (METHOD_PUT.equals(method)) {
                 byte[] value = exchange.getRequestBody().readAllBytes();
-                TadzhnahalProxyClient.ProxyResponse response = proxyClient.put(targetEndpoint, id, value);
+                response = proxyClient.put(targetEndpoint, id, value);
                 sendResponse(exchange, response.statusCode(), response.body());
                 return;
             }
 
             if (METHOD_DELETE.equals(method)) {
-                TadzhnahalProxyClient.ProxyResponse response = proxyClient.delete(targetEndpoint, id);
+                response = proxyClient.delete(targetEndpoint, id);
                 sendResponse(exchange, response.statusCode(), response.body());
                 return;
             }
 
             sendResponse(exchange, 405, new byte[0]);
         } catch (IOException e) {
-            sendResponse(exchange, 503, new byte[0]);
+            sendResponse(exchange, 504, new byte[0]);
         }
     }
 

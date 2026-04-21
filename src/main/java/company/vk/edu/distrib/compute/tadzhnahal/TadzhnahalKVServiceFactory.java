@@ -1,6 +1,5 @@
 package company.vk.edu.distrib.compute.tadzhnahal;
 
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.KVServiceFactory;
 
@@ -9,37 +8,58 @@ import java.nio.file.Path;
 import java.util.List;
 
 public class TadzhnahalKVServiceFactory extends KVServiceFactory {
-    private static final String LOCALHOST = "http://localhost:";
+    private final TadzhnahalShardingAlgorithm shardingAlgorithm;
+
+    public TadzhnahalKVServiceFactory() {
+        super();
+        this.shardingAlgorithm = TadzhnahalShardingAlgorithm.RENDEZVOUS;
+    }
+
+    public TadzhnahalKVServiceFactory(TadzhnahalShardingAlgorithm shardingAlgorithm) {
+        super();
+
+        if (shardingAlgorithm == null) {
+            throw new IllegalArgumentException("Sharding algorithm must not be null");
+        }
+
+        this.shardingAlgorithm = shardingAlgorithm;
+    }
 
     @Override
     protected KVService doCreate(int port) throws IOException {
+        FileDao dao = new FileDao(storageDir(port));
         return new TadzhnahalKVService(
                 port,
-                createDao(port),
-                List.of(endpoint(port))
+                dao,
+                List.of(endpoint(port)),
+                shardingAlgorithm
         );
     }
 
-    public KVService createClusterNode(int port, List<String> clusterEndpoints) throws IOException {
+    public KVService create(int port, List<String> clusterEndpoints) throws IOException {
+        if (clusterEndpoints == null || clusterEndpoints.isEmpty()) {
+            throw new IllegalArgumentException("Cluster endpoints must not be empty");
+        }
+
+        FileDao dao = new FileDao(storageDir(port));
         return new TadzhnahalKVService(
                 port,
-                createDao(port),
-                clusterEndpoints
+                dao,
+                clusterEndpoints,
+                shardingAlgorithm
         );
     }
 
-    private Dao<byte[]> createDao(int port) throws IOException {
-        Path rootDir = Path.of(
+    private static Path storageDir(int port) {
+        return Path.of(
                 System.getProperty("user.home"),
                 ".vk-distributed-computing",
                 "tadzhnahal",
                 "port-" + port
         );
-
-        return new FileDao(rootDir);
     }
 
-    private String endpoint(int port) {
-        return LOCALHOST + port;
+    private static String endpoint(int port) {
+        return "http://localhost:" + port;
     }
 }
