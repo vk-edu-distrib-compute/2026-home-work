@@ -14,19 +14,19 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class KvByteService implements KVService {
+public abstract class AbstractKvByteService implements KVService {
 
-    private static final Logger log = LoggerFactory.getLogger(KvByteService.class);
+    private static final Logger log = LoggerFactory.getLogger(AbstractKvByteService.class);
     private static final int DELAY_TO_STOP_SECONDS = 2;
 
-    private final HttpServer httpServer;
-    private final Dao<byte[]> dao;
+    private HttpServer httpServer;
+    protected final Dao<byte[]> dao;
+    protected final int port;
     private boolean isStarted;
-
     private final Lock lock = new ReentrantLock();
 
-    public KvByteService(int port, Dao<byte[]> dao) throws IOException {
-        this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
+    protected AbstractKvByteService(int port, Dao<byte[]> dao) {
+        this.port = port;
         this.dao = dao;
     }
 
@@ -38,17 +38,19 @@ public class KvByteService implements KVService {
                 log.error("Server already started");
                 return;
             }
+            httpServer = HttpServer.create(new InetSocketAddress(port), 0);
             registerHandlers();
             httpServer.start();
             isStarted = true;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to start server", e);
         } finally {
             lock.unlock();
         }
 
         if (log.isInfoEnabled()) {
-            log.info("Server started on port {}", httpServer.getAddress().getPort());
+            log.info("Server started on port {}", port);
         }
-
     }
 
     @Override
@@ -79,8 +81,9 @@ public class KvByteService implements KVService {
         http.sendResponseHeaders(status, -1);
     }
 
-    private void handleEntity(HttpExchange http) throws IOException {
-        String id = parseId(http.getRequestURI().getQuery());
+    protected abstract void handleEntity(HttpExchange http) throws IOException;
+
+    protected void handleEntityLocally(HttpExchange http, String id) throws IOException {
         switch (http.getRequestMethod()) {
             case "GET" -> {
                 byte[] data = dao.get(id);
@@ -99,7 +102,7 @@ public class KvByteService implements KVService {
         }
     }
 
-    private void sendBody(HttpExchange http, byte[] data) throws IOException {
+    protected void sendBody(HttpExchange http, byte[] data) throws IOException {
         try (var os = http.getResponseBody()) {
             os.write(data);
         }
@@ -129,7 +132,7 @@ public class KvByteService implements KVService {
         }
     }
 
-    private String parseId(String query) {
+    protected String parseId(String query) {
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("Query is empty. Expected 'id='");
         }
