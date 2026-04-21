@@ -18,27 +18,32 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static company.vk.edu.distrib.compute.shuuuurik.util.HttpUtils.parseQueryParams;
 
 /**
- * HTTP-сервер с кластером файловых узлов и репликацией без ведущих узлов (запись и чтение по кворуму).
+ * HTTP-сервер с кластером файловых узлов, репликацией без ведущих узлов (запись и чтение по кворуму)
+ * и параллельным I/O.
+ *
+ * <p>Отличие от {@link KVServiceReplicaImpl}: все N операций с репликами запускаются
+ * одновременно через {@link ExecutorCompletionService}, а не последовательно.
+ * При достижении ack подтверждений результат возвращается клиенту немедленно,
+ * не дожидаясь завершения оставшихся задач.
  *
  * <p>Архитектура:
  * <ul>
- *   <li>Кластер содержит {@code totalNodes} узлов ({@link ReplicaNode}), каждый в своей директории</li>
+ *   <li>Кластер содержит {@code totalNodes} узлов ({@link ReplicaNode})</li>
  *   <li>Фактор репликации N: каждый ключ хранится на N узлах из totalNodes</li>
- *   <li>Множество из N узлов для ключа определяется детерминированно через
- *       {@link ReplicaRouter} (Rendezvous Hashing)</li>
- *   <li>Каждая запись содержит timestamp для разрешения конфликтов</li>
- *   <li>DELETE записывает tombstone - маркер удаления с timestamp</li>
- *   <li>Early exit: обход N реплик прекращается при достижении ack подтверждений</li>
+ *   <li>Параллельный I/O: все N операций запускаются одновременно через {@link ExecutorCompletionService}</li>
  * </ul>
  */
-public class KVServiceReplicaImpl implements ReplicatedService {
+@SuppressWarnings("PMD.GodClass")
+public class KVServiceReplicaParallelImpl implements ReplicatedService {
 
-    private static final Logger log = LoggerFactory.getLogger(KVServiceReplicaImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(KVServiceReplicaParallelImpl.class);
 
     private static final String METHOD_GET = "GET";
     private static final String METHOD_PUT = "PUT";
@@ -46,15 +51,13 @@ public class KVServiceReplicaImpl implements ReplicatedService {
 
     private static final String PATH_STATUS = "/v0/status";
     private static final String PATH_ENTITY = "/v0/entity";
+    private static final String PATH_STATS_REPLICA = "/stats/replica/";
 
     /**
      * HTTP-статус при недостаточном количестве подтверждений реплик.
      */
     private static final int STATUS_INSUFFICIENT_REPLICAS = 500;
 
-    /**
-     * Дефолтный ack = 1 обеспечивает обратную совместимость.
-     */
     private static final int DEFAULT_ACK = 1;
 
     private final int serverPort;
@@ -70,23 +73,31 @@ public class KVServiceReplicaImpl implements ReplicatedService {
      */
     private final ReplicaRouter router;
 
-    /**
-     * Фактор репликации N - для валидации ack.
-     */
     private final int replicationFactor;
+
+    /**
+     * Пул потоков для параллельных I/O операций с репликами.
+     * Размер пула = количество узлов, чтобы все N операций шли параллельно.
+     */
+    private final ReplicaParallelExecutor parallelExecutor;
+
+    /**
+     * Обработчик эндпоинтов статистики реплик.
+     */
+    private final ReplicaStatsHandler statsHandler;
 
     private final AtomicBoolean started = new AtomicBoolean(false);
     private HttpServer server;
 
     /**
-     * Создаёт HTTP-сервер с поддержкой репликации.
+     * Создаёт HTTP-сервер с поддержкой репликации и параллельным I/O.
      *
-     * @param serverPort   порт HTTP-сервера
-     * @param nodes  все узлы кластера (totalNodes штук, например 10)
-     * @param router алгоритм выбора N реплик для ключа
+     * @param serverPort порт HTTP-сервера
+     * @param nodes      все узлы кластера
+     * @param router     алгоритм выбора N реплик для ключа
      * @throws IllegalArgumentException если null/пуст или replicationFactor > nodes.length
      */
-    public KVServiceReplicaImpl(int serverPort, ReplicaNode[] nodes, ReplicaRouter router) {
+    public KVServiceReplicaParallelImpl(int serverPort, ReplicaNode[] nodes, ReplicaRouter router) {
         if (nodes == null || nodes.length == 0) {
             throw new IllegalArgumentException("nodes must not be null or empty");
         }
@@ -100,6 +111,8 @@ public class KVServiceReplicaImpl implements ReplicatedService {
         this.totalNodes = nodes.length;
         this.router = router;
         this.replicationFactor = router.getReplicationFactor();
+        this.parallelExecutor = new ReplicaParallelExecutor();
+        this.statsHandler = new ReplicaStatsHandler(this.nodes, this.totalNodes);
     }
 
     @Override
@@ -153,6 +166,7 @@ public class KVServiceReplicaImpl implements ReplicatedService {
             HttpServer newServer = HttpServer.create();
             newServer.createContext(PATH_STATUS, this::handleStatus);
             newServer.createContext(PATH_ENTITY, this::handleEntity);
+            newServer.createContext(PATH_STATS_REPLICA, statsHandler::handle);
             newServer.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), serverPort), 0);
             newServer.start();
             this.server = newServer;
@@ -170,6 +184,7 @@ public class KVServiceReplicaImpl implements ReplicatedService {
             throw new IllegalStateException("Service is not started");
         }
         server.stop(0);
+        parallelExecutor.shutdown();
         log.info("Stopped replica service on port {}", serverPort);
     }
 
@@ -227,8 +242,11 @@ public class KVServiceReplicaImpl implements ReplicatedService {
     }
 
     /**
-     * Читает с N реплик в детерминированном порядке, выбирает запись с максимальным timestamp.
+     * Параллельно читает с N реплик в детерминированном порядке, выбирает запись с максимальным timestamp.
      * Tombstone с максимальным timestamp -> 404 (данные удалены). Останавливается при ack ответах (early exit).
+     *
+     * <p>Параллелизм: все N задач запускаются одновременно через {@link ExecutorCompletionService}.
+     * Как только собрано ack успешных ответов - отправляем результат клиенту, не дожидаясь оставшихся задач.
      *
      * <p>Подтверждение чтения = {@code nodes[idx].read(id)} завершился без {@link IOException}.
      *
@@ -243,28 +261,11 @@ public class KVServiceReplicaImpl implements ReplicatedService {
             int ack,
             List<Integer> replicaIndices
     ) throws IOException {
-        List<VersionedEntry> responses = new ArrayList<>();
-        int acksCollected = 0;
+        List<Callable<Optional<VersionedEntry>>> tasks = buildReadTasks(id, replicaIndices);
+        List<VersionedEntry> responses = parallelExecutor.collectSuccesses(tasks, ack, id, "GET");
 
-        for (int idx : replicaIndices) {
-            if (acksCollected >= ack) {
-                break;
-            }
-
-            try {
-                Optional<VersionedEntry> entry = nodes[idx].read(id);
-                entry.ifPresent(responses::add);
-                acksCollected++;
-                if (log.isDebugEnabled()) {
-                    log.debug("GET key={}: node-{} responded (found={})", id, idx, entry.isPresent());
-                }
-            } catch (IOException e) {
-                log.warn("GET key={}: node-{} unavailable", id, idx, e);
-            }
-        }
-
-        if (acksCollected < ack) {
-            log.warn("GET key={}: only {}/{} acks", id, acksCollected, ack);
+        if (responses == null) {
+            // Недостаточно подтверждений
             exchange.sendResponseHeaders(STATUS_INSUFFICIENT_REPLICAS, -1);
             return;
         }
@@ -293,8 +294,30 @@ public class KVServiceReplicaImpl implements ReplicatedService {
     }
 
     /**
-     * Записывает VersionedEntry с текущим timestamp на N реплик в детерминированном порядке.
-     * Останавливается при ack подтверждениях.
+     * Строит список задач чтения для каждой реплики.
+     *
+     * @param id             ключ
+     * @param replicaIndices индексы реплик
+     * @return список задач
+     */
+    private List<Callable<Optional<VersionedEntry>>> buildReadTasks(String id, List<Integer> replicaIndices) {
+        List<Callable<Optional<VersionedEntry>>> tasks = new ArrayList<>();
+        for (int idx : replicaIndices) {
+            final int nodeIdx = idx;
+            tasks.add(() -> {
+                Optional<VersionedEntry> result = nodes[nodeIdx].read(id);
+                if (log.isDebugEnabled()) {
+                    log.debug("GET key={}: node-{} responded (found={})", id, nodeIdx, result.isPresent());
+                }
+                return result;
+            });
+        }
+        return tasks;
+    }
+
+    /**
+     * Параллельно записывает VersionedEntry с текущим timestamp на N реплик в детерминированном порядке.
+     * Ждёт ack подтверждений.
      * Подтверждение записи = {@code nodes[idx].write()} завершился без {@link IOException}.
      *
      * @param exchange       HTTP-обмен
@@ -311,32 +334,15 @@ public class KVServiceReplicaImpl implements ReplicatedService {
         byte[] body = exchange.getRequestBody().readAllBytes();
         VersionedEntry entry = new VersionedEntry(body, System.currentTimeMillis());
 
-        int successCount = 0;
-        for (int idx : replicaIndices) {
-            if (successCount >= ack) {
-                break;
-            }
+        List<Callable<Optional<VersionedEntry>>> tasks = buildWriteTasks(id, entry, replicaIndices, "PUT");
+        List<VersionedEntry> successes = parallelExecutor.collectSuccesses(tasks, ack, id, "PUT");
 
-            try {
-                nodes[idx].write(id, entry);
-                successCount++;
-                log.debug("PUT key={}: node-{} confirmed", id, idx);
-            } catch (IOException e) {
-                log.warn("PUT key={}: node-{} write failed", id, idx, e);
-            }
-        }
-
-        if (successCount >= ack) {
-            exchange.sendResponseHeaders(201, -1);
-        } else {
-            log.warn("PUT key={}: only {}/{} acks (need {})", id, successCount, replicationFactor, ack);
-            exchange.sendResponseHeaders(STATUS_INSUFFICIENT_REPLICAS, -1);
-        }
+        exchange.sendResponseHeaders(successes != null ? 201 : STATUS_INSUFFICIENT_REPLICAS, -1);
     }
 
     /**
-     * Записывает tombstone с текущим timestamp на N реплик в детерминированном порядке.
-     * Останавливается при ack подтверждениях.
+     * Параллельно записывает tombstone с текущим timestamp на N реплик в детерминированном порядке.
+     * Ждёт ack подтверждений.
      * Подтверждение удаления = {@code nodes[idx].write(id, tombstone)} завершился без {@link IOException}.
      *
      * @param exchange       HTTP-обмен
@@ -352,26 +358,37 @@ public class KVServiceReplicaImpl implements ReplicatedService {
     ) throws IOException {
         VersionedEntry tombstone = new VersionedEntry(System.currentTimeMillis());
 
-        int successCount = 0;
-        for (int idx : replicaIndices) {
-            if (successCount >= ack) {
-                break;
-            }
-            try {
-                nodes[idx].write(id, tombstone);
-                successCount++;
-                log.debug("DELETE key={}: node-{} confirmed (tombstone written)", id, idx);
-            } catch (IOException e) {
-                log.warn("DELETE key={}: node-{} failed", id, idx, e);
-            }
-        }
+        List<Callable<Optional<VersionedEntry>>> tasks = buildWriteTasks(id, tombstone, replicaIndices, "DELETE");
+        List<VersionedEntry> successes = parallelExecutor.collectSuccesses(tasks, ack, id, "DELETE");
 
-        if (successCount >= ack) {
-            exchange.sendResponseHeaders(202, -1);
-        } else {
-            log.warn("DELETE key={}: only {}/{} acks (need {})", id, successCount, replicationFactor, ack);
-            exchange.sendResponseHeaders(STATUS_INSUFFICIENT_REPLICAS, -1);
+        exchange.sendResponseHeaders(successes != null ? 202 : STATUS_INSUFFICIENT_REPLICAS, -1);
+    }
+
+    /**
+     * Строит список задач записи (PUT или tombstone) для каждой реплики.
+     *
+     * @param id             ключ
+     * @param entry          запись или tombstone
+     * @param replicaIndices индексы реплик
+     * @param operation      название операции для логирования
+     * @return список задач
+     */
+    private List<Callable<Optional<VersionedEntry>>> buildWriteTasks(
+            String id,
+            VersionedEntry entry,
+            List<Integer> replicaIndices,
+            String operation
+    ) {
+        List<Callable<Optional<VersionedEntry>>> tasks = new ArrayList<>();
+        for (int idx : replicaIndices) {
+            final int nodeIdx = idx;
+            tasks.add(() -> {
+                nodes[nodeIdx].write(id, entry);
+                log.debug("{} key={}: node-{} confirmed", operation, id, nodeIdx);
+                return Optional.empty();
+            });
         }
+        return tasks;
     }
 
     /**

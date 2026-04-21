@@ -15,9 +15,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Файловый узел кластера с поддержкой версионированных записей и управляемого отключения.
+ * Файловый узел кластера с поддержкой версионированных записей, управляемого отключения
+ * и сбора статистики операций.
  *
  * <p>Хранит {@link VersionedEntry} на диске: каждый ключ = один файл в {@code rootDir}.
  * Поддерживает флаг {@code enabled} - при отключении все операции бросают {@link IOException},
@@ -31,6 +33,16 @@ public class ReplicaNode {
     private final Path rootDir;
 
     private final AtomicBoolean enabled = new AtomicBoolean(true);
+
+    /**
+     * Счётчик операций чтения (успешных + 404, то есть любых без IOException).
+     */
+    private final AtomicLong readCount = new AtomicLong(0);
+
+    /**
+     * Счётчик операций записи (upsert + tombstone, то есть любых без IOException).
+     */
+    private final AtomicLong writeCount = new AtomicLong(0);
 
     /**
      * Создаёт узел кластера.
@@ -67,6 +79,7 @@ public class ReplicaNode {
 
     /**
      * Читает версионированную запись по ключу.
+     * При успехе (в том числе "ключ не найден") инкрементирует счётчик readCount.
      *
      * @param key ключ
      * @return Optional с записью, пустой если ключ не найден
@@ -80,7 +93,9 @@ public class ReplicaNode {
         }
         try (ObjectInputStream ois = new ObjectInputStream(
                 new BufferedInputStream(Files.newInputStream(path)))) {
-            return Optional.of((VersionedEntry) ois.readObject());
+            VersionedEntry entry = (VersionedEntry) ois.readObject();
+            readCount.incrementAndGet();
+            return Optional.of(entry);
         } catch (ClassNotFoundException e) {
             throw new IOException("Corrupted data for key: " + key, e);
         }
@@ -88,6 +103,7 @@ public class ReplicaNode {
 
     /**
      * Записывает версионированную запись по ключу (атомарно через tmp-файл).
+     * При успехе инкрементирует счётчик writeCount.
      *
      * @param key   ключ
      * @param entry запись для сохранения
@@ -106,6 +122,39 @@ public class ReplicaNode {
         Files.move(temp, target,
                 StandardCopyOption.REPLACE_EXISTING,
                 StandardCopyOption.ATOMIC_MOVE);
+        writeCount.incrementAndGet();
+    }
+
+    /**
+     * Подсчитывает количество ключей, хранящихся в данном узле.
+     * Считает файлы в директории, исключая временные (.tmp) и tombstone.
+     *
+     * @return количество ключей (файлов) в директории узла
+     * @throws IOException при ошибке обхода директории
+     */
+    long countKeys() throws IOException {
+        if (!Files.exists(rootDir)) {
+            return 0;
+        }
+        try (var stream = Files.list(rootDir)) {
+            return stream
+                    .filter(p -> !p.getFileName().toString().endsWith(".tmp"))
+                    .count();
+        }
+    }
+
+    /**
+     * Количество успешных операций чтения с момента старта.
+     */
+    long getReadCount() {
+        return readCount.get();
+    }
+
+    /**
+     * Количество успешных операций записи с момента старта.
+     */
+    long getWriteCount() {
+        return writeCount.get();
     }
 
     /**

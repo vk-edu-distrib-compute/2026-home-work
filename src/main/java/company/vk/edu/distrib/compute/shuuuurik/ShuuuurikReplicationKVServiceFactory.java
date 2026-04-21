@@ -59,7 +59,7 @@ public class ShuuuurikReplicationKVServiceFactory extends KVServiceFactory {
         ReplicaNode[] nodes = createNodes(nodeCount, baseDir);
         ReplicaRouter router = new ReplicaRouter(n);
 
-        return new KVServiceReplicaImpl(port, nodes, router);
+        return new KVServiceReplicaParallelImpl(port, nodes, router);
     }
 
     /**
