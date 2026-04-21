@@ -15,6 +15,9 @@ public final class ServerUtils {
     private static final Logger LOG = LoggerFactory.getLogger(ServerUtils.class);
     private static final int DEFAULT_PORT = 8000;
     private static final String DEFAULT_STORAGE_DIR = "./data";
+    private static final String CLUSTER_FLAG = "--cluster";
+    private static final String ALGORITHM_RENDEZVOUS = "rendezvous";
+
     static final String METHOD_GET = "GET";
     static final String METHOD_PUT = "PUT";
     static final String METHOD_DELETE = "DELETE";
@@ -22,16 +25,18 @@ public final class ServerUtils {
     private ServerUtils() {
     }
 
-    public static void main(String... args) { // varargs уже используется
+    public static void main(String... args) {
         try {
-            if (args.length > 0 && "--cluster".equals(args[0])) {
+            if (args.length > 0 && CLUSTER_FLAG.equals(args[0])) {
                 runClusterMode(args);
             } else {
                 runSingleNodeMode(args);
             }
         } catch (Exception e) {
-            LOG.error("Fatal error", e);
-            System.exit(1);
+            if (LOG.isErrorEnabled()) {
+                LOG.error("Fatal error", e);
+            }
+            Runtime.getRuntime().halt(1);
         }
     }
 
@@ -56,8 +61,10 @@ public final class ServerUtils {
 
     private static void runClusterMode(String... args) {
         if (args.length < 3) {
-            LOG.error("Usage: --cluster <algorithm> <port1,port2,...>");
-            System.exit(1);
+            if (LOG.isErrorEnabled()) {
+                LOG.error("Usage: --cluster <algorithm> <port1,port2,...>");
+            }
+            Runtime.getRuntime().halt(1);
         }
         String algorithmArg = args[1];
         String portsArg = args[2];
@@ -66,7 +73,7 @@ public final class ServerUtils {
                 .collect(Collectors.toList());
 
         KVClusterImpl.Algorithm algorithm;
-        if ("rendezvous".equalsIgnoreCase(algorithmArg)) {
+        if (ALGORITHM_RENDEZVOUS.equalsIgnoreCase(algorithmArg)) {
             algorithm = KVClusterImpl.Algorithm.RENDEZVOUS_HASHING;
         } else {
             algorithm = KVClusterImpl.Algorithm.CONSISTENT_HASHING;
@@ -81,7 +88,9 @@ public final class ServerUtils {
         try {
             System.in.read();
         } catch (IOException e) {
-            LOG.error("IO error reading input", e);
+            if (LOG.isErrorEnabled()) {
+                LOG.error("IO error reading input", e);
+            }
         }
         cluster.stop();
         if (LOG.isInfoEnabled()) {

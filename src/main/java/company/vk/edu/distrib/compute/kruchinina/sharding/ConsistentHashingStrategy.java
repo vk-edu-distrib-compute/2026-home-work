@@ -58,7 +58,8 @@ public class ConsistentHashingStrategy implements ShardingStrategy {
             }
             return h;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("MD5 algorithm not available", e);
+            throw new IllegalStateException("MD5 algorithm not available", e);
         }
     }
 }
+

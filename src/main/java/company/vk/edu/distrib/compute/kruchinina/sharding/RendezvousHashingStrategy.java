@@ -33,7 +33,7 @@ public class RendezvousHashingStrategy implements ShardingStrategy {
             }
             return h;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-1 algorithm not available", e);
+            throw new IllegalStateException("SHA-1 algorithm not available", e);
         }
     }
 }

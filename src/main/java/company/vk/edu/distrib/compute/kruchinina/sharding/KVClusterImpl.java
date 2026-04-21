@@ -17,10 +17,12 @@ import java.util.stream.Collectors;
 
 public class KVClusterImpl implements KVCluster {
     private static final Logger LOG = LoggerFactory.getLogger(KVClusterImpl.class);
+    private static final String ENDPOINT_SEPARATOR = ":";
 
     public enum Algorithm {
         CONSISTENT_HASHING,
         RENDEZVOUS_HASHING
+
     }
 
     private final List<Integer> ports;
@@ -79,7 +81,7 @@ public class KVClusterImpl implements KVCluster {
             service.start();
             services.put(selfAddress, service);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start node on port " + port, e);
+            throw new IllegalStateException("Failed to start node on port " + port, e);
         }
     }
 
@@ -123,7 +125,7 @@ public class KVClusterImpl implements KVCluster {
     }
 
     private int extractPort(String endpoint) {
-        String[] parts = endpoint.split(":");
+        String[] parts = endpoint.split(ENDPOINT_SEPARATOR);
         if (parts.length != 2) {
             throw new IllegalArgumentException("Invalid endpoint format: " + endpoint);
         }
