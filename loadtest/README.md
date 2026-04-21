@@ -54,3 +54,30 @@ docker run --rm --platform linux/arm64 \
 Upload the `Detailed Percentile spectrum` sections from `put.out` and `get.out` to
 <https://hdrhistogram.github.io/HdrHistogram/plotFiles.html>, export PUT and GET images, and attach both images to
 the pull request.
+
+## Sharding bonus
+
+Run the cluster first:
+
+```bash
+./gradlew run --args="cluster"
+```
+
+Run the cluster load test with the required parameters:
+
+```bash
+wrk -t2 -c100 -R200 -d30s --latency -s loadtest/request.lua http://localhost:8080 > loadtest/cluster.out
+```
+
+To compare with the monolith, stop the cluster, start the single-node service and run the same script:
+
+```bash
+./gradlew run
+wrk -t2 -c100 -R200 -d30s --latency -s loadtest/request.lua http://localhost:8080 > loadtest/monolith.out
+```
+
+The distribution algorithm defaults to rendezvous hashing. To run the cluster with the bonus consistent-hash mode:
+
+```bash
+./gradlew run -Dce_fello.distribution=consistent --args="cluster"
+```
