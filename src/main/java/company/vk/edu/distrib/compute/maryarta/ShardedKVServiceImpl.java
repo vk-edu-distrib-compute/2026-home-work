@@ -12,25 +12,22 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 public class ShardedKVServiceImpl implements KVService {
     private HttpServer server;
+    private final HttpClient client = HttpClient.newHttpClient();
     private final Dao<byte[]> dao;
     private final String selfEndpoint;
-    private final List<String> endpoints;
-    private boolean started;
     private final int port;
-    private final HttpClient client = HttpClient.newHttpClient();
+    private boolean started;
+    private final ShardingStrategy shardingStrategy;
 
-    public ShardedKVServiceImpl(int port, List<String> endpoints) throws IOException {
+    public ShardedKVServiceImpl(int port, ShardingStrategy shardingStrategy) throws IOException {
         this.port = port;
         this.dao = new H2Dao("node-" + port);
         this.selfEndpoint = "http://localhost:" + port;
-        this.endpoints = List.copyOf(endpoints);
+        this.shardingStrategy = shardingStrategy;
     }
 
     @Override
@@ -68,27 +65,21 @@ public class ShardedKVServiceImpl implements KVService {
             }
             exchange.close();
         });
-        System.out.println(this.port + "adas");
         server.createContext("/v0/entity", handleRequest());
     }
 
-    private HttpHandler handleRequest(){
+    private HttpHandler handleRequest() {
         return exchange -> {
             try {
-                boolean internal = exchange.getRequestHeaders().containsKey("internal-request");
                 String method = exchange.getRequestMethod();
                 String query = exchange.getRequestURI().getQuery();
-                String target = resolve(parseId(query));
-                if (!internal && !target.equals(selfEndpoint)) {
-                    System.out.println("other target: " + selfEndpoint);
+                String target = shardingStrategy.getEndpoint(parseId(query));
+                if (!target.equals(selfEndpoint)) {
                     proxyRequest(exchange, target);
                     return;
-                }else {
-                    System.out.println("self target: " + target);
                 }
                 switch (method) {
                     case "GET" -> {
-//                        System.out.println("get " + target);
                         byte[] value = dao.get(parseId(query));
                         exchange.sendResponseHeaders(200, value.length); // OK
                         exchange.getResponseBody().write(value);
@@ -108,44 +99,43 @@ public class ShardedKVServiceImpl implements KVService {
                 exchange.sendResponseHeaders(400, 0);
             } catch (NoSuchElementException e) {
                 exchange.sendResponseHeaders(404, 0);
-            }
-            finally {
+            } finally {
                 exchange.close();
             }
         };
     }
 
-    private void proxyRequest(HttpExchange http, String target) throws IOException {
+    private void proxyRequest(HttpExchange exchange, String target) throws IOException {
         try {
-            URI uri = URI.create(target + http.getRequestURI());
-            HttpRequest.Builder request = HttpRequest.newBuilder(uri)
-                    .header("internal-request", "true");
-            switch (http.getRequestMethod()) {
+            URI uri = URI.create(target + exchange.getRequestURI());
+            HttpRequest.Builder request = HttpRequest.newBuilder(uri);
+            switch (exchange.getRequestMethod()) {
                 case "GET" -> request.GET();
-                case "PUT" -> request.PUT(HttpRequest.BodyPublishers.ofByteArray(http.getRequestBody().readAllBytes()));
+                case "PUT" ->
+                        request.PUT(HttpRequest.BodyPublishers
+                    .ofByteArray(exchange.getRequestBody().readAllBytes()));
                 case "DELETE" -> request.DELETE();
                 default -> {
-                    http.sendResponseHeaders(405, 0);
+                        exchange.sendResponseHeaders(405, 0);
                     return;
                 }
             }
-
             HttpResponse<byte[]> response = client.send(request.build(),
                     HttpResponse.BodyHandlers.ofByteArray());
             byte[] responseBody = response.body();
             if (responseBody == null) {
                 responseBody = new byte[0];
             }
-            http.sendResponseHeaders(response.statusCode(), responseBody.length);
-            http.getResponseBody().write(responseBody);
+                exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
+                exchange.getResponseBody().write(responseBody);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            http.sendResponseHeaders(500, -1);
+            exchange.sendResponseHeaders(500, -1);
         }catch (IOException e) {
-            http.sendResponseHeaders(503, -1);
+            exchange.sendResponseHeaders(503, -1);
         }
         finally {
-            http.close();
+            exchange.close();
         }
     }
 
@@ -154,33 +144,6 @@ public class ShardedKVServiceImpl implements KVService {
             return query.substring(3);
         } else {
             throw new IllegalArgumentException("Bad query");
-        }
-    }
-
-    private String resolve(String key) {
-        long max = Long.MIN_VALUE;
-        String target = "";
-        for(String endpoint: endpoints){
-            long score = score(key, endpoint);
-            if(score > max){
-                max = score;
-                target = endpoint;
-            }
-        }
-        return target;
-    }
-
-    private long score (String key, String endpoint) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest((key + endpoint).getBytes());
-            long value = 0;
-            for (int i = 0; i < 8; i++) {
-                value = (value << 8) | (digest[i] & 0xffL);
-            }
-            return value;
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm is not available", e);
         }
     }
 }

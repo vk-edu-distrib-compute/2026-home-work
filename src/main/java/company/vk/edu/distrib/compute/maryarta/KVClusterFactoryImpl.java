@@ -8,6 +8,6 @@ import java.util.List;
 public class KVClusterFactoryImpl extends KVClusterFactory {
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
-        return new KVClusterImpl(ports);
+        return new KVClusterImpl(ports, ShardingStrategy.ShardingAlgorithm.CONSISTENT);
     }
 }
