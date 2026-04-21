@@ -50,7 +50,7 @@ public class MarigussKVService implements KVService {
             server.start();
             isRunning = true;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start server on port " + port, e);
+            throw new IllegalStateException("Failed to start server on port " + port, e);
         }
     }
 

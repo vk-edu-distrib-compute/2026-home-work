@@ -26,7 +26,7 @@ public class MarigussKVCluster implements KVCluster {
                 service.setClusterEndpoints(this.endpoints);
                 this.services.put("http://localhost:" + port, service);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to create service", e);
+                throw new IllegalStateException("Failed to create service", e);
             }
         }
     }
