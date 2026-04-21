@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import company.vk.edu.distrib.compute.goshanchic.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.aldor7705.KVServiceFactorySimple;
 import company.vk.edu.distrib.compute.andeco.AndecoKVServiceFactory;
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
@@ -47,6 +48,7 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         LuckySlon2003KVServiceFactory.class,
         Wolfram158KVServiceFactoryFileWithCacheImpl.class,
         CakeKVServiceFactory.class
+        goshanchic.KVServiceFactoryImpl.class
     );
 
     @Override
