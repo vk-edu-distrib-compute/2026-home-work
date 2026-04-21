@@ -2,8 +2,10 @@ package company.vk.edu.distrib.compute.usl;
 
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.usl.sharding.ShardingStrategy;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
 
 public class UslKVService implements KVService {
     private final UslNodeServer node;
@@ -14,6 +16,10 @@ public class UslKVService implements KVService {
 
     UslKVService(int port, Dao<byte[]> dao) {
         this.node = new UslNodeServer(port, dao);
+    }
+
+    UslKVService(int port, Dao<byte[]> dao, ShardingStrategy shardingStrategy, HttpClient httpClient) {
+        this.node = new UslNodeServer(port, dao, shardingStrategy, httpClient);
     }
 
     @Override

@@ -3,12 +3,14 @@ package company.vk.edu.distrib.compute.usl;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.usl.sharding.ShardingStrategy;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 final class EntityHttpHandler implements HttpHandler {
     private static final String ENTITY_PATH = "/v0/entity";
@@ -20,9 +22,24 @@ final class EntityHttpHandler implements HttpHandler {
     private static final byte[] EMPTY_BODY = new byte[0];
 
     private final Dao<byte[]> dao;
+    private final String localEndpoint;
+    private final ShardingStrategy shardingStrategy;
+    private final ClusterRequestProxy requestProxy;
 
     EntityHttpHandler(Dao<byte[]> dao) {
-        this.dao = dao;
+        this(dao, null, null, null);
+    }
+
+    EntityHttpHandler(
+        Dao<byte[]> dao,
+        String localEndpoint,
+        ShardingStrategy shardingStrategy,
+        ClusterRequestProxy requestProxy
+    ) {
+        this.dao = Objects.requireNonNull(dao);
+        this.localEndpoint = localEndpoint;
+        this.shardingStrategy = shardingStrategy;
+        this.requestProxy = requestProxy;
     }
 
     @Override
@@ -35,12 +52,26 @@ final class EntityHttpHandler implements HttpHandler {
             }
 
             String key = extractId(exchange.getRequestURI());
-            byte[] requestBody = readBody(exchange);
-            handleLocal(exchange, key, requestBody);
+            String method = exchange.getRequestMethod();
+            if (!isSupportedMethod(method)) {
+                ExchangeResponses.sendEmpty(exchange, 405);
+                return;
+            }
+
+            byte[] requestBody = readBody(exchange, method);
+            if (shouldProxy(key)) {
+                handleProxy(exchange, method, requestBody, key);
+                return;
+            }
+
+            handleLocal(exchange, method, key, requestBody);
         } catch (IllegalArgumentException e) {
             ExchangeResponses.sendEmpty(exchange, 400);
         } catch (NoSuchElementException e) {
             ExchangeResponses.sendEmpty(exchange, 404);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            ExchangeResponses.sendEmpty(exchange, 503);
         } catch (IOException e) {
             ExchangeResponses.sendEmpty(exchange, 503);
         } catch (Exception e) {
@@ -50,13 +81,28 @@ final class EntityHttpHandler implements HttpHandler {
         }
     }
 
-    private void handleLocal(HttpExchange exchange, String key, byte[] requestBody) throws IOException {
-        switch (exchange.getRequestMethod()) {
+    private void handleLocal(HttpExchange exchange, String method, String key, byte[] requestBody) throws IOException {
+        switch (method) {
             case GET_METHOD -> ExchangeResponses.sendBody(exchange, 200, dao.get(key));
             case PUT_METHOD -> handlePut(exchange, key, requestBody);
             case DELETE_METHOD -> handleDelete(exchange, key);
             default -> ExchangeResponses.sendEmpty(exchange, 405);
         }
+    }
+
+    private void handleProxy(
+        HttpExchange exchange,
+        String method,
+        byte[] requestBody,
+        String key
+    ) throws IOException, InterruptedException {
+        ClusterRequestProxy.ProxyResponse response = requestProxy.proxy(
+            shardingStrategy.resolveOwner(key),
+            method,
+            exchange.getRequestURI(),
+            requestBody
+        );
+        ExchangeResponses.sendBody(exchange, response.statusCode(), response.body());
     }
 
     private void handlePut(HttpExchange exchange, String key, byte[] requestBody) throws IOException {
@@ -69,8 +115,16 @@ final class EntityHttpHandler implements HttpHandler {
         ExchangeResponses.sendEmpty(exchange, 202);
     }
 
-    private static byte[] readBody(HttpExchange exchange) throws IOException {
-        return switch (exchange.getRequestMethod()) {
+    private boolean shouldProxy(String key) {
+        return shardingStrategy != null && !localEndpoint.equals(shardingStrategy.resolveOwner(key));
+    }
+
+    private static boolean isSupportedMethod(String method) {
+        return GET_METHOD.equals(method) || PUT_METHOD.equals(method) || DELETE_METHOD.equals(method);
+    }
+
+    private static byte[] readBody(HttpExchange exchange, String method) throws IOException {
+        return switch (method) {
             case PUT_METHOD -> exchange.getRequestBody().readAllBytes();
             case GET_METHOD, DELETE_METHOD -> EMPTY_BODY;
             default -> EMPTY_BODY;

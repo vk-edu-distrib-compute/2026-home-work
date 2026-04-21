@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute;
 
+import company.vk.edu.distrib.compute.usl.UslKVClusterFactory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -12,17 +13,17 @@ import java.util.stream.Stream;
 
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
-    //        DummyKVClusterFactory.class
+        UslKVClusterFactory.class
     );
 
     @Override
     @NonNull
     public Stream<? extends Arguments> provideArguments(
-            @NonNull ParameterDeclarations parameters,
-            @NonNull ExtensionContext context
+        @NonNull ParameterDeclarations parameters,
+        @NonNull ExtensionContext context
     ) {
         return factories.stream()
-                .map(ReflectionUtils::newInstance)
-                .map(Arguments::of);
+            .map(ReflectionUtils::newInstance)
+            .map(Arguments::of);
     }
 }
