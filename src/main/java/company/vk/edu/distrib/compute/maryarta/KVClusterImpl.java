@@ -29,7 +29,7 @@ public class KVClusterImpl implements KVCluster {
         try {
             return new ShardedKVServiceImpl(port, shardingStrategy);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create service for port " + port, e);
+            throw new IllegalStateException("Failed to create service for port " + port, e);
         }
     }
 
