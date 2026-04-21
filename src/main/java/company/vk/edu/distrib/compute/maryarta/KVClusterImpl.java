@@ -21,11 +21,15 @@ public class KVClusterImpl implements KVCluster {
         };
         for (Integer port: ports) {
             String endpoint = "http://localhost:" + port;
-            try {
-                kvServices.put(endpoint, new ShardedKVServiceImpl(port, shardingStrategy));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            kvServices.put(endpoint, createService(port));
+        }
+    }
+
+    private ShardedKVServiceImpl createService(int port) {
+        try {
+            return new ShardedKVServiceImpl(port, shardingStrategy);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create service for port " + port, e);
         }
     }
 
@@ -41,7 +45,7 @@ public class KVClusterImpl implements KVCluster {
         try {
             kvServices.get(endpoint).start();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to start node: " + endpoint, e);
         }
     }
 

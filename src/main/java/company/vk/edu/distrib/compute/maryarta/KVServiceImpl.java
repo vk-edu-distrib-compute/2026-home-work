@@ -12,7 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class KVServiceImpl implements KVService {
-    private HttpServer server;
+    private final HttpServer server;
     private final Dao<byte[]> dao;
     private ExecutorService executor;
     private boolean started;
@@ -43,7 +43,6 @@ public class KVServiceImpl implements KVService {
         if (executor != null) {
             executor.close();
         }
-        server = null;
         started = false;
     }
 
