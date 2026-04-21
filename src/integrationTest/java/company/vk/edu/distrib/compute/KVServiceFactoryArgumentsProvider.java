@@ -16,6 +16,7 @@ import company.vk.edu.distrib.compute.mediocritas.service.factory.PushkinaKVServ
 import company.vk.edu.distrib.compute.luckyslon2003.LuckySlon2003KVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.nesterukia.file_system.NesterukiaFileSystemKVServiceFactory;
+import company.vk.edu.distrib.compute.nesterukia.in_memory.NesterukiaInMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
@@ -49,7 +50,7 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
             LuckySlon2003KVServiceFactory.class,
             Wolfram158KVServiceFactoryFileWithCacheImpl.class,
             CakeKVServiceFactory.class,
-            PushkinaKVServiceFactoryImpl
+            PushkinaKVServiceFactoryImpl.class
     );
 
     @Override
