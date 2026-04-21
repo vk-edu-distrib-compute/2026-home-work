@@ -4,11 +4,17 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.handlest.enums.HandlestHttpStatus;
+import company.vk.edu.distrib.compute.handlest.exceptions.HttpClientException;
 import company.vk.edu.distrib.compute.handlest.exceptions.PortRangeException;
 import company.vk.edu.distrib.compute.handlest.exceptions.ServerStopException;
+import company.vk.edu.distrib.compute.handlest.routing.HandlestRendezvousRouter;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,20 +24,40 @@ public class HandlestService implements KVService {
     private final HandlestDao dao;
     private final AtomicBoolean healthy = new AtomicBoolean(true);
 
-    private static final int MIN_PORT_VALUE = 1024; // values less than 1024 are reserved by system
+    private final String selfEndpoint;
+    private final HandlestRendezvousRouter router;
+    private final HttpClient httpClient;
+
+    private static final int MIN_PORT_VALUE = 1024;
     private static final int MAX_PORT_VALUE = 65535;
-    private static final String PATH_TO_LOCAL_STORAGE_FOLDER = "handlest_storage";
     private static final String ID_PARAM = "id";
 
+    /** Standalone (non-cluster) constructor — backward-compatible. */
     public HandlestService(int port) throws IOException {
+        this(port, null, null);
+    }
+
+    /**
+     * Cluster-aware constructor.
+     *
+     * @param port         port this node listens on
+     * @param selfEndpoint this node's own URL, e.g. "http://localhost:8080"
+     * @param router       shared rendezvous router for key → node mapping
+     */
+    public HandlestService(int port, String selfEndpoint, HandlestRendezvousRouter router) throws IOException {
         if (port < MIN_PORT_VALUE || port > MAX_PORT_VALUE) {
             throw new PortRangeException(
                     "Port must be between " + MIN_PORT_VALUE + " and " + MAX_PORT_VALUE + ", got: " + port);
         }
 
-        this.dao = new HandlestDao(PATH_TO_LOCAL_STORAGE_FOLDER);
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        String storagePath = "handlest_storage_" + port;
+        this.dao = new HandlestDao(storagePath);
 
+        this.selfEndpoint = selfEndpoint;
+        this.router = router;
+        this.httpClient = (router != null) ? HttpClient.newHttpClient() : null;
+
+        this.server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/v0/status", this::handleStatus);
         server.createContext("/v0/entity", this::handleEntity);
         server.setExecutor(Executors.newFixedThreadPool(10));
@@ -51,6 +77,13 @@ public class HandlestService implements KVService {
             dao.close();
         } catch (IOException e) {
             throw new ServerStopException("Unexpected error occurred. Could not shutdown server", e);
+        }
+        if (httpClient != null) {
+            try {
+                httpClient.close();
+            } catch (Exception e) {
+                throw new HttpClientException("Unexpected error occurred. Could not stop httpClient", e);
+            }
         }
     }
 
@@ -78,19 +111,20 @@ public class HandlestService implements KVService {
                 return;
             }
 
+            if (router != null) {
+                String targetEndpoint = router.route(id);
+                if (!targetEndpoint.equals(selfEndpoint)) {
+                    proxy(exchange, targetEndpoint, id);
+                    return;
+                }
+            }
+
             switch (method) {
-                case "GET":
-                    handleGet(exchange, id);
-                    break;
-                case "PUT":
-                    handlePut(exchange, id);
-                    break;
-                case "DELETE":
-                    handleDelete(exchange, id);
-                    break;
-                default:
-                    exchange.sendResponseHeaders(HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
-                    break;
+                case "GET" -> handleGet(exchange, id);
+                case "PUT" -> handlePut(exchange, id);
+                case "DELETE" -> handleDelete(exchange, id);
+                default -> exchange.sendResponseHeaders(
+                        HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
             }
         } catch (Exception e) {
             exchange.sendResponseHeaders(HandlestHttpStatus.INTERNAL_ERROR.getCode(), -1);
@@ -128,19 +162,54 @@ public class HandlestService implements KVService {
         }
     }
 
+    private void proxy(HttpExchange exchange, String targetEndpoint, String id) throws IOException {
+        String url = targetEndpoint + "/v0/entity?id=" + id;
+        String method = exchange.getRequestMethod();
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url));
+
+        switch (method) {
+            case "GET" -> builder.GET();
+            case "PUT" -> {
+                byte[] body = exchange.getRequestBody().readAllBytes();
+                builder.PUT(HttpRequest.BodyPublishers.ofByteArray(body));
+            }
+            case "DELETE" -> builder.DELETE();
+            default -> {
+                exchange.sendResponseHeaders(HandlestHttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
+                return;
+            }
+        }
+
+        try {
+            HttpResponse<byte[]> response =
+                    httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+
+            byte[] responseBody = response.body();
+            if (responseBody != null && responseBody.length > 0) {
+                exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
+                exchange.getResponseBody().write(responseBody);
+            } else {
+                exchange.sendResponseHeaders(
+                        response.statusCode(),
+                        responseBody != null ? 0 : -1);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            exchange.sendResponseHeaders(HandlestHttpStatus.INTERNAL_ERROR.getCode(), -1);
+        }
+    }
+
     private String extractId(String query) {
         if (query == null) {
             return null;
         }
-
-        String[] params = query.split("&");
-        for (String param : params) {
-            String[] keyValue = param.split("=", 2);
-            if (keyValue.length == 2 && ID_PARAM.equals(keyValue[0])) {
-                return keyValue[1];
+        for (String param : query.split("&")) {
+            String[] kv = param.split("=", 2);
+            if (kv.length == 2 && ID_PARAM.equals(kv[0])) {
+                return kv[1];
             }
         }
-
         return null;
     }
 }
