@@ -35,8 +35,12 @@ public class FileByteDao implements Dao<byte[]> {
     private final FileChannel channel;
 
     public FileByteDao() throws IOException {
+        this(BASE_PATH);
+    }
+
+    public FileByteDao(String basePath) throws IOException {
         this.index = new ConcurrentHashMap<>();
-        Path dir = Path.of(BASE_PATH);
+        Path dir = Path.of(basePath);
         Files.createDirectories(dir);
         Path dataFile = dir.resolve(FILE_NAME);
         this.channel = FileChannel.open(dataFile,
