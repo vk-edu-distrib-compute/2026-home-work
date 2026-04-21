@@ -1,45 +1,33 @@
 package company.vk.edu.distrib.compute.maryarta;
 
 import company.vk.edu.distrib.compute.Dao;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.*;
 import java.util.NoSuchElementException;
 
 public class H2Dao implements Dao<byte []> {
-    private final Connection connection;
+    private  Connection connection;
 
     public H2Dao(String dbName) {
         try {
-            this.connection = DriverManager.getConnection(
-                    "jdbc:h2:./data/" + dbName,
-                    "sa",
-                    ""
-            );
+            connection = DriverManager.getConnection("jdbc:h2:./data/" + dbName);
+            try (Statement st = connection.createStatement()) {
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS storage (
+                            id VARCHAR(255) PRIMARY KEY,
+                            data BLOB
+                        )
+                        """);
+            }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to initialize H2Dao", e);
-        }
-        init();
-    }
 
-
-    private void init(){
-        try (Statement st = connection.createStatement()) {
-            st.execute("""
-                CREATE TABLE IF NOT EXISTS storage (
-                    id VARCHAR(255) PRIMARY KEY,
-                    data BLOB
-                )
-            """);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
         }
     }
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
-        if(key.isBlank()){
+        if (key.isBlank()) {
             throw new IllegalArgumentException("Key is blank");
         }
         try (PreparedStatement ps = connection.prepareStatement(
@@ -47,7 +35,7 @@ public class H2Dao implements Dao<byte []> {
             ps.setString(1, key);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
-                    throw new java.util.NoSuchElementException("Key not found: " + key);
+                    throw new NoSuchElementException("Key not found: " + key);
                 }
                 return rs.getBytes(1);
             }
@@ -58,7 +46,7 @@ public class H2Dao implements Dao<byte []> {
 
     @Override
     public void upsert(String key, byte [] value) throws IllegalArgumentException, IOException {
-        if(key.isBlank()){
+        if (key.isBlank()) {
             throw new IllegalArgumentException("Key is blank");
         }
         try (PreparedStatement ps = connection.prepareStatement(
@@ -73,7 +61,7 @@ public class H2Dao implements Dao<byte []> {
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
-        if(key.isBlank()){
+        if (key.isBlank()) {
             throw new IllegalArgumentException("Key is blank");
         }
         try (PreparedStatement ps = connection.prepareStatement(
@@ -86,7 +74,7 @@ public class H2Dao implements Dao<byte []> {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         try {
             if (connection != null && !connection.isClosed()) {
                 connection.close();

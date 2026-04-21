@@ -3,44 +3,40 @@ package company.vk.edu.distrib.compute.maryarta;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 
-
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class KVClusterImpl implements KVCluster {
-    private final List<Integer> ports;
-    private final List<String> endpoints;// = getEndpoints();
-    private final Map<String, KVService> kvServices = new HashMap<>();
+    private final List<String> endpoints;
+    private final Map<String, KVService> kvServices = new ConcurrentHashMap<>();
+    ShardingStrategy shardingStrategy;
 
-    public KVClusterImpl(List<Integer> ports) {
-        this.ports = ports;
-        this.endpoints = getEndpoints();
+    public KVClusterImpl(List<Integer> ports, ShardingStrategy.ShardingAlgorithm shardingAlgorithm) {
+        this.endpoints = ports.stream().map(port -> "http://localhost:" + port).toList();
+        switch (shardingAlgorithm){
+            case CONSISTENT -> shardingStrategy = new ConsistentHashing(endpoints);
+            case RENDEZVOUS -> shardingStrategy = new RendezvousHashing(endpoints);
+        }
         for (Integer port: ports) {
             try {
-                kvServices.put("http://localhost:" + port, new ShardedKVServiceImpl(port, this.endpoints));
+                kvServices.put("http://localhost:" + port, new ShardedKVServiceImpl(port, shardingStrategy));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
     }
 
-    // стартует все ноды кластера
     @Override
     public void start() {
-//        List<String> endpoints = getEndpoints();
-        for(String endpoint: endpoints){
+        for (String endpoint: endpoints) {
             start(endpoint);
         }
     }
 
-    // стартует одну определенную ноду кластера
     @Override
     public void start(String endpoint) {
-        //проверить
-//        URI uri = URI.create(endpoint);
-//        int port = uri.getPort();
         try {
             kvServices.get(endpoint).start();
         } catch (IOException e) {
@@ -50,7 +46,7 @@ public class KVClusterImpl implements KVCluster {
 
     @Override
     public void stop() {
-        for(String endpoint: endpoints){
+        for (String endpoint: endpoints) {
             stop(endpoint);
         }
     }
@@ -62,7 +58,6 @@ public class KVClusterImpl implements KVCluster {
 
     @Override
     public List<String> getEndpoints() {
-        return ports.stream()
-                .map(port -> "http://localhost:" + port).toList();
+        return endpoints;
     }
 }
