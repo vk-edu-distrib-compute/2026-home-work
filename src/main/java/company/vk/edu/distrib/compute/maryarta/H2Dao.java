@@ -5,18 +5,15 @@ import company.vk.edu.distrib.compute.Dao;
 import java.io.IOException;
 import java.sql.*;
 import java.util.NoSuchElementException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class H2Dao implements Dao<byte []> {
     private final Connection connection;
-    private final ConcurrentMap<String, ReentrantReadWriteLock> lockMap;
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public H2Dao(String dbName) {
         try {
             connection = DriverManager.getConnection("jdbc:h2:./data/" + dbName);
-            lockMap = new ConcurrentHashMap<>();
             try (Statement st = connection.createStatement()) {
                 st.execute("""
                         CREATE TABLE IF NOT EXISTS storage (
@@ -26,7 +23,7 @@ public class H2Dao implements Dao<byte []> {
                         """);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to initialize H2Dao for db: " + dbName, e);
+            throw new IllegalStateException("Failed to initialize H2Dao for db: " + dbName, e);
         }
     }
 
@@ -35,8 +32,6 @@ public class H2Dao implements Dao<byte []> {
         if (key.isBlank()) {
             throw new IllegalArgumentException("Key is blank");
         }
-        final ReentrantReadWriteLock lock =
-                lockMap.computeIfAbsent(key, _ -> new ReentrantReadWriteLock());
         lock.readLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT data FROM storage WHERE id = ?")) {
@@ -48,7 +43,7 @@ public class H2Dao implements Dao<byte []> {
                 return rs.getBytes(1);
             }
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to read value for key: " + key, e);
         } finally {
             lock.readLock().unlock();
         }
@@ -59,8 +54,6 @@ public class H2Dao implements Dao<byte []> {
         if (key.isBlank()) {
             throw new IllegalArgumentException("Key is blank");
         }
-        final ReentrantReadWriteLock lock =
-                lockMap.computeIfAbsent(key, _ -> new ReentrantReadWriteLock());
         lock.writeLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "MERGE INTO storage (id, data) KEY(id) VALUES (?, ?)")) {
@@ -68,7 +61,7 @@ public class H2Dao implements Dao<byte []> {
             ps.setBytes(2, value);
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to upsert value for key: " + key, e);
         } finally {
             lock.writeLock().unlock();
         }
@@ -79,15 +72,13 @@ public class H2Dao implements Dao<byte []> {
         if (key.isBlank()) {
             throw new IllegalArgumentException("Key is blank");
         }
-        final ReentrantReadWriteLock lock =
-                lockMap.computeIfAbsent(key, _ -> new ReentrantReadWriteLock());
         lock.writeLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "DELETE FROM storage WHERE id = ?")) {
             ps.setString(1, key);
             ps.execute();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to delete value for key: " + key, e);
         } finally {
             lock.writeLock().unlock();
         }
@@ -100,7 +91,7 @@ public class H2Dao implements Dao<byte []> {
                 connection.close();
             }
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to close H2 connection", e);
         }
     }
 
