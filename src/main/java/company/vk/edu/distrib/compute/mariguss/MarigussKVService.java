@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.mariguss;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import java.util.concurrent.locks.ReentrantLock;
 
 import company.vk.edu.distrib.compute.KVService;
 
@@ -23,7 +24,7 @@ public class MarigussKVService implements KVService {
     private final String selfEndpoint;
     private List<String> clusterEndpoints;
     private boolean isRunning;
-    private final Object lock = new Object();
+    private final ReentrantLock lock = new ReentrantLock();
 
     public MarigussKVService(int port) throws IOException {
         this.port = port;
@@ -40,7 +41,8 @@ public class MarigussKVService implements KVService {
 
     @Override
     public void start() {
-        synchronized (lock) {
+        lock.lock();
+        try {
             if (isRunning) {
                 return;
             }
@@ -54,17 +56,22 @@ public class MarigussKVService implements KVService {
             } catch (IOException e) {
                 throw new IllegalStateException("Failed to start server on port " + port, e);
             }
+        } finally {
+            lock.unlock();
         }
     }
 
     @Override
     public void stop() {
-        synchronized (lock) {
+        lock.lock();
+        try {
             if (!isRunning) {
                 return;
             }
             server.stop(0);
             isRunning = false;
+        } finally {
+            lock.unlock();
         }
     }
 
