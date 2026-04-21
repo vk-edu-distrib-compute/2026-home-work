@@ -18,7 +18,7 @@ public final class Strategies {
     }
 
     public static String resolve(String key, Map<String, VredakonKVService> nodes) {
-        if ("rendezvous".equals(CONFIG.strategy())) {
+        if ("rendezvous".equals(CONFIG.getStrategy())) {
             return resolveRendezvous(key, nodes);
         }          
         return resolveConsistent(key, nodes);

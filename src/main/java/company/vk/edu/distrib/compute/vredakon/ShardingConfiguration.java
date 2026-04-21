@@ -16,7 +16,7 @@ public class ShardingConfiguration {
     //     strategy = "consistent";
     // }
 
-    public String strategy() {
+    public String getStrategy() {
         return strategy;
     }
 }

@@ -15,6 +15,8 @@ import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +29,7 @@ public class VredakonKVService implements KVService {
     private final HttpClient client = HttpClient.newHttpClient();
     private final AtomicBoolean isStarted = new AtomicBoolean(false);
     private final int port;
+    private final Lock lock = new ReentrantLock();
     private Map<String, VredakonKVService> otherNodes = new ConcurrentHashMap<>();
 
     public VredakonKVService(int port) throws IOException {
@@ -49,7 +52,8 @@ public class VredakonKVService implements KVService {
     }
 
     @Override
-    public synchronized void start() {
+    public void start() {
+        lock.lock();
         if (!isStarted.get()) {
             try {
                 server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -60,14 +64,17 @@ public class VredakonKVService implements KVService {
                 log.error("some error");
             }
         }
+        lock.unlock();
     }
 
     @Override
-    public synchronized void stop() {
+    public void stop() {
+        lock.lock();
         if (isStarted.get()) {
             server.stop(0);
             isStarted.set(false);
         }
+        lock.unlock();
     }
 
     public void handleEntity(HttpExchange exchange) throws IOException {
@@ -79,17 +86,15 @@ public class VredakonKVService implements KVService {
             return;
         }
 
-        Map<String, String> params = new ConcurrentHashMap<>();
-        for (String param : query.split("&")) {
-            String[] keyValue = param.split("=");
-            try {
-                params.put(keyValue[0], keyValue[1]);
-            } catch (ArrayIndexOutOfBoundsException exc) {
-                exchange.sendResponseHeaders(400, -1);
-                return;
-            }
-        }
+        Map<String, String> params;
 
+        try {
+            params = exctractParams(query);
+        } catch (ArrayIndexOutOfBoundsException exc) {
+            exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+      
         String appropriateNode = "http://localhost:" + server.getAddress().getPort();
         if (!otherNodes.isEmpty()) {
             appropriateNode = Strategies.resolve(params.get("id"), otherNodes);
@@ -97,6 +102,14 @@ public class VredakonKVService implements KVService {
         
         boolean doProxy = !appropriateNode.equals("http://localhost:" + server.getAddress().getPort()) && !otherNodes.isEmpty();
 
+        chooseAndExec(exchange, doProxy, appropriateNode, params);
+        exchange.close();
+    }
+
+    private void chooseAndExec(HttpExchange exchange, 
+    boolean doProxy, 
+    String appropriateNode,
+    Map<String, String> params) throws IOException {
         switch (exchange.getRequestMethod()) {
             case "GET":
                 handleEntityGet(exchange, doProxy, appropriateNode, params);
@@ -112,7 +125,15 @@ public class VredakonKVService implements KVService {
             default:
                 break;
         }
-        exchange.close();
+    }
+
+    private Map<String, String> exctractParams(String query) {
+        Map<String, String> params = new ConcurrentHashMap<>();
+        for (String param : query.split("&")) {
+            String[] keyValue = param.split("=");
+            params.put(keyValue[0], keyValue[1]);
+        }
+        return params;
     }
 
     public void handleStatus(HttpExchange exchange) throws IOException {

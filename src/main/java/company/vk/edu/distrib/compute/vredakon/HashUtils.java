@@ -4,7 +4,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public final class HashUtils {
+    private static final Logger log = LoggerFactory.getLogger(HashUtils.class);
+    
     private HashUtils() {
         throw new UnsupportedOperationException();
     }
@@ -19,7 +24,8 @@ public final class HashUtils {
             }
             return hash & Long.MAX_VALUE;
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not found", e);
+            log.error("Algorithm was not founded");
         }
+        return 0;
     }
 }
