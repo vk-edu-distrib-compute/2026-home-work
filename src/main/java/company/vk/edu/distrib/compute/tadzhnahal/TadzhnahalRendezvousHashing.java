@@ -1,10 +1,14 @@
 package company.vk.edu.distrib.compute.tadzhnahal;
 
-import java.util.LinkedHashSet;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 public class TadzhnahalRendezvousHashing {
+    private static final String HASH_ALGORITHM = "SHA-256";
+
     private final List<String> endpoints;
 
     public TadzhnahalRendezvousHashing(List<String> endpoints) {
@@ -12,29 +16,23 @@ public class TadzhnahalRendezvousHashing {
             throw new IllegalArgumentException("Endpoints must not be empty");
         }
 
-        Set<String> uniqueEndpoints = new LinkedHashSet<>();
-        for (String endpoint : endpoints) {
-            if (endpoint == null || endpoint.isEmpty()) {
-                throw new IllegalArgumentException("Endpoint must not be empty");
-            }
-        }
-
-        this.endpoints = List.copyOf(uniqueEndpoints);
+        this.endpoints = new ArrayList<>(endpoints);
     }
 
     public String select(String key) {
-        if (key == null) {
-            throw new IllegalArgumentException("Key must not be null");
+        if (key == null || key.isEmpty()) {
+            throw new IllegalArgumentException("Key must not be empty");
         }
 
         String bestEndpoint = null;
         long bestScore = 0L;
 
         for (String endpoint : endpoints) {
-            long currentScore = score(endpoint, key);
-            if (bestEndpoint == null || Long.compareUnsigned(currentScore, bestScore) > 0) {
+            long score = score(endpoint, key);
+
+            if (bestEndpoint == null || Long.compareUnsigned(score, bestScore) > 0) {
                 bestEndpoint = endpoint;
-                bestScore = currentScore;
+                bestScore = score;
             }
         }
 
@@ -42,14 +40,22 @@ public class TadzhnahalRendezvousHashing {
     }
 
     private long score(String endpoint, String key) {
-        long hash = 0xcbf29ce484222325L;
-        String value = endpoint + '\n' + key;
+        MessageDigest digest = newDigest();
+        byte[] hash = digest.digest((endpoint + '\n' + key).getBytes(StandardCharsets.UTF_8));
 
-        for (int i = 0; i < value.length(); i++) {
-            hash ^= value.charAt(i);
-            hash *= 0x100000001b3L;
+        long result = 0L;
+        for (int i = 0; i < Long.BYTES; i++) {
+            result = (result << 8) | (hash[i] & 0xffL);
         }
 
-        return hash;
+        return result;
+    }
+
+    private MessageDigest newDigest() {
+        try {
+            return MessageDigest.getInstance(HASH_ALGORITHM);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Hash algorithm is not available", e);
+        }
     }
 }

@@ -57,7 +57,7 @@ public class TadzhnahalKVCluster implements KVCluster {
         }
 
         try {
-            KVService service = factory.create(port);
+            KVService service = factory.createClusterNode(port, endpoints);
             service.start();
             startedNodes.put(endpoint, service);
         } catch (IOException e) {
