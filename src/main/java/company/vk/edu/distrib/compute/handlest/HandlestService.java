@@ -55,7 +55,7 @@ public class HandlestService implements KVService {
 
         this.selfEndpoint = selfEndpoint;
         this.router = router;
-        this.httpClient = (router != null) ? HttpClient.newHttpClient() : null;
+        this.httpClient = HttpClient.newHttpClient();
 
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/v0/status", this::handleStatus);
@@ -78,12 +78,10 @@ public class HandlestService implements KVService {
         } catch (IOException e) {
             throw new ServerStopException("Unexpected error occurred. Could not shutdown server", e);
         }
-        if (httpClient != null) {
-            try {
-                httpClient.close();
-            } catch (Exception e) {
-                throw new HttpClientException("Unexpected error occurred. Could not stop httpClient", e);
-            }
+        try {
+            httpClient.close();
+        } catch (Exception e) {
+            throw new HttpClientException("Unexpected error occurred. Could not stop httpClient", e);
         }
     }
 
@@ -111,12 +109,8 @@ public class HandlestService implements KVService {
                 return;
             }
 
-            if (router != null) {
-                String targetEndpoint = router.route(id);
-                if (!targetEndpoint.equals(selfEndpoint)) {
-                    proxy(exchange, targetEndpoint, id);
-                    return;
-                }
+            if (tryProxy(exchange, id)) {
+                return;
             }
 
             switch (method) {
@@ -211,5 +205,17 @@ public class HandlestService implements KVService {
             }
         }
         return null;
+    }
+
+    private boolean tryProxy(HttpExchange exchange, String id) throws IOException {
+        if (router == null) {
+            return false;
+        }
+        String target = router.route(id);
+        if (target.equals(selfEndpoint)) {
+            return false;
+        }
+        proxy(exchange, target, id);
+        return true;
     }
 }
