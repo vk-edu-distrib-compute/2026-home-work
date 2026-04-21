@@ -1,18 +1,24 @@
 package company.vk.edu.distrib.compute;
 
-import module java.base;
 import company.vk.edu.distrib.compute.usl.UslKVClusterFactory;
 import company.vk.edu.distrib.compute.usl.UslKVServiceFactory;
 import company.vk.edu.distrib.compute.usl.sharding.ShardingAlgorithm;
 import org.slf4j.LoggerFactory;
 
-public class Server {
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
-    void main(String... args) throws IOException {
+public final class Server {
+    private Server() {
+    }
+
+    public static void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
-        if (isClusterMode(args)) {
+        Server server = new Server();
+        if (server.isClusterMode(args)) {
             List<Integer> ports = Arrays.asList(8080, 8081);
-            KVCluster cluster = new UslKVClusterFactory(resolveClusterAlgorithm(args)).create(ports);
+            KVCluster cluster = new UslKVClusterFactory(server.resolveClusterAlgorithm(args)).create(ports);
             cluster.start();
             log.info("Cluster started on ports={}", ports);
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));

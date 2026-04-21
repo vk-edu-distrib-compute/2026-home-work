@@ -90,9 +90,8 @@ final class UslNodeServer {
                 return;
             }
 
-            server.stop(0);
+            currentServer().stop(0);
             stopExecutor();
-            server = null;
             started = false;
             closeDao();
             log.info("Node stopped on {}", localEndpointUrl);
@@ -102,21 +101,27 @@ final class UslNodeServer {
     }
 
     private void stopExecutor() {
-        if (executorService == null) {
+        ExecutorService currentExecutor = executorService;
+        if (currentExecutor == null) {
             return;
         }
 
-        executorService.shutdown();
+        currentExecutor.shutdown();
         try {
-            if (!executorService.awaitTermination(1, TimeUnit.SECONDS)) {
-                executorService.shutdownNow();
+            if (!currentExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+                currentExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            executorService.shutdownNow();
-        } finally {
-            executorService = null;
+            currentExecutor.shutdownNow();
         }
+    }
+
+    private HttpServer currentServer() {
+        if (server == null) {
+            throw new IllegalStateException("Server was not initialized");
+        }
+        return server;
     }
 
     private void closeDao() {
