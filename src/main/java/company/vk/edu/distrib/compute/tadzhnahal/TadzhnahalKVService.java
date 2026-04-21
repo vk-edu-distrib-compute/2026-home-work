@@ -12,9 +12,13 @@ import java.util.NoSuchElementException;
 public class TadzhnahalKVService implements KVService {
     private static final String STATUS_PATH = "/v0/status";
     private static final String ENTITY_PATH = "/v0/entity";
+
     private static final String METHOD_GET = "GET";
     private static final String METHOD_PUT = "PUT";
     private static final String METHOD_DELETE = "DELETE";
+
+    private static final String INTERNAL_REQUEST_HEADER = "X-Internal-Request";
+    private static final String INTERNAL_REQUEST_VALUE = "true";
 
     private final int port;
     private final Dao<byte[]> dao;
@@ -29,7 +33,7 @@ public class TadzhnahalKVService implements KVService {
 
     @Override
     public void start() {
-        if (started) {
+        if (started && !stopped) {
             throw new IllegalStateException("Server already started");
         }
 
@@ -39,6 +43,7 @@ public class TadzhnahalKVService implements KVService {
             server.createContext(ENTITY_PATH, this::handleEntity);
             server.start();
             started = true;
+            stopped = false;
         } catch (IOException e) {
             throw new IllegalStateException("Cannot start server", e);
         }
@@ -51,6 +56,7 @@ public class TadzhnahalKVService implements KVService {
         }
 
         server.stop(0);
+        started = false;
         stopped = true;
 
         try {
@@ -86,20 +92,12 @@ public class TadzhnahalKVService implements KVService {
 
                 String id = extractId(exchange);
 
-                switch (exchange.getRequestMethod()) {
-                    case METHOD_GET:
-                        handleGetEntity(exchange, id);
-                        break;
-                    case METHOD_PUT:
-                        handlePutEntity(exchange, id);
-                        break;
-                    case METHOD_DELETE:
-                        handleDeleteEntity(exchange, id);
-                        break;
-                    default:
-                        sendEmptyResponse(exchange, 405);
-                        break;
+                if (isInternalRequest(exchange)) {
+                    handleInternalEntity(exchange, id);
+                    return;
                 }
+
+                handleClientEntity(exchange, id);
             } catch (IllegalArgumentException e) {
                 sendEmptyResponse(exchange, 400);
             } catch (NoSuchElementException e) {
@@ -110,21 +108,68 @@ public class TadzhnahalKVService implements KVService {
         }
     }
 
-    private void handleGetEntity(HttpExchange exchange, String id) throws IOException {
+    private void handleClientEntity(HttpExchange exchange, String id) throws IOException {
+        String method = exchange.getRequestMethod();
+
+        if (METHOD_GET.equals(method)) {
+            handleLocalGet(exchange, id);
+            return;
+        }
+
+        if (METHOD_PUT.equals(method)) {
+            handleLocalPut(exchange, id);
+            return;
+        }
+
+        if (METHOD_DELETE.equals(method)) {
+            handleLocalDelete(exchange, id);
+            return;
+        }
+
+        sendEmptyResponse(exchange, 405);
+    }
+
+    private void handleInternalEntity(HttpExchange exchange, String id) throws IOException {
+        String method = exchange.getRequestMethod();
+
+        if (METHOD_GET.equals(method)) {
+            handleLocalGet(exchange, id);
+            return;
+        }
+
+        if (METHOD_PUT.equals(method)) {
+            handleLocalPut(exchange, id);
+            return;
+        }
+
+        if (METHOD_DELETE.equals(method)) {
+            handleLocalDelete(exchange, id);
+            return;
+        }
+
+        sendEmptyResponse(exchange, 405);
+    }
+
+    private void handleLocalGet(HttpExchange exchange, String id) throws IOException {
         byte[] value = dao.get(id);
         exchange.sendResponseHeaders(200, value.length);
         exchange.getResponseBody().write(value);
     }
 
-    private void handlePutEntity(HttpExchange exchange, String id) throws IOException {
+    private void handleLocalPut(HttpExchange exchange, String id) throws IOException {
         byte[] value = exchange.getRequestBody().readAllBytes();
         dao.upsert(id, value);
         sendEmptyResponse(exchange, 201);
     }
 
-    private void handleDeleteEntity(HttpExchange exchange, String id) throws IOException {
+    private void handleLocalDelete(HttpExchange exchange, String id) throws IOException {
         dao.delete(id);
         sendEmptyResponse(exchange, 202);
+    }
+
+    private boolean isInternalRequest(HttpExchange exchange) {
+        String headerValue = exchange.getRequestHeaders().getFirst(INTERNAL_REQUEST_HEADER);
+        return INTERNAL_REQUEST_VALUE.equalsIgnoreCase(headerValue);
     }
 
     private String extractId(HttpExchange exchange) {
