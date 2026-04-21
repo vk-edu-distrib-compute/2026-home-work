@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -110,11 +111,11 @@ public class KirillmedvedevKVCluster implements KVCluster {
                         .GET()
                         .build();
                 HttpResponse<Void> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.discarding());
-                if (response.statusCode() == 200) {
+                if (response.statusCode() == HttpURLConnection.HTTP_OK) {
                     return;
                 }
-            } catch (Exception e) {
-                // Server not ready yet
+            } catch (IOException | InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
             Thread.sleep(20);
         }
@@ -247,16 +248,17 @@ public class KirillmedvedevKVCluster implements KVCluster {
             byte[] value = localDao.get(id);
             exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
             exchange.sendResponseHeaders(200, value.length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(value);
-            os.close();
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(value);
+            }
         }
 
         private void handlePut(HttpExchange exchange, String id) throws IOException {
-            InputStream is = exchange.getRequestBody();
-            byte[] body = is.readAllBytes();
-            localDao.upsert(id, body);
-            exchange.sendResponseHeaders(201, -1);
+            try (InputStream is = exchange.getRequestBody()) {
+                byte[] body = is.readAllBytes();
+                localDao.upsert(id, body);
+            }
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
         }
 
         private void handleDelete(HttpExchange exchange, String id) throws IOException {
@@ -269,8 +271,9 @@ public class KirillmedvedevKVCluster implements KVCluster {
 
             byte[] body = new byte[0];
             if (!"DELETE".equals(exchange.getRequestMethod())) {
-                InputStream is = exchange.getRequestBody();
-                body = is.readAllBytes();
+                try (InputStream is = exchange.getRequestBody()) {
+                    body = is.readAllBytes();
+                }
             }
 
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
@@ -299,9 +302,9 @@ public class KirillmedvedevKVCluster implements KVCluster {
                 exchange.getResponseHeaders().add(name, String.join(",", response.headers().allValues(name)));
             }
             exchange.sendResponseHeaders(response.statusCode(), response.body().length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(response.body());
-            os.close();
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response.body());
+            }
         }
 
         private String extractId(URI uri) {
