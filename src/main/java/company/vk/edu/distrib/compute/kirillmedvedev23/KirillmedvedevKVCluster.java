@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.kirillmedvedev23;
 
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVCluster;
+import company.vk.edu.distrib.compute.kirillmedvedev23.exceptions.ClusterNodeException;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,10 @@ public class KirillmedvedevKVCluster implements KVCluster {
     private static final Logger log = LoggerFactory.getLogger(KirillmedvedevKVCluster.class);
     private static final int VIRTUAL_NODES = 150;
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final String HTTP_METHOD_DELETE = "DELETE";
+    private static final String QUERY_PARAM_ID = "id";
+    private static final int HTTP_STATUS_ACCEPTED = 202;
+    private static final int HTTP_STATUS_METHOD_NOT_ALLOWED = 405;
 
     private final List<Integer> ports;
     private final Map<Integer, HttpServer> servers = new ConcurrentHashMap<>();
@@ -93,10 +98,10 @@ public class KirillmedvedevKVCluster implements KVCluster {
 
             log.info("Node started on port {}", port);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start node on port " + port, e);
+            throw new ClusterNodeException("Failed to start node on port " + port, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to start node on port " + port, e);
+            throw new ClusterNodeException("Failed to start node on port " + port, e);
         } finally {
             lock.unlock();
         }
@@ -182,9 +187,9 @@ public class KirillmedvedevKVCluster implements KVCluster {
         public void handle(HttpExchange exchange) {
             try {
                 if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                    exchange.sendResponseHeaders(200, -1);
+                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, -1);
                 } else {
-                    exchange.sendResponseHeaders(405, -1);
+                    exchange.sendResponseHeaders(HTTP_STATUS_METHOD_NOT_ALLOWED, -1);
                 }
             } catch (IOException e) {
                 log.debug("Error sending status response", e);
@@ -240,7 +245,7 @@ public class KirillmedvedevKVCluster implements KVCluster {
                 case "GET" -> handleGet(exchange, id);
                 case "PUT" -> handlePut(exchange, id);
                 case "DELETE" -> handleDelete(exchange, id);
-                default -> exchange.sendResponseHeaders(405, -1);
+                default -> exchange.sendResponseHeaders(HTTP_STATUS_METHOD_NOT_ALLOWED, -1);
             }
         }
 
@@ -263,14 +268,14 @@ public class KirillmedvedevKVCluster implements KVCluster {
 
         private void handleDelete(HttpExchange exchange, String id) throws IOException {
             localDao.delete(id);
-            exchange.sendResponseHeaders(202, -1);
+            exchange.sendResponseHeaders(HTTP_STATUS_ACCEPTED, -1);
         }
 
         private void proxyRequest(HttpExchange exchange, String targetEndpoint, String id) throws IOException {
             String url = targetEndpoint + "/v0/entity?id=" + id;
 
             byte[] body = new byte[0];
-            if (!"DELETE".equals(exchange.getRequestMethod())) {
+            if (!HTTP_METHOD_DELETE.equals(exchange.getRequestMethod())) {
                 try (InputStream is = exchange.getRequestBody()) {
                     body = is.readAllBytes();
                 }
@@ -314,7 +319,7 @@ public class KirillmedvedevKVCluster implements KVCluster {
             }
             for (String param : query.split("&")) {
                 String[] kv = param.split("=", 2);
-                if (kv.length == 2 && "id".equals(kv[0])) {
+                if (kv.length == 2 && QUERY_PARAM_ID.equals(kv[0])) {
                     return kv[1];
                 }
             }
