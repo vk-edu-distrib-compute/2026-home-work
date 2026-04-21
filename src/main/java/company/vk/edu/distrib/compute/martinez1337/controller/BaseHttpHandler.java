@@ -2,16 +2,39 @@ package company.vk.edu.distrib.compute.martinez1337.controller;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.martinez1337.sharding.ShardingStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 import static company.vk.edu.distrib.compute.martinez1337.controller.ResponseStatus.*;
 
 public abstract class BaseHttpHandler implements HttpHandler {
     protected final Logger log = LoggerFactory.getLogger(getClass());
+
+    protected List<String> clusterEndpoints;
+    protected final ShardingStrategy sharding;
+    protected int myNodeId;
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    protected BaseHttpHandler(List<String> clusterEndpoints, ShardingStrategy sharding) {
+        this.clusterEndpoints = clusterEndpoints;
+        this.sharding = sharding;
+    }
+
+    public void setClusterInfo(List<String> clusterEndpoints, int myNodeId) {
+        this.clusterEndpoints = clusterEndpoints;
+        this.myNodeId = myNodeId;
+    }
 
     @Override
     public final void handle(HttpExchange exchange) throws IOException {
@@ -50,7 +73,67 @@ public abstract class BaseHttpHandler implements HttpHandler {
     protected final void sendError(HttpExchange exchange, ResponseStatus status) throws IOException {
         if (log.isErrorEnabled()) {
             log.error(status.getMessage());
+            log.error(exchange.getRequestURI().toString());
         }
         exchange.sendResponseHeaders(status.getCode(), 0);
+    }
+
+    protected Optional<String> getTargetProxyEndpoint(String key) {
+        if (clusterEndpoints.isEmpty()) {
+            return Optional.empty();
+        }
+
+        int responsibleNode = sharding.getResponsibleNode(key, clusterEndpoints);
+        if (responsibleNode == myNodeId) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(clusterEndpoints.get(responsibleNode));
+    }
+
+    protected void proxyRequest(HttpExchange exchange, String targetEndpoint) throws IOException {
+        URI originalUri = exchange.getRequestURI();
+
+        String rawQuery = originalUri.getRawQuery();
+        String rawPath = originalUri.getRawPath() != null ? originalUri.getRawPath() : "";
+
+        String targetUri = targetEndpoint
+                + rawPath
+                + (rawQuery != null ? "?" + rawQuery : "");
+        log.debug("Target URI: {}", targetUri);
+
+        byte[] body;
+        try (var is = exchange.getRequestBody()) {
+            body = is.readAllBytes();
+        }
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(targetUri))
+                .header("X-Proxy", "true")
+                .method(exchange.getRequestMethod(), body.length > 0
+                        ? HttpRequest.BodyPublishers.ofByteArray(body)
+                        : HttpRequest.BodyPublishers.noBody());
+
+        try {
+            var req = requestBuilder.build();
+            log.debug("Request: {}", req);
+            HttpResponse<byte[]> response = httpClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
+
+            response.headers().map().forEach((name, values) -> {
+                if (!"transfer-encoding".equalsIgnoreCase(name) && !"content-length".equalsIgnoreCase(name)) {
+                    values.forEach(value -> exchange.getResponseHeaders().add(name, value));
+                }
+            });
+
+            exchange.sendResponseHeaders(response.statusCode(),
+                    response.body().length == 0 ? -1 : response.body().length);
+
+            try (var os = exchange.getResponseBody()) {
+                if (response.body().length > 0) {
+                    os.write(response.body());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Proxying failed", e);
+        }
     }
 }
