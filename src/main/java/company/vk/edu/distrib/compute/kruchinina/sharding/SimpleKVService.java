@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.kruchinina;
+package company.vk.edu.distrib.compute.kruchinina.sharding;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -7,16 +7,18 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static company.vk.edu.distrib.compute.kruchinina.ServerUtils.*;
+import static company.vk.edu.distrib.compute.kruchinina.sharding.ServerUtils.*;
 
 public class SimpleKVService implements KVService {
     private static final Logger LOG = LoggerFactory.getLogger(SimpleKVService.class);
@@ -39,11 +41,30 @@ public class SimpleKVService implements KVService {
     private final int port;
     private final Dao<byte[]> dao;
     private HttpServer server;
-    private boolean started; // по умолчанию false
+    private boolean started;
 
+    // Кластерная конфигурация
+    private final List<String> clusterNodes; //все узлы, включая себя
+    private final String selfAddress;
+    private final ShardingStrategy shardingStrategy;
+    private final ClusterHttpClient httpClient;
+
+    //Конструктор для одиночного режима
     public SimpleKVService(int port, Dao<byte[]> dao) {
+        this(port, dao, null, null, null);
+    }
+
+    //Конструктор для кластерного режима
+    public SimpleKVService(int port, Dao<byte[]> dao,
+                           List<String> clusterNodes,
+                           String selfAddress,
+                           ShardingStrategy shardingStrategy) {
         this.port = port;
         this.dao = dao;
+        this.clusterNodes = clusterNodes;
+        this.selfAddress = selfAddress;
+        this.shardingStrategy = shardingStrategy;
+        this.httpClient = new ClusterHttpClient();
     }
 
     @Override
@@ -52,15 +73,15 @@ public class SimpleKVService implements KVService {
             throw new IllegalStateException("Service already started");
         }
         try {
-            //Создание HTTP-сервера, привязанного к локальному адресу и указанному порту
-            //Параметр 0 означает использование размера очереди подключений по умолчанию
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext("/v0/status", new StatusHandler());
             server.createContext("/v0/entity", new EntityHandler());
-            server.setExecutor(null); //Cервер будет использовать executor по умолчанию
+            server.setExecutor(null);
             server.start();
             started = true;
-            LOG.info("KVService started on port {}", port);
+            if (LOG.isInfoEnabled()) {
+                LOG.info("KVService started on port {} (cluster mode: {})", port, isClusterMode());
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start HTTP server on port " + port, e);
         }
@@ -73,7 +94,7 @@ public class SimpleKVService implements KVService {
         }
         if (server != null) {
             server.stop(0);
-            LOG.info("KVService stopped");
+            LOG.info("KVService stopped on port {}", port);
         }
         try {
             dao.close();
@@ -81,6 +102,10 @@ public class SimpleKVService implements KVService {
             LOG.error("Error closing DAO", e);
         }
         started = false;
+    }
+
+    private boolean isClusterMode() {
+        return clusterNodes != null && !clusterNodes.isEmpty() && shardingStrategy != null;
     }
 
     private static final class StatusHandler implements HttpHandler {
@@ -102,6 +127,18 @@ public class SimpleKVService implements KVService {
                 sendResponse(exchange, STATUS_BAD_REQUEST, MISSING_ID_MSG.getBytes(StandardCharsets.UTF_8));
                 return;
             }
+
+            //Новый блок: проверка и проксирование в кластерном режиме
+            if (isClusterMode()) {
+                String responsibleNode = shardingStrategy.selectNode(id, clusterNodes);
+                if (!responsibleNode.equals(selfAddress)) {
+                    // Проксируем запрос на ответственный узел
+                    httpClient.proxyRequest(responsibleNode, exchange);
+                    return;
+                }
+            }
+
+            //Локальная обработка
             try {
                 dispatchRequest(exchange, id);
             } catch (Exception e) {
@@ -185,9 +222,6 @@ public class SimpleKVService implements KVService {
         }
     }
 
-    //Метод отправки ответа: устанавливает код статуса и длину тела,
-    // записывает массив байтов в выходной поток,
-    // затем закрывает обмен
     private static void sendResponse(HttpExchange exchange, int statusCode, byte[] body) throws IOException {
         exchange.sendResponseHeaders(statusCode, body.length);
         try (OutputStream os = exchange.getResponseBody()) {

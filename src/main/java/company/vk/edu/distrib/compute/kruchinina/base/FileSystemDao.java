@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.kruchinina;
+package company.vk.edu.distrib.compute.kruchinina.base;
 
 import company.vk.edu.distrib.compute.Dao;
 import org.slf4j.Logger;
