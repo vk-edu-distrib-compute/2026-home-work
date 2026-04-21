@@ -6,34 +6,35 @@ import company.vk.edu.distrib.compute.KVService;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class TadzhnahalKVCluster implements KVCluster {
     private static final String LOCALHOST = "http://localhost:";
 
+    private final TadzhnahalKVServiceFactory factory;
     private final List<String> endpoints;
-    private final Map<String, KVService> nodes;
-    private final Set<String> startedEndpoints;
+    private final Map<String, Integer> portsByEndpoint;
+    private final Map<String, KVService> startedNodes;
 
     public TadzhnahalKVCluster(List<Integer> ports) {
+        this.factory = new TadzhnahalKVServiceFactory();
         this.endpoints = new ArrayList<>();
-        this.nodes = new LinkedHashMap<>();
-        this.startedEndpoints = new HashSet<>();
-
-        TadzhnahalKVServiceFactory factory = new TadzhnahalKVServiceFactory();
+        this.portsByEndpoint = new LinkedHashMap<>();
+        this.startedNodes = new LinkedHashMap<>();
 
         for (Integer port : ports) {
-            String endpoint = LOCALHOST + port;
-            endpoints.add(endpoint);
-
-            try {
-                nodes.put(endpoint, factory.create(port));
-            } catch (IOException e) {
-                throw new IllegalStateException("Cant create node for endpoint " + endpoint, e);
+            if (port == null) {
+                throw new IllegalArgumentException("Port must not be null");
             }
+
+            String endpoint = LOCALHOST + port;
+            if (portsByEndpoint.containsKey(endpoint)) {
+                throw new IllegalArgumentException("Duplicate endpoint: " + endpoint);
+            }
+
+            endpoints.add(endpoint);
+            portsByEndpoint.put(endpoint, port);
         }
     }
 
@@ -46,24 +47,27 @@ public class TadzhnahalKVCluster implements KVCluster {
 
     @Override
     public void start(String endpoint) {
-        KVService service = nodes.get(endpoint);
-
-        if (service == null) {
-            throw new IllegalArgumentException("Unknown endpoint: " + endpoint);
-        }
-
-        if (startedEndpoints.contains(endpoint)) {
+        if (startedNodes.containsKey(endpoint)) {
             return;
         }
 
-        service.start();
-        startedEndpoints.add(endpoint);
+        Integer port = portsByEndpoint.get(endpoint);
+        if (port == null) {
+            throw new IllegalArgumentException("Unknown endpoint: " + endpoint);
+        }
+
+        try {
+            KVService service = factory.create(port);
+            service.start();
+            startedNodes.put(endpoint, service);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot create node for endpoint " + endpoint, e);
+        }
     }
 
     @Override
     public void stop() {
-        List<String> activeEndpoints = new ArrayList<>(startedEndpoints);
-
+        List<String> activeEndpoints = new ArrayList<>(startedNodes.keySet());
         for (String endpoint : activeEndpoints) {
             stop(endpoint);
         }
@@ -71,18 +75,12 @@ public class TadzhnahalKVCluster implements KVCluster {
 
     @Override
     public void stop(String endpoint) {
-        KVService service = nodes.get(endpoint);
-
+        KVService service = startedNodes.remove(endpoint);
         if (service == null) {
-            throw new IllegalArgumentException("Unknown endpoint: " + endpoint);
-        }
-
-        if (!startedEndpoints.contains(endpoint)) {
             return;
         }
 
         service.stop();
-        startedEndpoints.remove(endpoint);
     }
 
     @Override
