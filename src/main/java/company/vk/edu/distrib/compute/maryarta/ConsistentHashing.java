@@ -8,12 +8,15 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class ConsistentHashing implements ShardingStrategy{
+public class ConsistentHashing implements ShardingStrategy {
+    private static final int VIRTUAL_NODES = 100;
     private final NavigableMap<Long, String> endpointsHash = new TreeMap<>();
 
-    public ConsistentHashing (List<String> endpoints){
-        for (String end: endpoints) {
-            this.endpointsHash.put(hash(end), end);
+    public ConsistentHashing(List<String> endpoints) {
+        for (String endpoint: endpoints) {
+            for (int i = 0; i < VIRTUAL_NODES; i++) {
+                this.endpointsHash.put(hash(endpoint + '_' + i), endpoint);
+            }
         }
     }
 
@@ -27,10 +30,10 @@ public class ConsistentHashing implements ShardingStrategy{
         return entry.getValue();
     }
 
-    private long hash (String val) {
+    private long hash(String value) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(val.getBytes());
+            byte[] digest = md.digest(value.getBytes());
             return ByteBuffer.wrap(digest).getLong();
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm is not available", e);
