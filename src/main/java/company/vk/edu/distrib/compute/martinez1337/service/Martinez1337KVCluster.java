@@ -76,7 +76,7 @@ public class Martinez1337KVCluster implements KVCluster {
             service.start();
             runningServices.put(endpoint, service);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start node on port " + port, e);
+            throw new ClusterException("Failed to start node on port " + port, e);
         }
     }
 
