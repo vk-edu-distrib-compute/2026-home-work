@@ -1,9 +1,11 @@
 package company.vk.edu.distrib.compute.maryarta;
 
+@FunctionalInterface
 public interface ShardingStrategy {
-    public enum ShardingAlgorithm {
+    enum ShardingAlgorithm {
         CONSISTENT,
         RENDEZVOUS
     }
+
     String getEndpoint(String key);
 }

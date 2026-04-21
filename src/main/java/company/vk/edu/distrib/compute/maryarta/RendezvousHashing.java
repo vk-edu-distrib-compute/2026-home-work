@@ -5,10 +5,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
-public class RendezvousHashing implements ShardingStrategy{
+public class RendezvousHashing implements ShardingStrategy {
     private final List<String> endpoints;
 
-    public RendezvousHashing(List<String> endpoints){
+    public RendezvousHashing(List<String> endpoints) {
         this.endpoints = endpoints;
     }
 
@@ -25,10 +25,11 @@ public class RendezvousHashing implements ShardingStrategy{
         }
         return target;
     }
-    private long hash (String val) {
+
+    private long hash(String value) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(val.getBytes());
+            byte[] digest = md.digest(value.getBytes());
             return ByteBuffer.wrap(digest).getLong();
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm is not available", e);

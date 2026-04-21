@@ -13,6 +13,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ShardedKVServiceImpl implements KVService {
     private HttpServer server;
@@ -22,6 +24,7 @@ public class ShardedKVServiceImpl implements KVService {
     private final int port;
     private boolean started;
     private final ShardingStrategy shardingStrategy;
+    private ExecutorService executor;
 
     public ShardedKVServiceImpl(int port, ShardingStrategy shardingStrategy) throws IOException {
         this.port = port;
@@ -37,6 +40,8 @@ public class ShardedKVServiceImpl implements KVService {
         }
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
+            executor = Executors.newVirtualThreadPerTaskExecutor();
+            server.setExecutor(executor);
             createContext();
             server.start();
             started = true;
@@ -51,12 +56,20 @@ public class ShardedKVServiceImpl implements KVService {
             return;
         }
         server.stop(0);
+        if (executor != null) {
+            executor.close();
+        }
         server = null;
         started = false;
     }
 
     private void createContext() {
-        server.createContext("/v0/status", exchange -> {
+        server.createContext("/v0/status", handleStatusRequest());
+        server.createContext("/v0/entity", handleEntityRequest());
+    }
+
+    private HttpHandler handleStatusRequest() {
+        return exchange -> {
             String method = exchange.getRequestMethod();
             if ("GET".equals(method)) {
                 exchange.sendResponseHeaders(200, -1);
@@ -64,43 +77,43 @@ public class ShardedKVServiceImpl implements KVService {
                 exchange.sendResponseHeaders(405, -1);
             }
             exchange.close();
-        });
-        server.createContext("/v0/entity", handleRequest());
+        };
     }
 
-    private HttpHandler handleRequest() {
+    private HttpHandler handleEntityRequest() {
         return exchange -> {
-            try {
-                String method = exchange.getRequestMethod();
-                String query = exchange.getRequestURI().getQuery();
-                String target = shardingStrategy.getEndpoint(parseId(query));
-                if (!target.equals(selfEndpoint)) {
-                    proxyRequest(exchange, target);
-                    return;
+            try (exchange) {
+                try {
+                    String method = exchange.getRequestMethod();
+                    String query = exchange.getRequestURI().getQuery();
+                    String id = parseId(query);
+                    String target = shardingStrategy.getEndpoint(parseId(query));
+                    if (!target.equals(selfEndpoint)) {
+                        proxyRequest(exchange, target);
+                        return;
+                    }
+                    switch (method) {
+                        case "GET" -> {
+                            byte[] value = dao.get(id);
+                            exchange.sendResponseHeaders(200, value.length);
+                            exchange.getResponseBody().write(value);
+                        }
+                        case "PUT" -> {
+                            byte[] newValue = exchange.getRequestBody().readAllBytes();
+                            dao.upsert(id, newValue);
+                            exchange.sendResponseHeaders(201, -1);
+                        }
+                        case "DELETE" -> {
+                            dao.delete(id);
+                            exchange.sendResponseHeaders(202, -1);
+                        }
+                        default -> exchange.sendResponseHeaders(405, -1);
+                    }
+                } catch (IllegalArgumentException e) {
+                    exchange.sendResponseHeaders(400, -1);
+                } catch (NoSuchElementException e) {
+                    exchange.sendResponseHeaders(404, -1);
                 }
-                switch (method) {
-                    case "GET" -> {
-                        byte[] value = dao.get(parseId(query));
-                        exchange.sendResponseHeaders(200, value.length); // OK
-                        exchange.getResponseBody().write(value);
-                    }
-                    case "PUT" -> {
-                        byte[] newValue = exchange.getRequestBody().readAllBytes();
-                        dao.upsert(parseId(query), newValue);
-                        exchange.sendResponseHeaders(201, 0); // OK
-                    }
-                    case "DELETE" -> {
-                        dao.delete(parseId(query));
-                        exchange.sendResponseHeaders(202, 0);
-                    }
-                    default -> exchange.sendResponseHeaders(405, 0);
-                }
-            } catch (IllegalArgumentException e) {
-                exchange.sendResponseHeaders(400, 0);
-            } catch (NoSuchElementException e) {
-                exchange.sendResponseHeaders(404, 0);
-            } finally {
-                exchange.close();
             }
         };
     }
@@ -111,31 +124,31 @@ public class ShardedKVServiceImpl implements KVService {
             HttpRequest.Builder request = HttpRequest.newBuilder(uri);
             switch (exchange.getRequestMethod()) {
                 case "GET" -> request.GET();
-                case "PUT" ->
-                        request.PUT(HttpRequest.BodyPublishers
-                    .ofByteArray(exchange.getRequestBody().readAllBytes()));
+                case "PUT" -> {
+                    byte[] requestBody = exchange.getRequestBody().readAllBytes();
+                    request.PUT(HttpRequest.BodyPublishers.ofByteArray(requestBody));
+                }
                 case "DELETE" -> request.DELETE();
                 default -> {
-                        exchange.sendResponseHeaders(405, 0);
+                    exchange.sendResponseHeaders(405, -1);
                     return;
                 }
             }
-            HttpResponse<byte[]> response = client.send(request.build(),
-                    HttpResponse.BodyHandlers.ofByteArray());
+            HttpResponse<byte[]> response = client.send(
+                    request.build(),
+                    HttpResponse.BodyHandlers.ofByteArray()
+            );
             byte[] responseBody = response.body();
             if (responseBody == null) {
                 responseBody = new byte[0];
             }
-                exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
-                exchange.getResponseBody().write(responseBody);
+            exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
+            exchange.getResponseBody().write(responseBody);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             exchange.sendResponseHeaders(500, -1);
-        }catch (IOException e) {
+        } catch (IOException e) {
             exchange.sendResponseHeaders(503, -1);
-        }
-        finally {
-            exchange.close();
         }
     }
 

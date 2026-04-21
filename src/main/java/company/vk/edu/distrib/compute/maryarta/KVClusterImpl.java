@@ -15,13 +15,14 @@ public class KVClusterImpl implements KVCluster {
 
     public KVClusterImpl(List<Integer> ports, ShardingStrategy.ShardingAlgorithm shardingAlgorithm) {
         this.endpoints = ports.stream().map(port -> "http://localhost:" + port).toList();
-        switch (shardingAlgorithm){
-            case CONSISTENT -> shardingStrategy = new ConsistentHashing(endpoints);
-            case RENDEZVOUS -> shardingStrategy = new RendezvousHashing(endpoints);
-        }
+        shardingStrategy = switch (shardingAlgorithm) {
+            case CONSISTENT -> new ConsistentHashing(endpoints);
+            case RENDEZVOUS -> new RendezvousHashing(endpoints);
+        };
         for (Integer port: ports) {
+            String endpoint = "http://localhost:" + port;
             try {
-                kvServices.put("http://localhost:" + port, new ShardedKVServiceImpl(port, shardingStrategy));
+                kvServices.put(endpoint, new ShardedKVServiceImpl(port, shardingStrategy));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
