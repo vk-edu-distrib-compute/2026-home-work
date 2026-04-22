@@ -50,7 +50,6 @@ public class EntityController {
                 case GET -> processGet(exchange, id);
                 case PUT -> processPut(exchange, id);
                 case DELETE -> processDelete(exchange, id);
-                default -> exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_METHOD, -1);
             }
         }
     }
