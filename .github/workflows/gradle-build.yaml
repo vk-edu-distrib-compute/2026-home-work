@@ -1,6 +1,7 @@
 name: Build
 
 on:
+  - push
   - pull_request
 
 jobs:
@@ -28,4 +29,3 @@ jobs:
         with:
           name: Package
           path: build/libs
-          
