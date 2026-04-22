@@ -7,7 +7,6 @@ import company.vk.edu.distrib.compute.aldor7705.KVServiceFactorySimple;
 import company.vk.edu.distrib.compute.andeco.AndecoKVServiceFactory;
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
 import company.vk.edu.distrib.compute.dkoften.KVServiceImpl;
-import company.vk.edu.distrib.compute.dkoften.KVServiceImpl;
 import company.vk.edu.distrib.compute.ip.PopovIgorKVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
