@@ -17,6 +17,9 @@ public final class ServerUtils {
     private static final String DEFAULT_STORAGE_DIR = "./data";
     private static final String CLUSTER_FLAG = "--cluster";
     private static final String ALGORITHM_RENDEZVOUS = "rendezvous";
+    private static final int ARGS_LENGTH = 3;
+    private static final int STATUS = 1;
+
 
     static final String METHOD_GET = "GET";
     static final String METHOD_PUT = "PUT";
@@ -60,11 +63,11 @@ public final class ServerUtils {
     }
 
     private static void runClusterMode(String... args) {
-        if (args.length < 3) {
+        if (args.length < ARGS_LENGTH) {
             if (LOG.isErrorEnabled()) {
                 LOG.error("Usage: --cluster <algorithm> <port1,port2,...>");
             }
-            Runtime.getRuntime().halt(1);
+            Runtime.getRuntime().halt(STATUS);
         }
         String algorithmArg = args[1];
         String portsArg = args[2];
