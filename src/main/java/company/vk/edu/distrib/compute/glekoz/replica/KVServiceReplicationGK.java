@@ -21,9 +21,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.ByteBuffer;
 
 public class KVServiceReplicationGK extends KVServiceGK implements ReplicatedService {
+    protected static final int INTERNAL_SERVER_ERROR = 500;
     private static final Logger log = LoggerFactory.getLogger(KVServiceReplicationGK.class);
     private final ReplicationManager repMan;
     private final HttpClient httpClient;
+    private final int minAcks = 1;
 
     public KVServiceReplicationGK(int port) {
         super(port);
@@ -149,7 +151,7 @@ public class KVServiceReplicationGK extends KVServiceGK implements ReplicatedSer
             return result;
         }
         
-        return null;
+        return new byte[0];
     }
 
     private void sendSuccessResponse(HttpExchange exchange, int status, byte[] body) throws IOException {
@@ -212,7 +214,7 @@ public class KVServiceReplicationGK extends KVServiceGK implements ReplicatedSer
             int statusCode = response.statusCode();
             byte[] resBody = response.body();
             
-            if (statusCode < 500) {
+            if (statusCode < INTERNAL_SERVER_ERROR) {
                 return ProxyResult.success(statusCode, resBody);
             } else {
                 return ProxyResult.error(statusCode);
@@ -234,7 +236,7 @@ public class KVServiceReplicationGK extends KVServiceGK implements ReplicatedSer
                 String value = param.substring(4);
                 try {
                     int res = Integer.parseInt(value);
-                    if (res < 1) {
+                    if (res < minAcks) {
                         log.warn("unacceptable ack value {}", res);
                         return rf / 2 + 1;
                     }

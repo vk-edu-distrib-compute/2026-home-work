@@ -15,6 +15,7 @@ public class ReplicationManager {
     private final Logger log = LoggerFactory.getLogger(ReplicationManager.class);
     private static final String LOCALHOST = "http://localhost:";
     private final int replicationFactor;
+    private final int minReplicas = 3;
     private static final int MAX_PORT_ATTEMPTS = 100;
 
     public ReplicationManager(int port) {
@@ -97,7 +98,7 @@ public class ReplicationManager {
 
         try {
             int res = Integer.parseInt(value);
-            if (res < 3) {
+            if (res < minReplicas) {
                 throw new IllegalArgumentException("At least 3 replicas expected");
             }
             return res;
@@ -113,7 +114,7 @@ public class ReplicationManager {
             int nodePort = port + 1 + nodeId + portAttempt;
             
             try {
-                KVServiceGK service = new KVServiceGK(nodePort);
+                KVServiceGK service = serviceWrapper(nodePort);
                 service.start();
                 
                 String endpoint = toEndpoint(nodePort);
@@ -131,6 +132,10 @@ public class ReplicationManager {
             }
         }
         throw new IllegalStateException("Unable to start service for node ID: " + nodeId);
+    }
+
+    private KVServiceGK serviceWrapper(int port) {
+        return new KVServiceGK(port);
     }
 
     private String toEndpoint(int port) {
