@@ -23,11 +23,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class KVServiceImpl implements KVService {
+    public static final String GET_METHOD = "GET";
+    public static final String PUT_METHOD = "PUT";
+    public static final String DELETE_METHOD = "DELETE";
     private static final int THREADS = 4;
     private static final int EMPTY_RESPONSE = -1;
-    protected static final String GET_METHOD = "GET";
-    protected static final String PUT_METHOD = "PUT";
-    protected static final String DELETE_METHOD = "DELETE";
 
     private boolean isStarted;
     private final Dao<DaoRecord> dao;
@@ -207,7 +207,7 @@ public class KVServiceImpl implements KVService {
         return value;
     }
 
-    protected static void sendEmptyResponse(int code, HttpExchange exchange) throws IOException {
+    public static void sendEmptyResponse(int code, HttpExchange exchange) throws IOException {
         try (exchange) {
             exchange.sendResponseHeaders(code, EMPTY_RESPONSE);
         }

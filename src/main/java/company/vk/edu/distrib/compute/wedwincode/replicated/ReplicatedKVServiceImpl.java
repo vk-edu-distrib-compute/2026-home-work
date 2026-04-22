@@ -9,12 +9,12 @@ import company.vk.edu.distrib.compute.wedwincode.exceptions.QuorumException;
 import company.vk.edu.distrib.compute.wedwincode.exceptions.ServiceStopException;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.CompletionService;
 import java.util.function.Function;
 
 public class ReplicatedKVServiceImpl extends KVServiceImpl implements ReplicatedService {
@@ -25,20 +25,18 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
     private final List<Dao<DaoRecord>> replicas;
     private final boolean[] enabled;
 
-    private final ParallelReplicationService parallelReplicationService;
+    private final ReplicationService replicationService;
     private final ReplicationStatsService statsService;
-
-    private record ReadResult(boolean responded, DaoRecord record) {}
 
     public ReplicatedKVServiceImpl(int port, List<Dao<DaoRecord>> replicas) throws IOException {
         super(port, null);
-        this.server.createContext(STATS_PREFIX, this::handleStats);
         this.port = port;
         this.replicas = replicas;
         enabled = new boolean[replicas.size()];
         Arrays.fill(enabled, true);
-        parallelReplicationService = new ParallelReplicationService(replicas, i -> enabled[i]);
-        statsService = new ReplicationStatsService(replicas.size());
+        replicationService = new ReplicationService(replicas, i -> enabled[i]);
+        statsService = new ReplicationStatsService(replicas.size(), STATS_PREFIX);
+        this.server.createContext(STATS_PREFIX, statsService::handleStats);
     }
 
     @Override
@@ -97,38 +95,33 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
         String id = getValueFromParams("id", params);
         int ack = getAck(params);
 
-        Function<Integer, ReadResult> taskGet = (replicaId) -> {
+        Function<Integer, ReplicationService.ReadResult> taskGet = replicaId -> {
             statsService.incrementRequestCount(replicaId);
             try {
-                var replica = replicas.get(replicaId);
-                return new ReadResult(true, replica.get(id));
+                return new ReplicationService.ReadResult(true, replicas.get(replicaId).get(id));
             } catch (NoSuchElementException e) {
-                return new ReadResult(true, null);
+                return new ReplicationService.ReadResult(true, null);
             } catch (IOException e) {
-                return new ReadResult(false, null);
+                return new ReplicationService.ReadResult(false, null);
             }
         };
 
-        List<ReadResult> results = parallelReplicationService.performTaskWithResult(taskGet);
+        CompletionService<ReplicationService.ReadResult> cs = replicationService.createTasks(taskGet);
+        List<ReplicationService.ReadResult> results = replicationService.getResults(
+                cs,
+                ack,
+                ReplicationService.ReadResult::responded
+        );
+        ReplicationService.AggregationResult aggregationResult = replicationService.aggregateResults(results);
 
-        int confirmed = 0;
-        DaoRecord best = null;
-        for (var result: results) {
-            if (result.responded) {
-                confirmed++;
-            }
-            if (best == null || result.record().timestamp() > best.timestamp()) {
-                best = result.record();
-            }
-        }
-        if (confirmed < ack) {
+        if (aggregationResult.responded() < ack) {
             throw new QuorumException("id not found");
         }
-        if (best == null || best.deleted()) {
+        if (aggregationResult.best() == null || aggregationResult.best().deleted()) {
             throw new NoSuchElementException("id was deleted");
         }
 
-        return best;
+        return aggregationResult.best();
     }
 
     @Override
@@ -136,11 +129,12 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
         String id = getValueFromParams("id", params);
         int ack = getAck(params);
 
-        Function<Integer, Boolean> upsertion = (replicaId) -> {
+        DaoRecord daoRecord = DaoRecord.buildCreated(data);
+
+        Function<Integer, Boolean> taskUpsert = replicaId -> {
             statsService.incrementRequestCount(replicaId);
             try {
-                var replica = replicas.get(replicaId);
-                replica.upsert(id, DaoRecord.buildCreated(data));
+                replicas.get(replicaId).upsert(id, daoRecord);
                 statsService.incrementKeysCount(replicaId);
                 return true;
             } catch (Exception e) {
@@ -148,7 +142,9 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
             }
         };
 
-        List<Boolean> results = parallelReplicationService.performTaskWithResult(upsertion);
+        CompletionService<Boolean> cs = replicationService.createTasks(taskUpsert);
+        List<Boolean> results = replicationService.getResults(cs, ack, Boolean.TRUE::equals);
+
         int confirmed = (int) results.stream().filter(Boolean.TRUE::equals).count();
         if (confirmed < ack) {
             throw new QuorumException("error upserting data");
@@ -160,18 +156,19 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
         String id = getValueFromParams("id", params);
         int ack = getAck(params);
 
-        Function<Integer, Boolean> deletion = (replicaId) -> {
+        Function<Integer, Boolean> taskDelete = replicaId -> {
             statsService.incrementRequestCount(replicaId);
             try {
-                var replica = replicas.get(replicaId);
-                replica.delete(id);
+                replicas.get(replicaId).delete(id);
                 return true;
             } catch (Exception e) {
                 return false;
             }
         };
 
-        List<Boolean> results = parallelReplicationService.performTaskWithResult(deletion);
+        CompletionService<Boolean> cs = replicationService.createTasks(taskDelete);
+        List<Boolean> results = replicationService.getResults(cs, ack, Boolean.TRUE::equals);
+
         int confirmed = (int) results.stream().filter(Boolean.TRUE::equals).count();
         if (confirmed < ack) {
             throw new QuorumException("error deleting data");
@@ -184,52 +181,6 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
             return Integer.parseInt(ackRaw);
         } catch (IllegalArgumentException e) {
             return DEFAULT_ACK;
-        }
-    }
-
-    private void handleStats(HttpExchange exchange) throws IOException {
-        if (!GET_METHOD.equals(exchange.getRequestMethod())) {
-            handleUnsupportedMethod(exchange);
-            return;
-        }
-
-        String path = exchange.getRequestURI().getPath();
-        if (!path.startsWith(STATS_PREFIX)) {
-            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
-            return;
-        }
-
-        String suffix = path.substring(STATS_PREFIX.length());
-        String[] parts = suffix.split("/");
-
-        int id = Integer.parseInt(parts[0]);
-
-        if (parts.length == 1) {
-            handleKeyStats(id, exchange);
-        } else if (parts.length == 2 && "access".equals(parts[1])) {
-            handleAccessStats(id, exchange);
-        }
-    }
-
-    private void handleKeyStats(int id, HttpExchange exchange) throws IOException {
-        try (exchange) {
-            int keysCountRaw = statsService.getKeysCount(id);
-            String keysCount = String.valueOf(keysCountRaw);
-            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, keysCount.getBytes().length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(keysCount.getBytes());
-            }
-        }
-    }
-
-    private void handleAccessStats(int id, HttpExchange exchange) throws IOException {
-        try (exchange) {
-            float accessRateRaw = statsService.getAccessRate(id);
-            String accessRate = String.valueOf(accessRateRaw);
-            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, accessRate.getBytes().length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(accessRate.getBytes());
-            }
         }
     }
 }
