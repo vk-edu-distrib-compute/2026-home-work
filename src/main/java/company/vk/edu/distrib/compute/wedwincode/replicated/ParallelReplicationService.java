@@ -23,16 +23,16 @@ public class ParallelReplicationService {
         this.replicaExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
-    public <T> List<T> performTaskWithResult(Function<Dao<DaoRecord>, T> task) {
+    public <T> List<T> performTaskWithResult(Function<Integer, T> task) {
         List<CompletableFuture<T>> futures = new ArrayList<>();
         for (int i = 0; i < replicas.size(); i++) {
             if (!isEnabled.test(i)) {
                 continue;
             }
 
-            final var replica = replicas.get(i);
+            final int replicaId = i;
             futures.add(CompletableFuture.supplyAsync(
-                    () -> task.apply(replica),
+                    () -> task.apply(replicaId),
                     replicaExecutor
             ));
         }

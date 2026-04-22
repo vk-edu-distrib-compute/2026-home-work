@@ -9,6 +9,7 @@ import company.vk.edu.distrib.compute.wedwincode.exceptions.QuorumException;
 import company.vk.edu.distrib.compute.wedwincode.exceptions.ServiceStopException;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.util.Arrays;
 import java.util.List;
@@ -18,22 +19,26 @@ import java.util.function.Function;
 
 public class ReplicatedKVServiceImpl extends KVServiceImpl implements ReplicatedService {
     private static final int DEFAULT_ACK = 1;
+    private static final String STATS_PREFIX = "/v0/stats/replica/";
 
     private final int port;
     private final List<Dao<DaoRecord>> replicas;
     private final boolean[] enabled;
 
     private final ParallelReplicationService parallelReplicationService;
+    private final ReplicationStatsService statsService;
 
     private record ReadResult(boolean responded, DaoRecord record) {}
 
     public ReplicatedKVServiceImpl(int port, List<Dao<DaoRecord>> replicas) throws IOException {
         super(port, null);
+        this.server.createContext(STATS_PREFIX, this::handleStats);
         this.port = port;
         this.replicas = replicas;
         enabled = new boolean[replicas.size()];
         Arrays.fill(enabled, true);
         parallelReplicationService = new ParallelReplicationService(replicas, i -> enabled[i]);
+        statsService = new ReplicationStatsService(replicas.size());
     }
 
     @Override
@@ -92,8 +97,10 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
         String id = getValueFromParams("id", params);
         int ack = getAck(params);
 
-        Function<Dao<DaoRecord>, ReadResult> taskGet = (replica) -> {
+        Function<Integer, ReadResult> taskGet = (replicaId) -> {
+            statsService.incrementRequestCount(replicaId);
             try {
+                var replica = replicas.get(replicaId);
                 return new ReadResult(true, replica.get(id));
             } catch (NoSuchElementException e) {
                 return new ReadResult(true, null);
@@ -129,9 +136,12 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
         String id = getValueFromParams("id", params);
         int ack = getAck(params);
 
-        Function<Dao<DaoRecord>, Boolean> upsertion = (replica) -> {
+        Function<Integer, Boolean> upsertion = (replicaId) -> {
+            statsService.incrementRequestCount(replicaId);
             try {
+                var replica = replicas.get(replicaId);
                 replica.upsert(id, DaoRecord.buildCreated(data));
+                statsService.incrementKeysCount(replicaId);
                 return true;
             } catch (Exception e) {
                 return false;
@@ -150,8 +160,10 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
         String id = getValueFromParams("id", params);
         int ack = getAck(params);
 
-        Function<Dao<DaoRecord>, Boolean> deletion = (replica) -> {
+        Function<Integer, Boolean> deletion = (replicaId) -> {
+            statsService.incrementRequestCount(replicaId);
             try {
+                var replica = replicas.get(replicaId);
                 replica.delete(id);
                 return true;
             } catch (Exception e) {
@@ -172,6 +184,52 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
             return Integer.parseInt(ackRaw);
         } catch (IllegalArgumentException e) {
             return DEFAULT_ACK;
+        }
+    }
+
+    private void handleStats(HttpExchange exchange) throws IOException {
+        if (!GET_METHOD.equals(exchange.getRequestMethod())) {
+            handleUnsupportedMethod(exchange);
+            return;
+        }
+
+        String path = exchange.getRequestURI().getPath();
+        if (!path.startsWith(STATS_PREFIX)) {
+            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
+            return;
+        }
+
+        String suffix = path.substring(STATS_PREFIX.length());
+        String[] parts = suffix.split("/");
+
+        int id = Integer.parseInt(parts[0]);
+
+        if (parts.length == 1) {
+            handleKeyStats(id, exchange);
+        } else if (parts.length == 2 && "access".equals(parts[1])) {
+            handleAccessStats(id, exchange);
+        }
+    }
+
+    private void handleKeyStats(int id, HttpExchange exchange) throws IOException {
+        try (exchange) {
+            int keysCountRaw = statsService.getKeysCount(id);
+            String keysCount = String.valueOf(keysCountRaw);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, keysCount.getBytes().length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(keysCount.getBytes());
+            }
+        }
+    }
+
+    private void handleAccessStats(int id, HttpExchange exchange) throws IOException {
+        try (exchange) {
+            float accessRateRaw = statsService.getAccessRate(id);
+            String accessRate = String.valueOf(accessRateRaw);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, accessRate.getBytes().length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(accessRate.getBytes());
+            }
         }
     }
 }
