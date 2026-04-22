@@ -21,6 +21,7 @@ import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevKVServiceFa
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevFileSystemKVServiceFactory;
 
 import company.vk.edu.distrib.compute.luckyslon2003.LuckySlon2003KVServiceFactory;
+import company.vk.edu.distrib.compute.wedwincode.replicated.EdwinReplicatedKVServiceFactory;
 import company.vk.edu.distrib.compute.wolfram158.Wolfram158KVServiceFactoryFileWithCacheImpl;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -49,7 +50,8 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         KirillmedvedevFileSystemKVServiceFactory.class,
         LuckySlon2003KVServiceFactory.class,
         Wolfram158KVServiceFactoryFileWithCacheImpl.class,
-        CakeKVServiceFactory.class
+        CakeKVServiceFactory.class,
+        EdwinReplicatedKVServiceFactory.class
     );
 
     @Override
