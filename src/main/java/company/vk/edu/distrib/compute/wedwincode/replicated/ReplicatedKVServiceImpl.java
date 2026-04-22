@@ -21,7 +21,7 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
     private static final int DEFAULT_ACK = 1;
     private static final String STATS_PREFIX = "/v0/stats/replica/";
 
-    private final int port;
+    private final int portNumber;
     private final List<Dao<DaoRecord>> replicas;
     private final boolean[] enabled;
 
@@ -30,7 +30,7 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
 
     public ReplicatedKVServiceImpl(int port, List<Dao<DaoRecord>> replicas) throws IOException {
         super(port, null);
-        this.port = port;
+        this.portNumber = port;
         this.replicas = replicas;
         enabled = new boolean[replicas.size()];
         Arrays.fill(enabled, true);
@@ -41,7 +41,7 @@ public class ReplicatedKVServiceImpl extends KVServiceImpl implements Replicated
 
     @Override
     public int port() {
-        return port;
+        return portNumber;
     }
 
     @Override

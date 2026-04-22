@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.wedwincode.replicated;
 
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.wedwincode.DaoRecord;
+import company.vk.edu.distrib.compute.wedwincode.exceptions.ReplicationException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,9 +67,9 @@ public class ReplicationService {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
+            throw new ReplicationException("thread interrupted", e);
         } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            throw new ReplicationException("executor error", e);
         }
 
         return results;

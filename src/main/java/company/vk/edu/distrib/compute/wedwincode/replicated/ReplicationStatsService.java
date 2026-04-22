@@ -40,9 +40,12 @@ public class ReplicationStatsService {
 
         int id = Integer.parseInt(parts[0]);
 
-        if (parts.length == 1) {
+        final int keyModePartLength = 1;
+        final int accessPartLength = 2;
+
+        if (parts.length == keyModePartLength) {
             handleKeyStats(id, exchange);
-        } else if (parts.length == 2 && "access".equals(parts[1])) {
+        } else if (parts.length == accessPartLength && "access".equals(parts[1])) {
             handleAccessStats(id, exchange);
         }
     }
