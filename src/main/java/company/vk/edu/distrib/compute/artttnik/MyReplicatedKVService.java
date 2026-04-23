@@ -38,7 +38,6 @@ public class MyReplicatedKVService implements ReplicatedService {
 
     private final int servicePort;
     private final MyReplicaManager replicaManager;
-    private final String selfEndpoint;
     private final ProxyService proxyService;
 
     private ExecutorService executor;
@@ -56,7 +55,7 @@ public class MyReplicatedKVService implements ReplicatedService {
     ) {
         this.servicePort = port;
         this.replicaManager = new MyReplicaManager(replicaDaos);
-        this.selfEndpoint = "http://localhost:" + port;
+        String selfEndpoint = "http://localhost:" + port;
         this.proxyService = new ProxyService(selfEndpoint, endpoints, shardingStrategy);
     }
 
@@ -208,9 +207,19 @@ public class MyReplicatedKVService implements ReplicatedService {
         }
 
         private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
+            if (replicaManager.enabledReplicas() < ack) {
+                exchange.sendResponseHeaders(HTTP_INTERNAL_ERROR, -1);
+                return;
+            }
+
             var res = replicaManager.readLatest(id);
 
-            if (res.confirmations() < ack || res.latest() == null || res.latest().deleted()) {
+            if (res.confirmations() < ack) {
+                exchange.sendResponseHeaders(HTTP_INTERNAL_ERROR, -1);
+                return;
+            }
+
+            if (res.latest() == null || res.latest().deleted()) {
                 exchange.sendResponseHeaders(HTTP_NOT_FOUND, -1);
                 return;
             }
