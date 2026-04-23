@@ -6,7 +6,6 @@ import java.util.stream.Stream;
 import company.vk.edu.distrib.compute.aldor7705.KVServiceFactorySimple;
 import company.vk.edu.distrib.compute.andeco.AndecoKVServiceFactory;
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
-import company.vk.edu.distrib.compute.golubtsov_pavel.PGInMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.ip.PopovIgorKVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.gavrilova_ekaterina.InMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.b10nicle.B10nicleKVServiceFactory;
@@ -38,8 +37,7 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         VredakonKVServiceFactory.class,
         PopovIgorKVServiceFactoryImpl.class,
         NesterukiaInMemoryKVServiceFactory.class,
-        NesterukiaFileSystemKVServiceFactory.class,
-        PGInMemoryKVServiceFactory.class
+        NesterukiaFileSystemKVServiceFactory.class
     );
 
     @Override
