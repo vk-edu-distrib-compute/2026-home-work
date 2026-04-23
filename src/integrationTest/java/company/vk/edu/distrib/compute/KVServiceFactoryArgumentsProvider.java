@@ -20,6 +20,7 @@ import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
 import company.vk.edu.distrib.compute.wolfram158.Wolfram158KVServiceFactoryFileWithCacheImpl;
+import company.vk.edu.distrib.compute.yyaarr.YyaarrKVServiceFileFactory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -39,6 +40,7 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         NihuawayKVServiceFactory.class,
         ShuuuurikFileKVServiceFactory.class,
         B10nicleKVServiceFactory.class,
+        YyaarrKVServiceFileFactory.class,
         VredakonKVServiceFactory.class,
         PopovIgorKVServiceFactoryImpl.class,
         NesterukiaFileSystemKVServiceFactory.class,
