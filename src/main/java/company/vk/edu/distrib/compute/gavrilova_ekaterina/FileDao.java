@@ -26,7 +26,7 @@ public class FileDao implements Dao<byte[]> {
         try {
             return Files.readAllBytes(file);
         } catch (Exception e) {
-            throw new NoSuchElementException(e.initCause(e));
+            throw new NoSuchElementException("Key not found: " + key, e);
         }
     }
 
