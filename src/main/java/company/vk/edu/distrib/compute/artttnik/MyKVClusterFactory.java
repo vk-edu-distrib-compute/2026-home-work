@@ -9,6 +9,11 @@ import java.util.List;
 public class MyKVClusterFactory extends KVClusterFactory {
     private final int replicaCount;
 
+    public MyKVClusterFactory() {
+        super();
+        this.replicaCount = ReplicationConfig.resolveReplicaCount();
+    }
+
     public MyKVClusterFactory(int replicaCount) {
         super();
         this.replicaCount = replicaCount;
