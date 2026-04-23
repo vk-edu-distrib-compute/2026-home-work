@@ -1,11 +1,13 @@
 package company.vk.edu.distrib.compute.artttnik;
 
+import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.artttnik.shard.ShardingStrategy;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,12 +17,14 @@ public class MyKVCluster implements KVCluster {
 
     private final List<String> endpoints;
     private final Map<String, KVService> servicesByEndpoint;
+    private final int replicaCount;
 
-    public MyKVCluster(List<Integer> ports, ShardingStrategy shardingStrategy) {
+    public MyKVCluster(List<Integer> ports, ShardingStrategy shardingStrategy, int replicaCount) {
         this.endpoints = ports.stream()
                 .map(port -> "http://localhost:" + port)
                 .toList();
         this.servicesByEndpoint = new LinkedHashMap<>();
+        this.replicaCount = replicaCount;
 
         for (int i = 0; i < ports.size(); i++) {
             int port = ports.get(i);
@@ -31,7 +35,16 @@ public class MyKVCluster implements KVCluster {
 
     private KVService createNodeService(int port, ShardingStrategy shardingStrategy) {
         Path nodeStoragePath = CLUSTER_STORAGE_ROOT.resolve(String.valueOf(port));
-        return new MyKVService(port, new MyDao(nodeStoragePath), endpoints, shardingStrategy);
+        return new MyReplicatedKVService(port, createReplicaDaos(nodeStoragePath), endpoints, shardingStrategy);
+    }
+
+    private List<Dao<byte[]>> createReplicaDaos(Path nodeStoragePath) {
+        List<Dao<byte[]>> result = new ArrayList<>(replicaCount);
+        for (int i = 0; i < replicaCount; i++) {
+            result.add(new MyDao(nodeStoragePath.resolve("replica-" + i)));
+        }
+
+        return Collections.unmodifiableList(result);
     }
 
     @Override
