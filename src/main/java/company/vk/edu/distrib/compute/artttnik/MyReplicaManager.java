@@ -34,6 +34,21 @@ final class MyReplicaManager implements AutoCloseable {
         this.versionGenerator = new AtomicLong(System.nanoTime());
     }
 
+    int enabledReplicas() {
+        lock.lock();
+        try {
+            int count = 0;
+            for (ReplicaNode r : replicas) {
+                if (r.isEnabled()) {
+                    count++;
+                }
+            }
+            return count;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     int numberOfReplicas() {
         return replicas.size();
     }
