@@ -2,13 +2,14 @@ package company.vk.edu.distrib.compute.andrey1af.dao;
 
 import company.vk.edu.distrib.compute.Dao;
 
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
@@ -17,12 +18,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InFileDao implements Dao<byte[]> {
 
+    private static final String FILE_EXTENSION = ".bin";
+
     private final Path directory;
     private final Map<String, byte[]> cache;
+    private volatile boolean closed;
 
-    public InFileDao(Path filePath) {
-        this.directory = filePath;
+    public InFileDao(Path directory) {
+        this.directory = directory;
         this.cache = new ConcurrentHashMap<>();
+
         try {
             Files.createDirectories(directory);
         } catch (IOException e) {
@@ -31,7 +36,8 @@ public class InFileDao implements Dao<byte[]> {
     }
 
     @Override
-    public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+    public byte[] get(String key) throws IOException {
+        checkNotClosed();
         checkKey(key);
 
         byte[] cached = cache.get(key);
@@ -40,31 +46,31 @@ public class InFileDao implements Dao<byte[]> {
         }
 
         Path file = fileForKey(key);
-        if (!Files.exists(file)) {
+        try {
+            byte[] value = Files.readAllBytes(file);
+            cache.put(key, value);
+            return Arrays.copyOf(value, value.length);
+        } catch (NoSuchFileException e) {
             throw new NoSuchElementException("Key not found: " + key);
         }
-        byte[] value = Files.readAllBytes(file);
-        cache.put(key, value);
-        return Arrays.copyOf(value, value.length);
     }
 
     @Override
-    public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
+    public void upsert(String key, byte[] value) throws IOException {
+        checkNotClosed();
         checkKey(key);
+
         if (value == null) {
             throw new IllegalArgumentException("Value cannot be null");
         }
-        byte[] storedValue = Arrays.copyOf(value, value.length);
 
+        byte[] storedValue = Arrays.copyOf(value, value.length);
         Path target = fileForKey(key);
         Path tempFile = Files.createTempFile(directory, "infile-dao-", ".tmp");
+
         try {
             Files.write(tempFile, storedValue);
-            try {
-                Files.move(tempFile, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+            moveAtomicallyOrReplace(tempFile, target);
             cache.put(key, storedValue);
         } finally {
             Files.deleteIfExists(tempFile);
@@ -72,14 +78,17 @@ public class InFileDao implements Dao<byte[]> {
     }
 
     @Override
-    public void delete(String key) throws IllegalArgumentException, IOException {
+    public void delete(String key) throws IOException {
+        checkNotClosed();
         checkKey(key);
-        cache.remove(key);
+
         Files.deleteIfExists(fileForKey(key));
+        cache.remove(key);
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
+        closed = true;
         cache.clear();
     }
 
@@ -87,12 +96,31 @@ public class InFileDao implements Dao<byte[]> {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Key cannot be null or blank");
         }
+        if (key.length() > 1024) {
+            throw new IllegalArgumentException("Key is too long");
+        }
+    }
+
+    private void checkNotClosed() {
+        if (closed) {
+            throw new IllegalStateException("DAO is closed");
+        }
     }
 
     private Path fileForKey(String key) {
         String encoded = Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(key.getBytes(StandardCharsets.UTF_8));
-        return directory.resolve(encoded + ".bin");
+        return directory.resolve(encoded + FILE_EXTENSION);
+    }
+
+    private void moveAtomicallyOrReplace(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 }

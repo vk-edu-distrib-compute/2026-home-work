@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Andrey1afKVService implements KVService {
 
@@ -20,16 +23,22 @@ public class Andrey1afKVService implements KVService {
     private final Dao<byte[]> dao;
     private final String selfEndpoint;
     private final HashRouter hashRouter;
+    private final AtomicBoolean stopped = new AtomicBoolean(false);
 
     Andrey1afKVService(int port, Dao<byte[]> dao) throws IOException {
         this(port, dao, null, null);
     }
 
     Andrey1afKVService(int port, Dao<byte[]> dao, String selfEndpoint, HashRouter hashRouter) throws IOException {
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.dao = dao;
+        this.dao = Objects.requireNonNull(dao, "dao cannot be null");
         this.selfEndpoint = selfEndpoint;
         this.hashRouter = hashRouter;
+
+        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.server.setExecutor(Executors.newFixedThreadPool(
+                Math.max(2, Runtime.getRuntime().availableProcessors())
+        ));
+
         initServer();
     }
 
@@ -41,21 +50,23 @@ public class Andrey1afKVService implements KVService {
     @Override
     public void start() {
         server.start();
-        if (log.isInfoEnabled()) {
-            log.info("Starting Andrey1afKVService on port {}", server.getAddress().getPort());
-        }
+        log.info("Starting Andrey1afKVService on {}", server.getAddress());
     }
 
     @Override
     public void stop() {
+        if (!stopped.compareAndSet(false, true)) {
+            return;
+        }
+
         server.stop(1);
+
         try {
             dao.close();
         } catch (IOException e) {
             log.error("Failed to close DAO", e);
         }
-        if (log.isInfoEnabled()) {
-            log.info("Andrey1afKVService stopped");
-        }
+
+        log.info("Andrey1afKVService stopped");
     }
 }
