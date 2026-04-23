@@ -1,23 +1,25 @@
 package company.vk.edu.distrib.compute;
 
 import module java.base;
-import company.vk.edu.distrib.compute.dummy.DummyKVClusterFactory;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
+import company.vk.edu.distrib.compute.artttnik.MyKVClusterFactory;
+import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
+import company.vk.edu.distrib.compute.artttnik.ReplicationConfig;
 import org.slf4j.LoggerFactory;
 
 public class Server {
 
     void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
+        int replicaCount = ReplicationConfig.resolveReplicaCount(args);
         if (isClusterMode(args)) {
             List<Integer> ports = Arrays.asList(8080, 8081);
-            KVCluster cluster = new DummyKVClusterFactory().create(ports);
+            KVCluster cluster = new MyKVClusterFactory(replicaCount).create(ports);
             cluster.start();
             log.info("Cluster started on ports={}", ports);
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
         } else {
             var port = 8080;
-            KVService storage = new DummyKVServiceFactory().create(port);
+            KVService storage = new MyKVServiceFactory(replicaCount).create(port);
             storage.start();
             log.info("Server started on port {}", port);
             Runtime.getRuntime().addShutdownHook(new Thread(storage::stop));
