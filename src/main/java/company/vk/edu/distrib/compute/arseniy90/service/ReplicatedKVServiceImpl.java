@@ -42,7 +42,6 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     private final HttpServer server;
     private final ReplicaClient replicaClient;
     private final QuorumCoordinator coordinator;
-    private final StatisticsAggregator statsAggregator;
     private final Set<Integer> disabledNodes = ConcurrentHashMap.newKeySet();
     private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
@@ -56,7 +55,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
         this.server = HttpServer.create(new InetSocketAddress(currentPort), 0);
         server.setExecutor(executor);
         HttpClient client = HttpClient.newBuilder().executor(executor).connectTimeout(Duration.ofMillis(500)).build();
-        this.statsAggregator = new StatisticsAggregator();
+        StatisticsAggregator statsAggregator = new StatisticsAggregator();
         this.replicaClient = new ReplicaClient(client, executor, currentEndpoint, dao, statsAggregator, disabledNodes);
         this.coordinator = new QuorumCoordinator(hashRouter, this.replicaClient, replicationFactor);
         initRoutes();
