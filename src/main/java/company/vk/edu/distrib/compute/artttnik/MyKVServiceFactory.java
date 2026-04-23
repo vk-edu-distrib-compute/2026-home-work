@@ -14,6 +14,11 @@ public class MyKVServiceFactory extends KVServiceFactory {
 
     private final int replicaCount;
 
+    public MyKVServiceFactory() {
+        super();
+        this.replicaCount = ReplicationConfig.resolveReplicaCount();
+    }
+
     public MyKVServiceFactory(int replicaCount) {
         super();
         this.replicaCount = replicaCount;
