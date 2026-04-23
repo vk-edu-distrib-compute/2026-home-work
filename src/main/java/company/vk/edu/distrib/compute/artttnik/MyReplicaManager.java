@@ -1,6 +1,8 @@
 package company.vk.edu.distrib.compute.artttnik;
 
 import company.vk.edu.distrib.compute.Dao;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -11,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class MyReplicaManager implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(MyReplicaManager.class);
     private static final int RECORD_HEADER_SIZE = Long.BYTES + 1 + Integer.BYTES;
 
     private final List<ReplicaNode> replicas;
@@ -79,7 +82,9 @@ final class MyReplicaManager implements AutoCloseable {
                         latest = record;
                     }
                 } catch (IOException e) {
-                    // best-effort quorum read; failed replicas simply do not confirm
+                    if (log.isDebugEnabled()) {
+                        log.debug("Failed to read from replica", e);
+                    }
                 }
             }
 
@@ -114,7 +119,9 @@ final class MyReplicaManager implements AutoCloseable {
                     replica.write(key, record);
                     confirmations++;
                 } catch (IOException e) {
-                    // best-effort quorum write; failed replicas simply do not confirm
+                    if (log.isDebugEnabled()) {
+                        log.debug("Failed to write to replica", e);
+                    }
                 }
             }
             return confirmations;
@@ -131,7 +138,6 @@ final class MyReplicaManager implements AutoCloseable {
         if (nodeId < 0 || nodeId >= replicas.size()) {
             throw new IllegalArgumentException("Replica id out of range: " + nodeId);
         }
-
         return replicas.get(nodeId);
     }
 
@@ -166,6 +172,7 @@ final class MyReplicaManager implements AutoCloseable {
             long version = buffer.getLong();
             boolean deleted = buffer.get() != 0;
             int length = buffer.getInt();
+
             if (length < 0 || length > buffer.remaining()) {
                 return null;
             }
