@@ -1,15 +1,12 @@
 package company.vk.edu.distrib.compute.nihuaway00.storage;
 
 import java.nio.ByteBuffer;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.Instant;
 
 public class VersionedEntry {
     private long timestamp;
     private boolean tombstone;
     private byte[] data;
-    private static final VersionedEntry ABSENT = new VersionedEntry(0L, true, new byte[0]);
 
     public VersionedEntry(byte[] data) {
         actualizeTimestamp();
@@ -42,7 +39,7 @@ public class VersionedEntry {
     }
 
     public static VersionedEntry getAbsentInstance() {
-        return ABSENT;
+        return new VersionedEntry(0L, true, new byte[0]);
     }
 
     public long getTimestamp() {
@@ -50,10 +47,7 @@ public class VersionedEntry {
     }
 
     private void actualizeTimestamp() {
-        LocalDateTime newTime = LocalDateTime.now();
-        ZoneId zoneId = ZoneId.of("UTC");
-        ZonedDateTime zonedDateTime = newTime.atZone(zoneId);
-        this.timestamp = zonedDateTime.toInstant().toEpochMilli();
+        this.timestamp = Instant.now().toEpochMilli();
     }
 
     public boolean isTombstone() {

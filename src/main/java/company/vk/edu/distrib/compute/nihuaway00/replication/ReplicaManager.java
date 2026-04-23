@@ -26,8 +26,16 @@ public class ReplicaManager {
     }
 
     private void checkAckValue(int ack) {
-        if (ack > numberOfReplicas()) {
-            throw new IllegalArgumentException("ack is bigger than enabled replicas count");
+        if (ack < 1 || ack > numberOfReplicas()) {
+            throw new IllegalArgumentException(
+                    "ack must be in range [1, " + numberOfReplicas() + "]"
+            );
+        }
+    }
+
+    private void validateNodeId(int nodeId) {
+        if (nodeId < 0 || nodeId >= replicas.size()) {
+            throw new IllegalArgumentException("Invalid replica nodeId: " + nodeId);
         }
     }
 
@@ -36,10 +44,12 @@ public class ReplicaManager {
     }
 
     public void disableReplica(int nodeId) {
+        validateNodeId(nodeId);
         replicas.get(nodeId).disable();
     }
 
     public void enableReplica(int nodeId) {
+        validateNodeId(nodeId);
         replicas.get(nodeId).enable();
     }
 
