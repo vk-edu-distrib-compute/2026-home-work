@@ -15,7 +15,7 @@ public class KVProxyClient {
 
     public void proxy(HttpExchange exchange, Node targetNode) throws IOException {
         String method = exchange.getRequestMethod();
-        String uri = targetNode.getName() + exchange.getRequestURI().getPath() + "?"
+        String uri = targetNode.name() + exchange.getRequestURI().getPath() + "?"
                 + exchange.getRequestURI().getQuery();
         HttpRequest.Builder request = HttpRequest.newBuilder().uri(URI.create(uri));
 

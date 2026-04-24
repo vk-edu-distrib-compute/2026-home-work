@@ -6,7 +6,7 @@ import com.google.common.hash.Hashing;
 import company.vk.edu.distrib.compute.borodinavalera1996dev.cluster.Node;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
+import java.util.*;
 
 public class RendezvousStrategy implements HashingStrategy {
 
@@ -18,23 +18,32 @@ public class RendezvousStrategy implements HashingStrategy {
     }
 
     @Override
-    public Node getNode(String key) {
-        Node winner = null;
-        long maxWeight = Long.MIN_VALUE;
-
+    public List<Node> getNodes(String key, int numberOfReplicated) {
+        List<WeightNode> weightNodes = new ArrayList<>();
         for (Node node : nodes) {
-            long weight = hash(key + node);
+            weightNodes.add(new WeightNode(node, hash(key + node)));
+        }
+        weightNodes.sort(Comparator.comparingLong(WeightNode::weight).reversed());
 
-            if (weight > maxWeight) {
-                maxWeight = weight;
-                winner = node;
+        List<Node> nodes = new ArrayList<>(weightNodes.size());
+        for (int i = 0; i < numberOfReplicated; i++) {
+            if (weightNodes.get(i).node.status()) {
+                nodes.add(weightNodes.get(i).node);
             }
         }
-        return winner;
+        return nodes;
+    }
+
+    @Override
+    public Node getNode(String key) {
+        return getNodes(key, 1).getFirst();
     }
 
     private long hash(String key) {
         HashCode hc = hf.hashString(key, StandardCharsets.UTF_8);
         return hc.asLong();
+    }
+
+    private record WeightNode(Node node, long weight) {
     }
 }
