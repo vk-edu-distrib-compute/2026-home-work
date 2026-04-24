@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,7 +46,7 @@ public class ReplicaManager {
     }
 
     public List<Integer> getReplicaIndexes(String key) {
-        return selector.getReplicaIndexes(key);
+        return Collections.unmodifiableList(selector.getReplicaIndexes(key));
     }
 
     public void disableReplica(int nodeId) {
