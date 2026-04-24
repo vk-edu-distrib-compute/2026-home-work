@@ -71,10 +71,12 @@ public class MyKVCluster implements KVCluster {
             mapOfNodes.put(endpoint, node);
             log.info("Node started on endpoint {}", endpoint);
 
-        } catch (IOException | NoSuchAlgorithmException e) {
+        } catch (IOException e) {
             log.error("Failed to start node on endpoint {}", endpoint, e);
-            throw new UncheckedIOException("Failed to start node on endpoint " + endpoint,
-                    e instanceof IOException ioe ? ioe : new IOException(e));
+            throw new UncheckedIOException("Failed to start node on endpoint " + endpoint, e);
+        } catch (NoSuchAlgorithmException e) {
+            log.error("Failed to start node on endpoint {}", endpoint, e);
+            throw new UncheckedIOException("Failed to start node on endpoint " + endpoint, new IOException(e));
         }
     }
 

@@ -21,16 +21,21 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplicatedKVServiceImpl.class);
     private static final int NUM_REPLICAS = 3;
+    private static final int PARAM_PAIR_SIZE = 2;
 
-    private final int port;
+    private final int servicePort;
     private final MyKVCluster cluster;
     private final String[] replicaEndpoints;
     private final boolean[] enabled;
     private final HttpServer coordinatorServer;
     private final AtomicLong versionCounter;
 
+    private record QueryParams(String id, int ack) {}
+
+    private record ReplicaResponse(int responded, List<VersionedValue> found) {}
+
     public ReplicatedKVServiceImpl(int port) throws IOException {
-        this.port = port;
+        this.servicePort = port;
         this.replicaEndpoints = new String[NUM_REPLICAS];
         this.enabled = new boolean[NUM_REPLICAS];
         this.versionCounter = new AtomicLong(System.currentTimeMillis());
@@ -53,7 +58,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     public void start() {
         cluster.start();
         coordinatorServer.start();
-        log.info("Replicated service started on port {}", port);
+        log.info("Replicated service started on port {}", servicePort);
     }
 
     @Override
@@ -70,7 +75,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override
@@ -115,50 +120,62 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
                 exchange.sendResponseHeaders(400, -1);
                 return;
             }
+            QueryParams params = parseParams(query);
+            if (params == null) {
+                exchange.sendResponseHeaders(400, -1);
+                return;
+            }
+            routeRequest(exchange, params);
+        }
+    }
 
-            String id = null;
-            int ack = 1;
-            for (String param : query.split("&")) {
-                String[] kv = param.split("=", 2);
-                if (kv.length != 2) {
-                    continue;
-                }
-                switch (kv[0]) {
-                    case "id" -> id = kv[1];
-                    case "ack" -> {
-                        try {
-                            ack = Integer.parseInt(kv[1]);
-                        } catch (NumberFormatException e) {
-                            exchange.sendResponseHeaders(400, -1);
-                            return;
-                        }
+    private QueryParams parseParams(String query) {
+        String id = null;
+        int ack = 1;
+        for (String param : query.split("&")) {
+            String[] kv = param.split("=", PARAM_PAIR_SIZE);
+            if (kv.length != PARAM_PAIR_SIZE) {
+                continue;
+            }
+            switch (kv[0]) {
+                case "id" -> id = kv[1];
+                case "ack" -> {
+                    try {
+                        ack = Integer.parseInt(kv[1]);
+                    } catch (NumberFormatException e) {
+                        return null;
                     }
-                    default -> { }
                 }
+                default -> { }
             }
+        }
+        if (id == null || id.isBlank() || ack < 1 || ack > NUM_REPLICAS) {
+            return null;
+        }
+        return new QueryParams(id, ack);
+    }
 
-            if (id == null || id.isBlank()) {
-                exchange.sendResponseHeaders(400, -1);
-                return;
-            }
-            if (ack < 1 || ack > NUM_REPLICAS) {
-                exchange.sendResponseHeaders(400, -1);
-                return;
-            }
-
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> handleGet(exchange, id, ack);
-                case "PUT" -> handlePut(exchange, id, ack);
-                case "DELETE" -> handleDelete(exchange, id, ack);
-                default -> exchange.sendResponseHeaders(405, -1);
-            }
+    private void routeRequest(HttpExchange exchange, QueryParams params) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> handleGet(exchange, params.id(), params.ack());
+            case "PUT" -> handlePut(exchange, params.id(), params.ack());
+            case "DELETE" -> handleDelete(exchange, params.id(), params.ack());
+            default -> exchange.sendResponseHeaders(405, -1);
         }
     }
 
     private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
+        ReplicaResponse response = collectReplicas(id);
+        if (response.responded() < ack) {
+            exchange.sendResponseHeaders(500, -1);
+            return;
+        }
+        sendGetResponse(exchange, response.found());
+    }
+
+    private ReplicaResponse collectReplicas(String id) {
         List<VersionedValue> found = new ArrayList<>();
         int responded = 0;
-
         for (int i = 0; i < NUM_REPLICAS; i++) {
             if (!enabled[i]) {
                 continue;
@@ -168,8 +185,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
                 continue;
             }
             try {
-                byte[] raw = node.dao().get(id);
-                found.add(VersionedValue.decode(raw));
+                found.add(VersionedValue.decode(node.dao().get(id)));
                 responded++;
             } catch (NoSuchElementException e) {
                 responded++;
@@ -177,25 +193,21 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
                 log.warn("Replica {} GET failed for key {}", i, id, e);
             }
         }
+        return new ReplicaResponse(responded, found);
+    }
 
-        if (responded < ack) {
-            exchange.sendResponseHeaders(500, -1);
-            return;
-        }
+    private void sendGetResponse(HttpExchange exchange, List<VersionedValue> found) throws IOException {
         if (found.isEmpty()) {
             exchange.sendResponseHeaders(404, -1);
             return;
         }
-
         VersionedValue newest = found.stream()
                 .max(Comparator.comparingLong(VersionedValue::timestamp))
                 .orElseThrow();
-
         if (newest.isDeleted()) {
             exchange.sendResponseHeaders(404, -1);
             return;
         }
-
         byte[] data = newest.data();
         exchange.sendResponseHeaders(200, data.length);
         try (OutputStream os = exchange.getResponseBody()) {
