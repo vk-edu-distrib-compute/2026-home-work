@@ -31,4 +31,13 @@ build/
 .idea/
 out/
 
+/.data/
+/data/
+/data_*/
+/ekaterina-gavrilova-storage/
+/storage/
+/vitos23-storage
+/loadtest/*.out
+/loadtest/*.err
+
 .vscode/
