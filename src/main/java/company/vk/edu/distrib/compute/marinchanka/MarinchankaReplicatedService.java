@@ -30,6 +30,16 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private static final String HEADER_CONTENT_TYPE = "Content-Type";
     private static final String MEDIA_TYPE_JSON = "application/json";
     private static final String STATS_ACCESS_PATH = "access";
+    private static final String MSG_INVALID_PATH = "Invalid path";
+    private static final String MSG_INVALID_REPLICA = "Invalid replica ID";
+    private static final String MSG_REPLICA_NOT_FOUND = "Replica not found";
+    private static final String MSG_MISSING_ID = "Missing id parameter";
+    private static final String MSG_ACK_TOO_HIGH = "ack > numberOfReplicas";
+    private static final String MSG_NOT_ENOUGH_AVAILABLE = "Not enough replicas available";
+    private static final String MSG_NOT_ENOUGH_CONFIRMED = "Not enough replicas confirmed";
+    private static final String MSG_KEY_NOT_FOUND = "Key not found";
+    private static final String MSG_INTERNAL_ERROR = "Internal server error";
+    private static final String MEDIA_TYPE_TEXT = "text/plain; charset=utf-8";
 
     private static final int METHOD_NOT_ALLOWED = 405;
     private static final int BAD_REQUEST = 400;
@@ -188,7 +198,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split("/");
             if (parts.length < 4) {
-                sendError(exchange, BAD_REQUEST, "Invalid path");
+                sendError(exchange, BAD_REQUEST, MSG_INVALID_PATH);
                 return;
             }
 
@@ -196,12 +206,12 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             try {
                 replicaId = Integer.parseInt(parts[3]);
             } catch (NumberFormatException e) {
-                sendError(exchange, BAD_REQUEST, "Invalid replica ID");
+                sendError(exchange, BAD_REQUEST, MSG_INVALID_REPLICA);
                 return;
             }
 
             if (replicaId < 0 || replicaId >= replicationFactor) {
-                sendError(exchange, NOT_FOUND, "Replica not found");
+                sendError(exchange, NOT_FOUND, MSG_REPLICA_NOT_FOUND);
                 return;
             }
 
@@ -228,7 +238,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         private void sendError(HttpExchange exchange, int code, String message) throws IOException {
             byte[] response = message.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8");
+            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, MEDIA_TYPE_TEXT);
             exchange.sendResponseHeaders(code, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
@@ -245,12 +255,12 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             int ack = extractAck(query);
 
             if (id == null || id.isEmpty()) {
-                sendError(exchange, BAD_REQUEST, "Missing id parameter");
+                sendError(exchange, BAD_REQUEST, MSG_MISSING_ID);
                 return;
             }
 
             if (ack > replicationFactor) {
-                sendError(exchange, BAD_REQUEST, "ack > numberOfReplicas");
+                sendError(exchange, BAD_REQUEST, MSG_ACK_TOO_HIGH);
                 return;
             }
 
@@ -271,24 +281,24 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             } catch (IllegalArgumentException e) {
                 sendError(exchange, BAD_REQUEST, e.getMessage());
             } catch (NoSuchElementException e) {
-                sendError(exchange, NOT_FOUND, e.getMessage());
+                sendError(exchange, NOT_FOUND, MSG_KEY_NOT_FOUND);
             } catch (IOException e) {
                 log.error("Internal server error", e);
-                sendError(exchange, INTERNAL_ERROR, "Internal server error");
+                sendError(exchange, INTERNAL_ERROR, MSG_INTERNAL_ERROR);
             }
         }
 
         private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
             int available = availableReplicas(id);
             if (available < ack) {
-                sendError(exchange, INTERNAL_ERROR, "Not enough replicas available");
+                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_AVAILABLE);
                 return;
             }
 
             ReadResult result = collectReadResults(id);
 
             if (result.totalResponses < ack) {
-                sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
+                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_CONFIRMED);
                 return;
             }
 
@@ -297,9 +307,9 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             if (result.maxVersion >= 0 && !result.tombstone) {
                 sendOkWithData(exchange, result.data);
             } else if (result.maxVersion >= 0) {
-                sendError(exchange, NOT_FOUND, "Key not found");
+                sendError(exchange, NOT_FOUND, MSG_KEY_NOT_FOUND);
             } else {
-                sendError(exchange, NOT_FOUND, "Key not found");
+                sendError(exchange, NOT_FOUND, MSG_KEY_NOT_FOUND);
             }
         }
 
@@ -390,7 +400,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         private void handlePut(HttpExchange exchange, String id, int ack) throws IOException {
             int available = availableReplicas(id);
             if (available < ack) {
-                sendError(exchange, INTERNAL_ERROR, "Not enough replicas available");
+                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_AVAILABLE);
                 return;
             }
 
@@ -418,14 +428,14 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             if (confirmed.get() >= ack) {
                 exchange.sendResponseHeaders(STATUS_CREATED, -1);
             } else {
-                sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
+                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_CONFIRMED);
             }
         }
 
         private void handleDelete(HttpExchange exchange, String id, int ack) throws IOException {
             int available = availableReplicas(id);
             if (available < ack) {
-                sendError(exchange, INTERNAL_ERROR, "Not enough replicas available");
+                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_AVAILABLE);
                 return;
             }
 
@@ -452,7 +462,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             if (confirmed.get() >= ack) {
                 exchange.sendResponseHeaders(STATUS_ACCEPTED, -1);
             } else {
-                sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
+                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_CONFIRMED);
             }
         }
 
@@ -488,7 +498,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         private void sendError(HttpExchange exchange, int code, String message) throws IOException {
             byte[] response = message.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8");
+            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, MEDIA_TYPE_TEXT);
             exchange.sendResponseHeaders(code, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
