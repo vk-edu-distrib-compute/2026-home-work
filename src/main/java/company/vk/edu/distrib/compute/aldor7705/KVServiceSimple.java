@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.aldor7705;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.aldor7705.handler.EntityHandler;
 import company.vk.edu.distrib.compute.aldor7705.handler.StatusHandler;
 import org.slf4j.Logger;
@@ -12,18 +13,20 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 
-public class KVServiceSimple implements KVService {
+public class KVServiceSimple implements ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceSimple.class);
     private final int port;
-    private final Dao<byte[]> dao;
+    private final EntityDao dao;
     private final List<Integer> clusterPorts;
     private HttpServer httpServer;
     private boolean running;
+    private final int replicas;
 
-    public KVServiceSimple(int port, Dao<byte[]> dao, List<Integer> clusterPorts) {
+    public KVServiceSimple(int port, EntityDao dao, List<Integer> clusterPorts, int replicas) {
         this.port = port;
         this.dao = dao;
         this.clusterPorts = clusterPorts;
+        this.replicas = replicas;
     }
 
     private HttpServer createServer() throws IOException {
@@ -54,5 +57,25 @@ public class KVServiceSimple implements KVService {
             httpServer.stop(0);
             running = false;
         }
+    }
+
+    @Override
+    public int port() {
+        return port;
+    }
+
+    @Override
+    public int numberOfReplicas() {
+        return replicas;
+    }
+
+    @Override
+    public void disableReplica(int nodeId) {
+        dao.disableReplica(nodeId);
+    }
+
+    @Override
+    public void enableReplica(int nodeId) {
+        dao.enableReplica(nodeId);
     }
 }
