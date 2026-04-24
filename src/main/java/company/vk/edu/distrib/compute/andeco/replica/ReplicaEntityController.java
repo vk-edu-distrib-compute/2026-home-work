@@ -20,7 +20,6 @@ public class ReplicaEntityController implements Controller {
         try (exchange) {
             String id = QueryUtil.extractId(exchange.getRequestURI().getQuery());
             Integer ack = QueryUtil.extractAck(exchange.getRequestURI().getQuery());
-
             int effectiveAck = ack == null ? 1 : ack;
 
             if (effectiveAck <= 0 || effectiveAck > replicas.getNumberOfReplicas()) {
@@ -58,25 +57,22 @@ public class ReplicaEntityController implements Controller {
 
     private void processPut(HttpExchange exchange, String id, int ack) throws IOException {
         byte[] body = exchange.getRequestBody().readAllBytes();
-        int success = replicas.writeData(id, body);
 
-        if (success < ack) {
+        try {
+            replicas.writeData(ack, id, body);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
+        } catch (IllegalStateException e) {
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_UNAVAILABLE, -1);
-            return;
         }
-
-        exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
     }
 
     private void processDelete(HttpExchange exchange, String id, int ack) throws IOException {
-        int success = replicas.deleteData(id);
-
-        if (success < ack) {
+        try {
+            replicas.deleteData(ack, id);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_ACCEPTED, -1);
+        } catch (IllegalStateException e) {
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_UNAVAILABLE, -1);
-            return;
         }
-
-        exchange.sendResponseHeaders(HttpURLConnection.HTTP_ACCEPTED, -1);
     }
 
     public void disableReplica(int id) {

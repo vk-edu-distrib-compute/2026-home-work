@@ -6,8 +6,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -17,18 +24,14 @@ public class Replicas {
     private final int numberOfReplicas;
     private final List<Replica> replicaList;
     private final Map<Integer, Replica> replicaMap;
-
     private final AtomicReference<BigInteger> version = new AtomicReference<>(BigInteger.ZERO);
-
     private final ExecutorService executor;
 
     public Replicas(int port, int numberOfReplicas) {
         this.numberOfReplicas = numberOfReplicas;
-
         this.replicaList = new ArrayList<>(numberOfReplicas);
         this.replicaMap = new HashMap<>(numberOfReplicas);
-
-        this.executor = Executors.newCachedThreadPool();
+        this.executor = Executors.newFixedThreadPool(Math.max(1, numberOfReplicas));
 
         for (int i = 0; i < numberOfReplicas; i++) {
             Replica replica = createReplica(port, i);
@@ -71,11 +74,10 @@ public class Replicas {
         return version.updateAndGet(v -> v.add(BigInteger.ONE));
     }
 
-    public int writeData(String key, byte[] value) {
+    public void writeData(int ack, String key, byte[] value) {
         BigInteger ver = nextVersion();
         AtomicInteger success = new AtomicInteger();
-
-        List<Future<?>> futures = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>(replicaList.size());
 
         for (Replica replica : replicaList) {
             if (!replica.isAvailable()) {
@@ -93,14 +95,16 @@ public class Replicas {
         }
 
         waitAll(futures);
-        return success.get();
+
+        if (success.get() < ack) {
+            throw new IllegalStateException("Write quorum not reached");
+        }
     }
 
-    public int deleteData(String key) {
+    public void deleteData(int ack, String key) {
         BigInteger ver = nextVersion();
         AtomicInteger success = new AtomicInteger();
-
-        List<Future<?>> futures = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>(replicaList.size());
 
         for (Replica replica : replicaList) {
             if (!replica.isAvailable()) {
@@ -118,14 +122,16 @@ public class Replicas {
         }
 
         waitAll(futures);
-        return success.get();
+
+        if (success.get() < ack) {
+            throw new IllegalStateException("Delete quorum not reached");
+        }
     }
 
     public ReplicaValue readData(int ack, String key) {
         AtomicInteger success = new AtomicInteger();
-        Collection<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
-
-        List<Future<?>> futures = new ArrayList<>();
+        ConcurrentLinkedQueue<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
+        List<Future<?>> futures = new ArrayList<>(replicaList.size());
 
         for (Replica replica : replicaList) {
             if (!replica.isAvailable()) {
@@ -157,9 +163,9 @@ public class Replicas {
     }
 
     private void waitAll(List<Future<?>> futures) {
-        for (Future<?> f : futures) {
+        for (Future<?> future : futures) {
             try {
-                f.get();
+                future.get();
             } catch (Exception e) {
                 log.warn("task execution failed", e);
             }
