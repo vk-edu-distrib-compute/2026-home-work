@@ -24,7 +24,7 @@ public class ReplicationManager {
 
     public ReplicationManager(List<Dao<byte[]>> replicas, ShardingStrategy sharding) {
         if (replicas == null || replicas.isEmpty()) {
-            throw new IllegalArgumentException("Replicas list must not be empty");
+            throw new IllegalArgumentException("Replicas list must not be empty.");
         }
         this.sharding = sharding;
         this.replicas = List.copyOf(replicas);
