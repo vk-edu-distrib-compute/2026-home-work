@@ -31,7 +31,7 @@ import com.sun.net.httpserver.HttpExchange;
 @SuppressFBWarnings(
         value = {"REC_CCC_EXCEPTION_NOT_THROWN", "DM_BOXED_PRIMITIVE_FOR_PARSING", "UMAC_UNCALLED_METHOD"},
         justification = "Required for hash computation and HTTP handling")
-@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity"})
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity", "PMD.CyclomaticComplexity"})
 public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KirillmedvedevKVCluster.class);
     private static final int VIRTUAL_NODES = 150;
@@ -439,7 +439,7 @@ private final class EntityHandler implements HttpHandler {
 
         private void proxyRequest(HttpExchange exchange, String targetEndpoint, String id, int ack) throws IOException {
             String url = targetEndpoint + "/v0/entity?id=" + id;
-            if (ack > 1) {
+            if (ack > DEFAULT_ACK) {
                 url += "&ack=" + ack;
             }
 
