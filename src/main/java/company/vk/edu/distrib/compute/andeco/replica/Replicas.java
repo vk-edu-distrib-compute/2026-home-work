@@ -6,11 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -130,7 +126,7 @@ public class Replicas {
 
     public ReplicaValue readData(int ack, String key) {
         AtomicInteger success = new AtomicInteger();
-        ConcurrentLinkedQueue<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
+        Queue<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
         List<Future<?>> futures = new ArrayList<>(replicaList.size());
 
         for (Replica replica : replicaList) {
