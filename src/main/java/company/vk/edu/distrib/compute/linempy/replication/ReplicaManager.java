@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,12 +39,13 @@ public class ReplicaManager {
         for (int i = 0; i < config.getFactor(); i++) {
             replicaEnabled.put(i, true);
         }
-        log.info("ReplicaManager started: factor={}, async={}", config.getFactor(), config.isAsyncMode());
+        if (log.isInfoEnabled()) {
+            log.info("ReplicaManager started: factor={}, async={}", config.getFactor(), config.isAsyncMode());
+        }
     }
 
     public List<Integer> getReplicaIndexes(String key) {
-        List<Integer> indexes = selector.getReplicaIndexes(key);
-        return indexes == null ? Collections.emptyList() : indexes;
+        return selector.getReplicaIndexes(key);
     }
 
     public void disableReplica(int nodeId) {
