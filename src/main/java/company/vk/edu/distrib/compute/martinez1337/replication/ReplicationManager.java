@@ -131,7 +131,9 @@ public class ReplicationManager {
     }
 
     private StoredValue pickLatest(StoredValue a, StoredValue b) {
-        if (a == null) return b;
+        if (a == null) {
+            return b;
+        }
         return b.version() > a.version() ? b : a;
     }
 
