@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ReplicaStats {
     private final ConcurrentMap<Integer, ReplicaStatData> stats = new ConcurrentHashMap<>();
 
+    @SuppressWarnings("ForLoopReplaceableByForEach")
     public ReplicaStats(int replicationFactor) {
         for (int i = 0; i < replicationFactor; i++) {
             stats.put(i, new ReplicaStatData());

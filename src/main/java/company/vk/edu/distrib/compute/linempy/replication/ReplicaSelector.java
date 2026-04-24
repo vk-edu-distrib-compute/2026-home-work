@@ -27,7 +27,7 @@ public class ReplicaSelector {
         List<Integer> indexes = new ArrayList<>(replicationFactor);
 
         for (int i = 0; i < replicationFactor; i++) {
-            int index = (start + i) % maxReplicas;
+            int index = (start + i) % replicationFactor;
             indexes.add(index);
         }
         return indexes;

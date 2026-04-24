@@ -13,6 +13,7 @@ import company.vk.edu.distrib.compute.ip.PopovIgorKVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevFileSystemKVServiceFactory;
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevKVServiceFactory;
 import company.vk.edu.distrib.compute.korjick.CakeKVServiceFactory;
+import company.vk.edu.distrib.compute.linempy.replication.LinempyKVServiceReplicationFactory;
 import company.vk.edu.distrib.compute.luckyslon2003.LuckySlon2003KVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.nesterukia.file_system.NesterukiaFileSystemKVServiceFactory;
@@ -49,6 +50,7 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         Wolfram158KVServiceFactoryFileWithCacheImpl.class,
         CakeKVServiceFactory.class,
         LinempyKVServiceFactory.class,
+        LinempyKVServiceReplicationFactory.class,
         NesterukiaInMemoryKVServiceFactory.class,
         NesterukiaFileSystemKVServiceFactory.class
     );

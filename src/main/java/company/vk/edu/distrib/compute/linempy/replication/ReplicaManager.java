@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ReplicaManager {
     private static final Logger log = LoggerFactory.getLogger(ReplicaManager.class);
+    private static final String ACK_ERROR = "ack > factor";
 
     private final ReplicaStorage storage;
     private final ReplicationConfig config;
@@ -37,11 +39,14 @@ public class ReplicaManager {
         for (int i = 0; i < config.getFactor(); i++) {
             replicaEnabled.put(i, true);
         }
-        log.info("ReplicaManager started: factor={}, async={}", config.getFactor(), config.isAsyncMode());
+        if (log.isInfoEnabled()) {
+            log.info("ReplicaManager started: factor={}, async={}", config.getFactor(), config.isAsyncMode());
+        }
     }
 
     public List<Integer> getReplicaIndexes(String key) {
-        return selector.getReplicaIndexes(key);
+        List<Integer> indexes = selector.getReplicaIndexes(key);
+        return indexes == null ? Collections.emptyList() : indexes;
     }
 
     public void disableReplica(int nodeId) {
@@ -58,9 +63,18 @@ public class ReplicaManager {
 
     public int writeWithAck(String key, byte[] value, int requiredAck) {
         if (requiredAck > config.getFactor()) {
-            throw new IllegalArgumentException("ack > factor");
+            throw new IllegalArgumentException(ACK_ERROR);
         }
         List<Integer> indexes = getReplicaIndexes(key);
+
+        int available = (int) indexes.stream().filter(this::isReplicaEnabled).count();
+
+        if (available < requiredAck) {
+            if (log.isWarnEnabled()) {
+                log.warn("Not enough replicas: available={}, required={}", available, requiredAck);
+            }
+            return 0;
+        }
 
         int success = asyncWriter.write(key, value, requiredAck, indexes, this::isReplicaEnabled);
 
@@ -83,7 +97,9 @@ public class ReplicaManager {
                 stats.recordRead(idx);
                 return value;
             } catch (IOException e) {
-                log.warn("Read failed idx={}", idx);
+                if (log.isWarnEnabled()) {
+                    log.warn("Read failed idx={}", idx);
+                }
             }
         }
         return null;
@@ -93,6 +109,14 @@ public class ReplicaManager {
         List<Integer> indexes = getReplicaIndexes(key);
         int responded = 0;
         byte[] best = null;
+
+        int available = (int) indexes.stream().filter(this::isReplicaEnabled).count();
+        if (available < requiredAck) {
+            if (log.isWarnEnabled()) {
+                log.warn("Not enough replicas for read: available={}, required={}", available, requiredAck);
+            }
+            return new ReadResult(false, null, 0);
+        }
 
         for (int idx : indexes) {
             if (!isReplicaEnabled(idx)) {
@@ -110,7 +134,9 @@ public class ReplicaManager {
                     stats.recordRead(idx);
                 }
             } catch (IOException e) {
-                log.warn("Read failed idx={}", idx);
+                if (log.isWarnEnabled()) {
+                    log.warn("Read failed idx={}", idx);
+                }
                 responded++;
             }
         }
@@ -130,15 +156,14 @@ public class ReplicaManager {
     public int deleteAllReplicas(String key) {
         int deleted = 0;
         for (int idx : getReplicaIndexes(key)) {
-            if (!isReplicaEnabled(idx)) {
-                continue;
-            }
             try {
                 if (storage.delete(key, idx)) {
                     deleted++;
                 }
             } catch (IOException e) {
-                log.warn("Delete failed idx={}", idx);
+                if (log.isWarnEnabled()) {
+                    log.warn("Delete failed idx={}: {}", idx, e.getMessage());
+                }
             }
         }
         keyExists.remove(key);
@@ -158,9 +183,13 @@ public class ReplicaManager {
             if (val != null) {
                 try {
                     storage.write(key, nodeId, val);
-                    log.debug("Synced key {} to replica {}", key, nodeId);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Synced key {} to replica {}", key, nodeId);
+                    }
                 } catch (IOException ex) {
-                    log.warn("Sync failed key={}", key);
+                    if (log.isWarnEnabled()) {
+                        log.warn("Sync failed key={}", key);
+                    }
                 }
             }
         }

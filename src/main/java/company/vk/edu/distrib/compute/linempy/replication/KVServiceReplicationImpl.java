@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.linempy.replication;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.ReplicatedService;
+import company.vk.edu.distrib.compute.linempy.HttpCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,25 +21,27 @@ public class KVServiceReplicationImpl implements ReplicatedService {
 
     private final ReplicaManager replicaManager;
     private final ReplicationConfig config;
-    private final int port;
+    private final int serverPort;
     private final HttpServer server;
 
-    public KVServiceReplicationImpl(int port) throws IOException {
-        this.port = port;
+    public KVServiceReplicationImpl(int serverPort) throws IOException {
+        this.serverPort = serverPort;
         this.config = new ReplicationConfig();
-        this.replicaManager = new ReplicaManager(config, port);
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.replicaManager = new ReplicaManager(config, serverPort);
+        this.server = HttpServer.create(new InetSocketAddress(serverPort), 0);
 
         server.createContext("/v0/status", this::handleStatus);
         server.createContext("/v0/entity", this::handleEntity);
         server.createContext("/stats/replica", this::handleStats);
 
-        log.info("KVServiceReplicationImpl started on port {} with factor={}",
-                port, config.getFactor());
+        if (log.isInfoEnabled()) {
+            log.info("KVServiceReplicationImpl started on port {} with factor={}",
+                    serverPort, config.getFactor());
+        }
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        exchange.sendResponseHeaders(200, -1);
+        exchange.sendResponseHeaders(HttpCodes.OK, -1);
         exchange.close();
     }
 
@@ -57,29 +60,46 @@ public class KVServiceReplicationImpl implements ReplicatedService {
                 return;
             }
 
-            int available = replicaManager.getAvailableReplicasCount(id);
-            if (available < ack) {
-                log.warn("Not enough replicas: need={}, available={}", ack, available);
-                exchange.sendResponseHeaders(503, -1);
+            if (!isEnoughReplicas(id, ack, exchange)) {
                 return;
             }
 
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> handleGet(exchange, id, ack);
-                case "PUT" -> handlePut(exchange, id, ack);
-                case "DELETE" -> handleDelete(exchange, id, ack);
-                default -> exchange.sendResponseHeaders(405, -1);
-            }
+            dispatchRequest(exchange, id, ack);
         } catch (Exception e) {
-            log.error("Error handling request", e);
+            if (log.isErrorEnabled()) {
+                log.error("Error handling request", e);
+            }
             exchange.sendResponseHeaders(500, -1);
+        }
+    }
+
+    private boolean isEnoughReplicas(String id, int ack, HttpExchange exchange) throws IOException {
+        int available = replicaManager.getAvailableReplicasCount(id);
+        if (available < ack) {
+            if (log.isWarnEnabled()) {
+                if (log.isWarnEnabled()) {
+                    log.warn("Not enough replicas: need={}, available={}", ack, available);
+                }
+            }
+            exchange.sendResponseHeaders(503, -1);
+            return false;
+        }
+        return true;
+    }
+
+    private void dispatchRequest(HttpExchange exchange, String id, int ack) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> handleGet(exchange, id, ack);
+            case "PUT" -> handlePut(exchange, id, ack);
+            case "DELETE" -> handleDelete(exchange, id, ack);
+            default -> exchange.sendResponseHeaders(405, -1);
         }
     }
 
     private void handleStats(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         String response;
-        int code = 200;
+        int code = HttpCodes.OK;
 
         try {
             if (path.matches("/stats/replica/\\d+")) {
@@ -92,11 +112,11 @@ public class KVServiceReplicationImpl implements ReplicatedService {
                 response = handleReplicaAccess(replicaId);
             } else {
                 response = "{\"error\": \"Invalid path. Use /stats/replica/{id} or /stats/replica/{id}/access\"}";
-                code = 400;
+                code = HttpCodes.BAD_REQUEST;
             }
         } catch (Exception e) {
             response = "{\"error\": \"" + e.getMessage() + "\"}";
-            code = 500;
+            code = HttpCodes.SERVER_ERROR;
         }
 
         byte[] body = response.getBytes();
@@ -120,7 +140,7 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     private void handlePut(HttpExchange exchange, String id, int ack) throws IOException {
         byte[] body = exchange.getRequestBody().readAllBytes();
         int success = replicaManager.writeWithAck(id, body, ack);
-        exchange.sendResponseHeaders(success >= ack ? 201 : 503, -1);
+        exchange.sendResponseHeaders(success >= ack ? HttpCodes.CREATED : HttpCodes.SERVER_ERROR, -1);
     }
 
     private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
@@ -128,22 +148,22 @@ public class KVServiceReplicationImpl implements ReplicatedService {
 
         if (!result.success()) {
             log.warn("GET key={}: responded={} < ack={}", id, result.responded(), ack);
-            exchange.sendResponseHeaders(503, -1);
+            exchange.sendResponseHeaders(HttpCodes.SERVER_ERROR, -1);
             return;
         }
 
         byte[] value = result.value();
         if (value != null) {
-            exchange.sendResponseHeaders(200, value.length);
+            exchange.sendResponseHeaders(HttpCodes.OK, value.length);
             exchange.getResponseBody().write(value);
         } else {
-            exchange.sendResponseHeaders(404, -1);
+            exchange.sendResponseHeaders(HttpCodes.NOT_FOUND, -1);
         }
     }
 
     private void handleDelete(HttpExchange exchange, String id, int ack) throws IOException {
         int deleted = replicaManager.deleteAllReplicas(id);
-        exchange.sendResponseHeaders(deleted >= ack ? 202 : 503, -1);
+        exchange.sendResponseHeaders(deleted >= ack ? HttpCodes.ACCEPTED : HttpCodes.SERVER_ERROR, -1);
     }
 
     private String extractId(HttpExchange exchange) {
@@ -180,19 +200,23 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     @Override
     public void start() {
         server.start();
-        log.info("Server started on port {}", port);
+        if (log.isInfoEnabled()) {
+            log.info("Server started on port {}", serverPort);
+        }
     }
 
     @Override
     public void stop() {
         replicaManager.close();
         server.stop(0);
-        log.info("Server stopped on port {}", port);
+        if (log.isInfoEnabled()) {
+            log.info("Server stopped on port {}", serverPort);
+        }
     }
 
     @Override
     public int port() {
-        return port;
+        return serverPort;
     }
 
     @Override
@@ -203,13 +227,17 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     @Override
     public void disableReplica(int nodeId) {
         replicaManager.disableReplica(nodeId);
-        log.info("Replica {} disabled", nodeId);
+        if (log.isInfoEnabled()) {
+            log.info("Replica {} disabled", nodeId);
+        }
     }
 
     @Override
     public void enableReplica(int nodeId) {
         replicaManager.enableReplica(nodeId);
         replicaManager.syncReplica(nodeId);
-        log.info("Replica {} enabled and synced", nodeId);
+        if (log.isInfoEnabled()) {
+            log.info("Replica {} enabled and synced", nodeId);
+        }
     }
 }
