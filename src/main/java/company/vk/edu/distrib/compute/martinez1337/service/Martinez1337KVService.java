@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
 public class Martinez1337KVService implements ClusterAwareKVService, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(Martinez1337KVService.class);
 
-    private final int port;
+    private final int servicePort;
     private final HttpServer server;
     private final ReplicationManager replicationManager;
 
@@ -45,7 +45,7 @@ public class Martinez1337KVService implements ClusterAwareKVService, ReplicatedS
             List<Dao<byte[]>> replicaDaos,
             ShardingStrategy sharding
     ) throws IOException {
-        this.port = port;
+        this.servicePort = port;
         this.sharding = sharding;
         this.replicationManager = new ReplicationManager(replicaDaos, sharding);
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -88,7 +88,7 @@ public class Martinez1337KVService implements ClusterAwareKVService, ReplicatedS
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override

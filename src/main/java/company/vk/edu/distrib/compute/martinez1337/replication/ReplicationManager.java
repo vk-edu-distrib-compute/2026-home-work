@@ -104,18 +104,17 @@ public class ReplicationManager {
     public ReadResult get(String key, int ack, List<Integer> replicasForKey) {
         int successful = 0;
         StoredValue latest = null;
+
         for (int replicaId : replicasForKey) {
             if (enabled.get(replicaId) == REPLICA_DISABLED) {
                 log.debug("Replica {} is disabled, skip read", replicaId);
                 continue;
             }
+
             try {
-                byte[] rawValue = replicas.get(replicaId).get(key);
+                StoredValue current = tryRead(replicaId, key);
                 successful++;
-                StoredValue current = StoredValue.decode(rawValue);
-                if (latest == null || current.version() > latest.version()) {
-                    latest = current;
-                }
+                latest = pickLatest(latest, current);
             } catch (NoSuchElementException e) {
                 successful++;
             } catch (IOException e) {
@@ -123,7 +122,20 @@ public class ReplicationManager {
             }
         }
 
-        log.info("GET key={} ack={} successful={}", key, ack, successful);
+        return buildReadResult(successful, ack, latest);
+    }
+
+    private StoredValue tryRead(int replicaId, String key) throws IOException {
+        byte[] rawValue = replicas.get(replicaId).get(key);
+        return StoredValue.decode(rawValue);
+    }
+
+    private StoredValue pickLatest(StoredValue a, StoredValue b) {
+        if (a == null) return b;
+        return b.version() > a.version() ? b : a;
+    }
+
+    private ReadResult buildReadResult(int successful, int ack, StoredValue latest) {
         if (successful < ack) {
             return new ReadResult(500, null);
         }

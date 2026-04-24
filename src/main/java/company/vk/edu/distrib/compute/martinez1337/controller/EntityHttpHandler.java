@@ -98,7 +98,8 @@ public class EntityHttpHandler extends BaseHttpHandler {
         if (values == null || values.isEmpty()) {
             return 1;
         }
-        if (values.size() > 1) {
+        int validAmount = 1;
+        if (values.size() > validAmount) {
             throw new IllegalArgumentException("Ack parameter must be provided once");
         }
         String ackStr = values.getFirst();

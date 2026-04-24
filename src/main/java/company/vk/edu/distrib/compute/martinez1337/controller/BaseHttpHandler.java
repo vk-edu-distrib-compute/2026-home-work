@@ -74,7 +74,7 @@ public abstract class BaseHttpHandler implements HttpHandler {
     }
 
     protected final void sendError(HttpExchange exchange, ResponseStatus status) throws IOException {
-        if (status.getCode() >= 500) {
+        if (status.getCode() >= INTERNAL_ERROR.getCode()) {
             if (log.isErrorEnabled()) {
                 log.error("{} {}", status.getMessage(), exchange.getRequestURI());
             }
