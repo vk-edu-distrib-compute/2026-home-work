@@ -8,7 +8,10 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-public class Server {
+public final class Server {
+
+    private Server() {
+    }
 
     public static void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");

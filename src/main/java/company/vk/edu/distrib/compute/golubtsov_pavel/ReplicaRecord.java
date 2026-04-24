@@ -7,7 +7,6 @@ public class ReplicaRecord {
     private final long timestamp;
     private final boolean deleted;
 
-
     public ReplicaRecord(byte[] value, long timestamp, boolean deleted) {
         this.value = value == null ? null : Arrays.copyOf(value, value.length);
         this.timestamp = timestamp;

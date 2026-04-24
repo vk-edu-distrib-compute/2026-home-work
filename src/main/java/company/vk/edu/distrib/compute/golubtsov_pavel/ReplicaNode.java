@@ -1,17 +1,18 @@
 package company.vk.edu.distrib.compute.golubtsov_pavel;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ReplicaNode {
     private final int id;
     private final Map<String, ReplicaRecord> storage;
-    private volatile boolean enabled;
+    private final AtomicBoolean enabled;
 
     public ReplicaNode(int id) {
         this.id = id;
         this.storage = new ConcurrentHashMap<>();
-        this.enabled = true;
+        this.enabled = new AtomicBoolean(true);
     }
 
     public int getId() {
@@ -24,15 +25,15 @@ public class ReplicaNode {
     }
 
     public boolean isEnabled() {
-        return enabled;
+        return enabled.get();
     }
 
     public void disable() {
-        this.enabled = false;
+        enabled.set(false);
     }
 
     public void enable() {
-        this.enabled = true;
+        enabled.set(true);
     }
 
     public void upsert(String key, ReplicaRecord record) {
@@ -56,7 +57,5 @@ public class ReplicaNode {
             throw new IllegalArgumentException("key is null or blank");
         }
     }
-
-
 }
 
