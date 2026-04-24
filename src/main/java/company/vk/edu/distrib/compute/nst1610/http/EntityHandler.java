@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.nst1610.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.nst1610.replication.ReplicatedFileStorage;
 import company.vk.edu.distrib.compute.nst1610.sharding.HashingStrategy;
 import java.io.IOException;
 import java.net.URI;
@@ -15,18 +15,18 @@ import org.slf4j.LoggerFactory;
 public class EntityHandler implements HttpHandler {
     private static final Logger log = LoggerFactory.getLogger(EntityHandler.class);
 
-    private final Dao<byte[]> dao;
+    private final ReplicatedFileStorage replicatedStorage;
     private final String localEndpoint;
     private final HashingStrategy strategy;
     private final ClusterProxy clusterProxy;
 
     public EntityHandler(
-        Dao<byte[]> dao,
+        ReplicatedFileStorage replicatedStorage,
         String localEndpoint,
         HashingStrategy strategy,
         ClusterProxy clusterProxy
     ) {
-        this.dao = dao;
+        this.replicatedStorage = replicatedStorage;
         this.localEndpoint = localEndpoint;
         this.strategy = strategy;
         this.clusterProxy = clusterProxy;
@@ -53,7 +53,12 @@ public class EntityHandler implements HttpHandler {
 
     private void handleRequest(HttpExchange exchange) throws IOException {
         String id = extractId(exchange.getRequestURI());
+        int ack = extractAck(exchange.getRequestURI());
         if (id == null) {
+            exchange.sendResponseHeaders(400, 0);
+            return;
+        }
+        if (ack <= 0 || ack > replicatedStorage.numberOfReplicas()) {
             exchange.sendResponseHeaders(400, 0);
             return;
         }
@@ -63,19 +68,15 @@ public class EntityHandler implements HttpHandler {
         }
         String targetEndpoint = strategy.resolve(id);
         if (!localEndpoint.equals(targetEndpoint)) {
-            proxyRequest(exchange, id, targetEndpoint);
+            proxyRequest(exchange, id, ack, targetEndpoint);
             return;
         }
-        handleByMethod(exchange, id);
+        handleByMethod(exchange, id, ack);
     }
 
-    private void proxyRequest(HttpExchange exchange, String id, String endpoint) throws IOException {
+    private void proxyRequest(HttpExchange exchange, String id, int ack, String endpoint) throws IOException {
         try {
-            ClusterProxy.ProxyResponse response = clusterProxy.forward(
-                endpoint,
-                id,
-                exchange
-            );
+            ClusterProxy.ProxyResponse response = clusterProxy.forward(endpoint, id, ack, exchange);
             exchange.sendResponseHeaders(response.statusCode(), response.body().length);
             if (response.body().length > 0) {
                 exchange.getResponseBody().write(response.body());
@@ -86,29 +87,37 @@ public class EntityHandler implements HttpHandler {
         }
     }
 
-    private void handleByMethod(HttpExchange exchange, String id) throws IOException {
+    private void handleByMethod(HttpExchange exchange, String id, int ack) throws IOException {
         switch (exchange.getRequestMethod()) {
-            case "GET" -> handleGet(exchange, id);
-            case "PUT" -> handlePut(exchange, id);
-            case "DELETE" -> handleDelete(exchange, id);
+            case "GET" -> handleGet(exchange, id, ack);
+            case "PUT" -> handlePut(exchange, id, ack);
+            case "DELETE" -> handleDelete(exchange, id, ack);
             default -> exchange.sendResponseHeaders(405, 0);
         }
     }
 
-    private void handleGet(HttpExchange exchange, String id) throws IOException {
-        byte[] value = dao.get(id);
-        exchange.sendResponseHeaders(200, value.length);
-        exchange.getResponseBody().write(value);
+    private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
+        ReplicatedFileStorage.ReadResult result = replicatedStorage.get(id, ack);
+        if (!result.enoughReplicas()) {
+            exchange.sendResponseHeaders(500, 0);
+            return;
+        }
+        if (!result.found()) {
+            exchange.sendResponseHeaders(404, 0);
+            return;
+        }
+        exchange.sendResponseHeaders(200, result.value().length);
+        exchange.getResponseBody().write(result.value());
     }
 
-    private void handlePut(HttpExchange exchange, String id) throws IOException {
-        dao.upsert(id, exchange.getRequestBody().readAllBytes());
-        exchange.sendResponseHeaders(201, 0);
+    private void handlePut(HttpExchange exchange, String id, int ack) throws IOException {
+        boolean replicated = replicatedStorage.put(id, exchange.getRequestBody().readAllBytes(), ack);
+        exchange.sendResponseHeaders(replicated ? 201 : 500, 0);
     }
 
-    private void handleDelete(HttpExchange exchange, String id) throws IOException {
-        dao.delete(id);
-        exchange.sendResponseHeaders(202, 0);
+    private void handleDelete(HttpExchange exchange, String id, int ack) throws IOException {
+        boolean replicated = replicatedStorage.delete(id, ack);
+        exchange.sendResponseHeaders(replicated ? 202 : 500, 0);
     }
 
     private boolean isSupportedMethod(String method) {
@@ -116,18 +125,31 @@ public class EntityHandler implements HttpHandler {
     }
 
     private String extractId(URI uri) {
+        String value = extractQueryParam(uri, "id");
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        String decodedValue = URLDecoder.decode(value, StandardCharsets.UTF_8);
+        return decodedValue.isEmpty() ? null : decodedValue;
+    }
+
+    private Integer extractAck(URI uri) {
+        String ackValue = extractQueryParam(uri, "ack");
+        if (ackValue == null) {
+            return 1;
+        }
+        return Integer.parseInt(ackValue);
+    }
+
+    private String extractQueryParam(URI uri, String targetParam) {
         String query = uri.getRawQuery();
         if (query == null || query.isEmpty()) {
             return null;
         }
         for (String param : query.split("&")) {
-            if (param.startsWith("id=")) {
-                String value = param.substring(3);
-                if (value.isEmpty()) {
-                    return null;
-                }
-                String decodedValue = URLDecoder.decode(value, StandardCharsets.UTF_8);
-                return decodedValue.isEmpty() ? null : decodedValue;
+            String prefix = targetParam + "=";
+            if (param.startsWith(prefix)) {
+                return param.substring(prefix.length());
             }
         }
         return null;

@@ -13,10 +13,14 @@ import java.time.Duration;
 public class ClusterProxy {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    public ProxyResponse forward(String endpoint, String id, HttpExchange exchange)
+    public ProxyResponse forward(String endpoint, String id, int ack, HttpExchange exchange)
         throws IOException, InterruptedException {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-            .uri(URI.create(endpoint + "/v0/entity?id=" + URLEncoder.encode(id, StandardCharsets.UTF_8)))
+            .uri(URI.create(
+                endpoint
+                    + "/v0/entity?id=" + URLEncoder.encode(id, StandardCharsets.UTF_8)
+                    + "&ack=" + ack
+            ))
             .timeout(Duration.ofSeconds(2));
         switch (exchange.getRequestMethod()) {
             case "GET" -> requestBuilder.GET();

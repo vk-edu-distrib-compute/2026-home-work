@@ -1,12 +1,12 @@
 package company.vk.edu.distrib.compute.nst1610;
 
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.nst1610.dao.FileDao;
+import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.nst1610.http.ClusterProxy;
 import company.vk.edu.distrib.compute.nst1610.http.EntityHandler;
 import company.vk.edu.distrib.compute.nst1610.http.StatusHandler;
+import company.vk.edu.distrib.compute.nst1610.replication.ReplicatedFileStorage;
 import company.vk.edu.distrib.compute.nst1610.sharding.HashingStrategy;
 import company.vk.edu.distrib.compute.nst1610.sharding.RendezvousHashingStrategy;
 import java.io.IOException;
@@ -16,31 +16,44 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Nst1610KVService implements KVService {
+public class Nst1610KVService implements KVService, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(Nst1610KVService.class);
+    private static final int DEFAULT_REPLICATION_FACTOR = 9;
+    private static final String REPLICATION_FACTOR_ENV = "NST1610_REPLICATION_FACTOR";
+
+    private final int port;
     private final HttpServer server;
-    private final Dao<byte[]> dao;
     private final String localEndpoint;
     private final HashingStrategy strategy;
     private final ClusterProxy clusterProxy;
+    private final ReplicatedFileStorage replicatedStorage;
 
     public Nst1610KVService(int port) throws IOException {
-        this(port, List.of(getEndpoint(port)), getEndpoint(port));
+        this(port, List.of(getEndpoint(port)), getEndpoint(port), resolveReplicationFactor());
     }
 
     public Nst1610KVService(int port, List<String> clusterEndpoints, String localEndpoint) throws IOException {
+        this(port, clusterEndpoints, localEndpoint, resolveReplicationFactor());
+    }
+
+    public Nst1610KVService(int port, List<String> clusterEndpoints, String localEndpoint, int replicationFactor)
+        throws IOException {
+        this.port = port;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.dao = new FileDao(Path.of("storage", Integer.toString(port)));
         this.localEndpoint = localEndpoint;
         this.strategy = new RendezvousHashingStrategy();
         this.strategy.updateEndpoints(clusterEndpoints);
         this.clusterProxy = new ClusterProxy();
+        this.replicatedStorage = new ReplicatedFileStorage(
+            Path.of("storage", Integer.toString(port)),
+            replicationFactor
+        );
         initServer();
     }
 
     private void initServer() {
         server.createContext("/v0/status", new StatusHandler());
-        server.createContext("/v0/entity", new EntityHandler(dao, localEndpoint, strategy, clusterProxy));
+        server.createContext("/v0/entity", new EntityHandler(replicatedStorage, localEndpoint, strategy, clusterProxy));
     }
 
     @Override
@@ -61,5 +74,40 @@ public class Nst1610KVService implements KVService {
 
     public void updateClusterEndpoints(List<String> clusterEndpoints) {
         strategy.updateEndpoints(clusterEndpoints);
+    }
+
+    @Override
+    public int port() {
+        return port;
+    }
+
+    @Override
+    public int numberOfReplicas() {
+        return replicatedStorage.numberOfReplicas();
+    }
+
+    @Override
+    public void disableReplica(int nodeId) {
+        replicatedStorage.disableReplica(nodeId);
+    }
+
+    @Override
+    public void enableReplica(int nodeId) {
+        replicatedStorage.enableReplica(nodeId);
+    }
+
+    private static int resolveReplicationFactor() {
+        String envValue = System.getenv(REPLICATION_FACTOR_ENV);
+        if (envValue != null && !envValue.isBlank()) {
+            return validateReplicationFactor(Integer.parseInt(envValue));
+        }
+        return DEFAULT_REPLICATION_FACTOR;
+    }
+
+    private static int validateReplicationFactor(int replicationFactor) {
+        if (replicationFactor <= 0) {
+            throw new IllegalArgumentException("Replication factor must be positive");
+        }
+        return replicationFactor;
     }
 }
