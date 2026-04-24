@@ -103,11 +103,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         running = false;
         if (server != null) {
             server.stop(0);
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            server = null; // освобождаем ссылку на сервер
         }
         replicas.forEach(dao -> {
             try {
@@ -227,9 +223,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
 
         private ReadResult collectReadResults(String id) {
-            long maxVersion = -1;
-            byte[] resultData = null;
-            boolean tombstone = false;
+            Optional<VersionedInMemoryDao.VersionedEntry> best = Optional.empty();
             int foundCount = 0;
             int notFoundCount = 0;
 
@@ -237,28 +231,40 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-
-                try {
-                    VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                    VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
-                    if (entry != null && !entry.tombstone && entry.version > maxVersion) {
-                        maxVersion = entry.version;
-                        resultData = entry.data;
-                        tombstone = false;
-                    } else if (entry != null && entry.tombstone && entry.version > maxVersion) {
-                        maxVersion = entry.version;
-                        resultData = null;
-                        tombstone = true;
+                ReplicaReadOutcome outcome = processReplicaRead(replicaId, id);
+                if (outcome.present) {
+                    if (best.isEmpty() || outcome.version > best.get().version) {
+                        best = Optional.of(new VersionedInMemoryDao.VersionedEntry(
+                                outcome.data, outcome.version, outcome.tombstone));
                     }
                     foundCount++;
-                } catch (NoSuchElementException e) {
+                } else {
                     notFoundCount++;
-                } catch (IOException e) {
-                    log.error("Failed to read from replica {}", replicaId, e);
                 }
             }
 
-            return new ReadResult(maxVersion, resultData, tombstone, foundCount + notFoundCount);
+            if (best.isPresent()) {
+                VersionedInMemoryDao.VersionedEntry e = best.get();
+                return new ReadResult(e.version, e.tombstone ? null : e.data, e.tombstone, foundCount + notFoundCount);
+            } else {
+                return new ReadResult(-1, null, false, foundCount + notFoundCount);
+            }
+        }
+
+        private ReplicaReadOutcome processReplicaRead(int replicaId, String id) {
+            try {
+                VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+                VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
+                if (entry != null) {
+                    return new ReplicaReadOutcome(true, entry.version, entry.tombstone ? null : entry.data,
+                            entry.tombstone);
+                }
+            } catch (NoSuchElementException e) {
+                // ключ не найден на этой реплике
+            } catch (IOException e) {
+                log.error("Failed to read from replica {}", replicaId, e);
+            }
+            return new ReplicaReadOutcome(false, -1, null, false);
         }
 
         private void performReadRepair(String id, long maxVersion, byte[] data, boolean tombstone) {
@@ -401,6 +407,20 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             this.data = data != null ? data.clone() : null;
             this.tombstone = tombstone;
             this.totalResponses = totalResponses;
+        }
+    }
+
+    private static class ReplicaReadOutcome {
+        final boolean present;
+        final long version;
+        final byte[] data;
+        final boolean tombstone;
+
+        ReplicaReadOutcome(boolean present, long version, byte[] data, boolean tombstone) {
+            this.present = present;
+            this.version = version;
+            this.data = data != null ? data.clone() : null;
+            this.tombstone = tombstone;
         }
     }
 
