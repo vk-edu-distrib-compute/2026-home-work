@@ -1,8 +1,6 @@
 package company.vk.edu.distrib.compute;
 
 import module java.base;
-import company.vk.edu.distrib.compute.dummy.DummyKVClusterFactory;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
 import company.vk.edu.distrib.compute.lillymega.LillymegaKVClusterFactory;
 import company.vk.edu.distrib.compute.lillymega.LillymegaKVServiceFactory;
 import org.slf4j.LoggerFactory;

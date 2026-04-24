@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class LillymegaReplicatedService implements ReplicatedService {
+    private final LillymegaReplicaSelector replicaSelector;
     private static final String REPLICATION_FACTOR_PROPERTY = "lillymega.replication.factor";
     private static final String REPLICATION_FACTOR_ENV = "LILLYMEGA_REPLICATION_FACTOR";
     private static final int DEFAULT_REPLICATION_FACTOR = 3;
@@ -37,9 +38,10 @@ public class LillymegaReplicatedService implements ReplicatedService {
     private final AtomicLong[] replicaWriteAccess;
     private final AtomicLong versionGenerator = new AtomicLong();
 
-    public LillymegaReplicatedService(int port) throws IOException {
+    public LillymegaReplicatedService(int port, int replicationFactor) throws IOException {
         this.port = port;
-        this.replicationFactor = resolveReplicationFactor();
+        this.replicationFactor = replicationFactor;
+        this.replicaSelector = new LillymegaReplicaSelector(replicationFactor);
         this.availableReplicas = new boolean[replicationFactor];
         this.replicaReadAccess = new AtomicLong[replicationFactor];
         this.replicaWriteAccess = new AtomicLong[replicationFactor];
@@ -89,7 +91,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        if (!METHOD_GET.equals(exchange.getRequestMethod())) {
+        if (!"GET".equals(exchange.getRequestMethod())) {
             sendEmptyResponse(exchange, 405);
             return;
         }
@@ -155,7 +157,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
     }
 
     private void handleGet(HttpExchange exchange, RequestParameters parameters) throws IOException {
-        List<Integer> replicaIds = selectReplicas(parameters.id());
+        List<Integer> replicaIds = replicaSelector.selectReplicas(parameters.id());
         int successfulReads = 0;
         List<VersionedEntry> entries = new ArrayList<>();
 
@@ -194,7 +196,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
         long version = versionGenerator.incrementAndGet();
         VersionedEntry entry = new VersionedEntry(body, version, false);
 
-        int successfulWrites = applyToReplicas(parameters.id(), parameters.ack(), entry);
+        int successfulWrites = applyToReplicas(parameters.id(), entry);
         if (successfulWrites < parameters.ack()) {
             sendEmptyResponse(exchange, 500);
             return;
@@ -207,7 +209,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
         long version = versionGenerator.incrementAndGet();
         VersionedEntry tombstone = new VersionedEntry(new byte[0], version, true);
 
-        int successfulDeletes = applyToReplicas(parameters.id(), parameters.ack(), tombstone);
+        int successfulDeletes = applyToReplicas(parameters.id(), tombstone);
         if (successfulDeletes < parameters.ack()) {
             sendEmptyResponse(exchange, 500);
             return;
@@ -216,9 +218,9 @@ public class LillymegaReplicatedService implements ReplicatedService {
         sendEmptyResponse(exchange, 202);
     }
 
-    private int applyToReplicas(String key, int ack, VersionedEntry entry) {
+    private int applyToReplicas(String key, VersionedEntry entry) {
         int successfulOperations = 0;
-        for (int replicaId : selectReplicas(key)) {
+        for (int replicaId : replicaSelector.selectReplicas(key)) {
             if (!availableReplicas[replicaId]) {
                 continue;
             }
@@ -229,32 +231,6 @@ public class LillymegaReplicatedService implements ReplicatedService {
         }
 
         return successfulOperations;
-    }
-
-    private List<Integer> selectReplicas(String key) {
-        List<Integer> selectedReplicas = new ArrayList<>(replicationFactor);
-        Set<Integer> usedReplicaIds = new HashSet<>();
-        long nonce = 0;
-
-        while (selectedReplicas.size() < replicationFactor) {
-            int replicaId = Math.floorMod(Long.hashCode(hash(key, nonce)), replicationFactor);
-            if (usedReplicaIds.add(replicaId)) {
-                selectedReplicas.add(replicaId);
-            }
-            nonce++;
-        }
-
-        return selectedReplicas;
-    }
-
-    private long hash(String key, long nonce) {
-        String value = key + "#" + nonce;
-        long hash = 0xcbf29ce484222325L;
-        for (int i = 0; i < value.length(); i++) {
-            hash ^= value.charAt(i);
-            hash *= 0x100000001b3L;
-        }
-        return hash;
     }
 
     private RequestParameters extractParameters(HttpExchange exchange) {
@@ -298,22 +274,6 @@ public class LillymegaReplicatedService implements ReplicatedService {
         if (nodeId < 0 || nodeId >= replicationFactor) {
             throw new IllegalArgumentException("Replica id out of range: " + nodeId);
         }
-    }
-
-    private int resolveReplicationFactor() {
-        String configuredValue = System.getProperty(REPLICATION_FACTOR_PROPERTY);
-        if (configuredValue == null || configuredValue.isBlank()) {
-            configuredValue = System.getenv(REPLICATION_FACTOR_ENV);
-        }
-        if (configuredValue == null || configuredValue.isBlank()) {
-            return DEFAULT_REPLICATION_FACTOR;
-        }
-
-        int parsedValue = Integer.parseInt(configuredValue);
-        if (parsedValue < 1) {
-            throw new IllegalArgumentException("Replication factor must be positive");
-        }
-        return parsedValue;
     }
 
     private String replicaStats(int replicaId) {

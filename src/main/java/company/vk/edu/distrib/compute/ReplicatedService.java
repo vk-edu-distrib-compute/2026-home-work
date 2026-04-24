@@ -1,6 +1,6 @@
 package company.vk.edu.distrib.compute;
 
-public interface   ReplicatedService extends KVService {
+public interface ReplicatedService extends KVService {
 
     /**
      * Порт, на котором запущен сервис -- для удобства тестирования.
