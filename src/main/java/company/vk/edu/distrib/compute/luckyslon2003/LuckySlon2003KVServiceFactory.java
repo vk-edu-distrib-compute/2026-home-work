@@ -10,13 +10,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LuckySlon2003KVServiceFactory extends KVServiceFactory {
+    private static final int MIN_REPLICA_COUNT = 1;
     private static final String REPLICA_COUNT_PROPERTY = "luckyslon2003.replication.factor";
     private static final int DEFAULT_REPLICA_COUNT = 3;
 
     @Override
     protected KVService doCreate(int port) throws IOException {
         int replicaCount = Integer.getInteger(REPLICA_COUNT_PROPERTY, DEFAULT_REPLICA_COUNT);
-        if (replicaCount < 1) {
+        if (replicaCount < MIN_REPLICA_COUNT) {
             throw new IllegalArgumentException("Replica count must be positive");
         }
 

@@ -3,64 +3,64 @@ package company.vk.edu.distrib.compute.luckyslon2003;
 import java.util.concurrent.atomic.AtomicLong;
 
 final class ReplicaStats {
-    private final AtomicLong storedKeys = new AtomicLong();
-    private final AtomicLong tombstones = new AtomicLong();
-    private final AtomicLong storedBytes = new AtomicLong();
-    private final AtomicLong readRequests = new AtomicLong();
-    private final AtomicLong writeRequests = new AtomicLong();
-    private final AtomicLong deleteRequests = new AtomicLong();
+    private final AtomicLong storedKeysCounter = new AtomicLong();
+    private final AtomicLong tombstonesCounter = new AtomicLong();
+    private final AtomicLong storedBytesCounter = new AtomicLong();
+    private final AtomicLong readRequestsCounter = new AtomicLong();
+    private final AtomicLong writeRequestsCounter = new AtomicLong();
+    private final AtomicLong deleteRequestsCounter = new AtomicLong();
 
     long storedKeys() {
-        return storedKeys.get();
+        return storedKeysCounter.get();
     }
 
     long tombstones() {
-        return tombstones.get();
+        return tombstonesCounter.get();
     }
 
     long storedBytes() {
-        return storedBytes.get();
+        return storedBytesCounter.get();
     }
 
     long readRequests() {
-        return readRequests.get();
+        return readRequestsCounter.get();
     }
 
     long writeRequests() {
-        return writeRequests.get();
+        return writeRequestsCounter.get();
     }
 
     long deleteRequests() {
-        return deleteRequests.get();
+        return deleteRequestsCounter.get();
     }
 
     void recordRead() {
-        readRequests.incrementAndGet();
+        readRequestsCounter.incrementAndGet();
     }
 
     void recordWrite() {
-        writeRequests.incrementAndGet();
+        writeRequestsCounter.incrementAndGet();
     }
 
     void recordDelete() {
-        deleteRequests.incrementAndGet();
+        deleteRequestsCounter.incrementAndGet();
     }
 
     void adjustCounts(VersionedEntry previousEntry, VersionedEntry newEntry) {
         if (previousEntry != null) {
             if (previousEntry.tombstone()) {
-                tombstones.decrementAndGet();
+                tombstonesCounter.decrementAndGet();
             } else {
-                storedKeys.decrementAndGet();
-                storedBytes.addAndGet(-previousEntry.valueSize());
+                storedKeysCounter.decrementAndGet();
+                storedBytesCounter.addAndGet(-previousEntry.valueSize());
             }
         }
 
         if (newEntry.tombstone()) {
-            tombstones.incrementAndGet();
+            tombstonesCounter.incrementAndGet();
         } else {
-            storedKeys.incrementAndGet();
-            storedBytes.addAndGet(newEntry.valueSize());
+            storedKeysCounter.incrementAndGet();
+            storedBytesCounter.addAndGet(newEntry.valueSize());
         }
     }
 }

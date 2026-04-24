@@ -24,21 +24,24 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+@SuppressWarnings("PMD.GodClass")
 public class LuckySlon2003ReplicatedService implements ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(LuckySlon2003ReplicatedService.class);
 
     private static final String PATH_STATUS = "/v0/status";
     private static final String PATH_ENTITY = "/v0/entity";
     private static final String PATH_STATS_REPLICA = "/stats/replica/";
+    private static final int BAD_REQUEST = 400;
+    private static final int METHOD_NOT_ALLOWED = 405;
 
-    private final int port;
+    private final int servicePort;
     private final HttpServer server;
     private final List<ReplicaNode> replicas;
     private final ExecutorService replicaExecutor;
     private final AtomicLong versionGenerator = new AtomicLong();
 
     public LuckySlon2003ReplicatedService(int port, List<Dao<byte[]>> replicaDaos) throws IOException {
-        this.port = port;
+        this.servicePort = port;
         this.replicas = createReplicas(replicaDaos);
         this.replicaExecutor = Executors.newFixedThreadPool(Math.max(2, replicaDaos.size()));
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -51,7 +54,13 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
     @Override
     public void start() {
         server.start();
-        log.info("Replicated LuckySlon2003 service started on port {} with {} replicas", port, replicas.size());
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Replicated LuckySlon2003 service started on port {} with {} replicas",
+                    servicePort,
+                    replicas.size()
+            );
+        }
     }
 
     @Override
@@ -70,7 +79,7 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override
@@ -90,30 +99,40 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
 
     private void handleStatus(HttpExchange exchange) throws IOException {
         if (!Objects.equals(exchange.getRequestMethod(), "GET")) {
-            sendEmpty(exchange, 405);
+            sendEmpty(exchange, METHOD_NOT_ALLOWED);
             return;
         }
         sendEmpty(exchange, 200);
     }
 
     private void handleEntity(HttpExchange exchange) throws IOException {
+        EntityRequest entityRequest = parseEntityRequest(exchange);
+        if (entityRequest == null) {
+            sendEmpty(exchange, BAD_REQUEST);
+            return;
+        }
+        dispatchEntityRequest(exchange, entityRequest);
+    }
+
+    private EntityRequest parseEntityRequest(HttpExchange exchange) {
         String id = queryParam(exchange.getRequestURI(), "id");
         if (id == null || id.isEmpty()) {
-            sendEmpty(exchange, 400);
-            return;
+            return null;
         }
 
         Integer ack = parseAck(exchange.getRequestURI());
         if (ack == null || ack <= 0 || ack > replicas.size()) {
-            sendEmpty(exchange, 400);
-            return;
+            return null;
         }
+        return new EntityRequest(id, ack);
+    }
 
+    private void dispatchEntityRequest(HttpExchange exchange, EntityRequest entityRequest) throws IOException {
         switch (exchange.getRequestMethod().toUpperCase(Locale.ROOT)) {
-            case "GET" -> handleGet(exchange, id, ack);
-            case "PUT" -> handlePut(exchange, id, ack);
-            case "DELETE" -> handleDelete(exchange, id, ack);
-            default -> sendEmpty(exchange, 405);
+            case "GET" -> handleGet(exchange, entityRequest.id(), entityRequest.ack());
+            case "PUT" -> handlePut(exchange, entityRequest.id(), entityRequest.ack());
+            case "DELETE" -> handleDelete(exchange, entityRequest.id(), entityRequest.ack());
+            default -> sendEmpty(exchange, METHOD_NOT_ALLOWED);
         }
     }
 
@@ -171,7 +190,7 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
 
     private void handleStats(HttpExchange exchange) throws IOException {
         if (!Objects.equals(exchange.getRequestMethod(), "GET")) {
-            sendEmpty(exchange, 405);
+            sendEmpty(exchange, METHOD_NOT_ALLOWED);
             return;
         }
 
@@ -196,7 +215,7 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
         try {
             replicaId = Integer.parseInt(replicaIdPart);
         } catch (NumberFormatException e) {
-            sendEmpty(exchange, 400);
+            sendEmpty(exchange, BAD_REQUEST);
             return;
         }
 
@@ -222,7 +241,10 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
     private int waitForWrites(String key, VersionedEntry entry, boolean delete) {
         List<CompletableFuture<Boolean>> futures = new ArrayList<>(replicas.size());
         for (ReplicaNode replica : replicas) {
-            futures.add(CompletableFuture.supplyAsync(() -> writeReplica(replica, key, entry, delete), replicaExecutor));
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> writeReplica(replica, key, entry, delete),
+                    replicaExecutor
+            ));
         }
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         return (int) futures.stream()
@@ -233,18 +255,18 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
 
     private ReplicaReadResult readReplica(ReplicaNode replica, String key) {
         if (!replica.enabled.get()) {
-            return ReplicaReadResult.failure(replica.id);
+            return ReplicaReadResult.failure();
         }
 
         replica.stats.recordRead();
         try {
             byte[] raw = replica.dao.get(key);
-            return ReplicaReadResult.success(replica.id, VersionedEntry.deserialize(raw));
+            return ReplicaReadResult.success(VersionedEntry.deserialize(raw));
         } catch (NoSuchElementException e) {
-            return ReplicaReadResult.success(replica.id, null);
+            return ReplicaReadResult.success(null);
         } catch (IOException | IllegalArgumentException e) {
             log.warn("Read failed on replica {} for key={}", replica.id, key, e);
-            return ReplicaReadResult.failure(replica.id);
+            return ReplicaReadResult.failure();
         }
     }
 
@@ -361,30 +383,31 @@ public class LuckySlon2003ReplicatedService implements ReplicatedService {
     }
 
     private static final class ReplicaReadResult {
-        private final int replicaId;
-        private final boolean successful;
-        private final VersionedEntry entry;
+        private final boolean successfulRead;
+        private final VersionedEntry resolvedEntry;
 
-        private ReplicaReadResult(int replicaId, boolean successful, VersionedEntry entry) {
-            this.replicaId = replicaId;
-            this.successful = successful;
-            this.entry = entry;
+        private ReplicaReadResult(boolean successful, VersionedEntry entry) {
+            this.successfulRead = successful;
+            this.resolvedEntry = entry;
         }
 
-        static ReplicaReadResult success(int replicaId, VersionedEntry entry) {
-            return new ReplicaReadResult(replicaId, true, entry);
+        static ReplicaReadResult success(VersionedEntry entry) {
+            return new ReplicaReadResult(true, entry);
         }
 
-        static ReplicaReadResult failure(int replicaId) {
-            return new ReplicaReadResult(replicaId, false, null);
+        static ReplicaReadResult failure() {
+            return new ReplicaReadResult(false, null);
         }
 
         boolean successful() {
-            return successful;
+            return successfulRead;
         }
 
         VersionedEntry entry() {
-            return entry;
+            return resolvedEntry;
         }
+    }
+
+    private record EntityRequest(String id, int ack) {
     }
 }

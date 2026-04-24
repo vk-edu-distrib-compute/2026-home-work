@@ -5,40 +5,40 @@ import java.nio.ByteBuffer;
 final class VersionedEntry {
     private static final int HEADER_SIZE = Long.BYTES + 1 + Integer.BYTES;
 
-    private final long version;
-    private final boolean tombstone;
-    private final byte[] value;
+    private final long entryVersion;
+    private final boolean tombstoneMarker;
+    private final byte[] entryValue;
 
     VersionedEntry(long version, boolean tombstone, byte[] value) {
-        this.version = version;
-        this.tombstone = tombstone;
-        this.value = value == null ? null : value.clone();
+        this.entryVersion = version;
+        this.tombstoneMarker = tombstone;
+        this.entryValue = value == null ? null : value.clone();
     }
 
     long version() {
-        return version;
+        return entryVersion;
     }
 
     boolean tombstone() {
-        return tombstone;
+        return tombstoneMarker;
     }
 
     byte[] value() {
-        return value == null ? null : value.clone();
+        return entryValue == null ? null : entryValue.clone();
     }
 
     int valueSize() {
-        return value == null ? 0 : value.length;
+        return entryValue == null ? 0 : entryValue.length;
     }
 
     byte[] serialize() {
-        int valueLength = value == null ? 0 : value.length;
+        int valueLength = entryValue == null ? 0 : entryValue.length;
         ByteBuffer buffer = ByteBuffer.allocate(HEADER_SIZE + valueLength);
-        buffer.putLong(version);
-        buffer.put((byte) (tombstone ? 1 : 0));
+        buffer.putLong(entryVersion);
+        buffer.put((byte) (tombstoneMarker ? 1 : 0));
         buffer.putInt(valueLength);
         if (valueLength > 0) {
-            buffer.put(value);
+            buffer.put(entryValue);
         }
         return buffer.array();
     }
