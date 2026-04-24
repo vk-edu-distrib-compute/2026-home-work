@@ -2,6 +2,10 @@ package company.vk.edu.distrib.compute.maryarta;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.maryarta.sharding.ConsistentHashing;
+import company.vk.edu.distrib.compute.maryarta.sharding.RendezvousHashing;
+import company.vk.edu.distrib.compute.maryarta.sharding.ShardingStrategy;
+import company.vk.edu.distrib.compute.maryarta.ShardedKVServiceImpl;
 
 
 import java.io.IOException;
