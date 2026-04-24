@@ -23,6 +23,10 @@ public class TadzhnahalReplicaNode {
         return nodeId;
     }
 
+    public Dao<byte[]> dao() {
+        return dao;
+    }
+
     public boolean enabled() {
         return enabled;
     }

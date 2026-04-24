@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 public class TadzhnahalKVServiceFactory extends KVServiceFactory {
+    private static final int DEFAULT_REPLICA_COUNT = 3;
+
     private final TadzhnahalShardingAlgorithm shardingAlgorithm;
 
     public TadzhnahalKVServiceFactory() {
@@ -17,49 +19,35 @@ public class TadzhnahalKVServiceFactory extends KVServiceFactory {
 
     public TadzhnahalKVServiceFactory(TadzhnahalShardingAlgorithm shardingAlgorithm) {
         super();
-
-        if (shardingAlgorithm == null) {
-            throw new IllegalArgumentException("Sharding algorithm must not be null");
-        }
-
         this.shardingAlgorithm = shardingAlgorithm;
     }
 
     @Override
     protected KVService doCreate(int port) throws IOException {
-        FileDao dao = new FileDao(storageDir(port));
-        return new TadzhnahalKVService(
-                port,
-                dao,
-                List.of(endpoint(port)),
-                shardingAlgorithm
-        );
+        Path rootDir = buildRootDir(port);
+        return new TadzhnahalKVService(port, rootDir, DEFAULT_REPLICA_COUNT);
     }
 
     public KVService create(int port, List<String> clusterEndpoints) throws IOException {
-        if (clusterEndpoints == null || clusterEndpoints.isEmpty()) {
-            throw new IllegalArgumentException("Cluster endpoints must not be empty");
-        }
-
-        FileDao dao = new FileDao(storageDir(port));
+        Path rootDir = buildRootDir(port);
         return new TadzhnahalKVService(
                 port,
-                dao,
-                clusterEndpoints,
-                shardingAlgorithm
+                rootDir,
+                DEFAULT_REPLICA_COUNT,
+                clusterEndpoints
         );
     }
 
-    private static Path storageDir(int port) {
+    public TadzhnahalShardingAlgorithm shardingAlgorithm() {
+        return shardingAlgorithm;
+    }
+
+    private Path buildRootDir(int port) {
         return Path.of(
                 System.getProperty("user.home"),
                 ".vk-distributed-computing",
                 "tadzhnahal",
                 "port-" + port
         );
-    }
-
-    private static String endpoint(int port) {
-        return "http://localhost:" + port;
     }
 }

@@ -2,72 +2,63 @@ package company.vk.edu.distrib.compute.tadzhnahal;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.ReplicatedService;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TadzhnahalKVService implements KVService {
+public class TadzhnahalKVService implements ReplicatedService {
     private static final String STATUS_PATH = "/v0/status";
-    private static final String ENTITY_PATH = "/v0/entity";
     private static final String METHOD_GET = "GET";
     private static final String LOCALHOST = "http://localhost:";
 
     private final int port;
-    private final Dao<byte[]> dao;
+    private final Path rootDir;
+    private final int replicaCount;
+    private final List<TadzhnahalReplicaNode> replicaNodes;
+
     private final String localEndpoint;
-    private final TadzhnahalShardSelector shardSelector;
+    private final List<String> clusterEndpoints;
+    private final TadzhnahalRendezvousHashing rendezvousHashing;
     private final TadzhnahalProxyClient proxyClient;
 
     private HttpServer server;
     private boolean started;
 
-    public TadzhnahalKVService(int port, Dao<byte[]> dao) {
-        this(
-                port,
-                dao,
-                List.of(buildEndpoint(port)),
-                TadzhnahalShardingAlgorithm.RENDEZVOUS
-        );
-    }
-
-    public TadzhnahalKVService(int port, Dao<byte[]> dao, List<String> clusterEndpoints) {
-        this(
-                port,
-                dao,
-                clusterEndpoints,
-                TadzhnahalShardingAlgorithm.RENDEZVOUS
-        );
+    public TadzhnahalKVService(int port, Path rootDir, int replicaCount) throws IOException {
+        this(port, rootDir, replicaCount, List.of(buildEndpoint(port)));
     }
 
     public TadzhnahalKVService(
             int port,
-            Dao<byte[]> dao,
-            List<String> clusterEndpoints,
-            TadzhnahalShardingAlgorithm shardingAlgorithm
-    ) {
-        if (dao == null) {
-            throw new IllegalArgumentException("Dao must not be null");
+            Path rootDir,
+            int replicaCount,
+            List<String> clusterEndpoints
+    ) throws IOException {
+        if (rootDir == null) {
+            throw new IllegalArgumentException("Root dir must not be null");
+        }
+
+        if (replicaCount < 1) {
+            throw new IllegalArgumentException("Replica count must be positive");
         }
 
         if (clusterEndpoints == null || clusterEndpoints.isEmpty()) {
             throw new IllegalArgumentException("Cluster endpoints must not be empty");
         }
 
-        if (shardingAlgorithm == null) {
-            throw new IllegalArgumentException("Sharding algorithm must not be null");
-        }
-
         this.port = port;
-        this.dao = dao;
-        this.localEndpoint = buildEndpoint(port);
-        this.proxyClient = new TadzhnahalProxyClient();
+        this.rootDir = rootDir;
+        this.replicaCount = replicaCount;
+        this.replicaNodes = createReplicaNodes(rootDir, replicaCount);
 
-        List<String> endpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
-        this.shardSelector = createShardSelector(endpoints, shardingAlgorithm);
+        this.localEndpoint = buildEndpoint(port);
+        this.clusterEndpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
+        this.rendezvousHashing = new TadzhnahalRendezvousHashing(this.clusterEndpoints);
+        this.proxyClient = new TadzhnahalProxyClient();
     }
 
     @Override
@@ -80,11 +71,11 @@ public class TadzhnahalKVService implements KVService {
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext(STATUS_PATH, this::handleStatus);
             server.createContext(
-                    ENTITY_PATH,
+                    "/v0/entity",
                     new TadzhnahalEntityHandler(
                             localEndpoint,
-                            dao,
-                            shardSelector,
+                            replicaNodes.getFirst().dao(),
+                            rendezvousHashing,
                             proxyClient
                     )
             );
@@ -103,6 +94,43 @@ public class TadzhnahalKVService implements KVService {
 
         server.stop(0);
         started = false;
+        server = null;
+    }
+
+    @Override
+    public int port() {
+        return port;
+    }
+
+    @Override
+    public int numberOfReplicas() {
+        return replicaCount;
+    }
+
+    @Override
+    public void disableReplica(int nodeId) {
+        replica(nodeId).disable();
+    }
+
+    @Override
+    public void enableReplica(int nodeId) {
+        replica(nodeId).enable();
+    }
+
+    public Path rootDir() {
+        return rootDir;
+    }
+
+    public List<TadzhnahalReplicaNode> replicaNodes() {
+        return List.copyOf(replicaNodes);
+    }
+
+    private TadzhnahalReplicaNode replica(int nodeId) {
+        if (nodeId < 0 || nodeId >= replicaNodes.size()) {
+            throw new IllegalArgumentException("Unknown replica id: " + nodeId);
+        }
+
+        return replicaNodes.get(nodeId);
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -142,14 +170,16 @@ public class TadzhnahalKVService implements KVService {
         return List.copyOf(endpoints);
     }
 
-    private static TadzhnahalShardSelector createShardSelector(
-            List<String> endpoints,
-            TadzhnahalShardingAlgorithm shardingAlgorithm
-    ) {
-        if (shardingAlgorithm == TadzhnahalShardingAlgorithm.CONSISTENT) {
-            return new TadzhnahalConsistentHashing(endpoints);
+    private static List<TadzhnahalReplicaNode> createReplicaNodes(Path rootDir, int replicaCount)
+            throws IOException {
+        List<TadzhnahalReplicaNode> nodes = new ArrayList<>();
+
+        for (int nodeId = 0; nodeId < replicaCount; nodeId++) {
+            Path replicaDir = rootDir.resolve("replica-" + nodeId);
+            FileDao dao = new FileDao(replicaDir);
+            nodes.add(new TadzhnahalReplicaNode(nodeId, dao));
         }
 
-        return new TadzhnahalRendezvousHashing(endpoints);
+        return List.copyOf(nodes);
     }
 }
