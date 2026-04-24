@@ -13,6 +13,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @SuppressWarnings("PMD.GodClass")
 public class MarinchankaReplicatedService implements ReplicatedService {
@@ -39,6 +41,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private final int replicationFactor;
     private final List<Dao<byte[]>> replicas;
     private final boolean[] replicaEnabled;
+    private final ExecutorService executor;
     private HttpServer server;
     private boolean running;
 
@@ -48,6 +51,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         this.replicas = replicas;
         this.replicaEnabled = new boolean[numberOfReplicas];
         Arrays.fill(replicaEnabled, true);
+        this.executor = Executors.newFixedThreadPool(numberOfReplicas);
     }
 
     @Override
@@ -86,6 +90,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             server = HttpServer.create(new InetSocketAddress(servicePort), 0);
             server.createContext("/v0/status", new StatusHandler());
             server.createContext("/v0/entity", new EntityHandler());
+            server.createContext("/v0/stats", new StatsHandler());
             server.setExecutor(null);
             server.start();
             running = true;
@@ -103,6 +108,15 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         running = false;
         server = closeServer(server);
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         replicas.forEach(dao -> {
             try {
                 dao.close();
@@ -156,6 +170,65 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 exchange.sendResponseHeaders(STATUS_OK, -1);
             } else {
                 exchange.sendResponseHeaders(SERVICE_UNAVAILABLE, -1);
+            }
+        }
+    }
+
+    private final class StatsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
+                return;
+            }
+
+            String path = exchange.getRequestURI().getPath();
+            String[] parts = path.split("/");
+            if (parts.length < 4) {
+                sendError(exchange, BAD_REQUEST, "Invalid path");
+                return;
+            }
+
+            int replicaId;
+            try {
+                replicaId = Integer.parseInt(parts[3]);
+            } catch (NumberFormatException e) {
+                sendError(exchange, BAD_REQUEST, "Invalid replica ID");
+                return;
+            }
+
+            if (replicaId < 0 || replicaId >= replicationFactor) {
+                sendError(exchange, NOT_FOUND, "Replica not found");
+                return;
+            }
+
+            boolean accessStats = parts.length >= 5 && "access".equals(parts[4]);
+            VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+
+            StringBuilder json = new StringBuilder(64);
+            json.append('{');
+            if (accessStats) {
+                json.append("\"reads\":").append(dao.getReadCount())
+                        .append(",\"writes\":").append(dao.getWriteCount());
+            } else {
+                json.append("\"keys\":").append(dao.getKeyCount());
+            }
+            json.append('}');
+
+            byte[] response = json.toString().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(STATUS_OK, response.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response);
+            }
+        }
+
+        private void sendError(HttpExchange exchange, int code, String message) throws IOException {
+            byte[] response = message.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+            exchange.sendResponseHeaders(code, response.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response);
             }
         }
     }
@@ -228,29 +301,35 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
 
         private ReadResult collectReadResults(String id) {
-            List<VersionedInMemoryDao.VersionedEntry> entries = new ArrayList<>();
-            int notFoundCount = 0;
+            List<VersionedInMemoryDao.VersionedEntry> entries = Collections.synchronizedList(new ArrayList<>());
+            AtomicInteger notFoundCount = new AtomicInteger(0);
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                try {
-                    VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                    VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
-                    if (entry != null) {
-                        entries.add(entry);
-                    } else {
-                        notFoundCount++;
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    try {
+                        VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+                        VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
+                        if (entry != null) {
+                            entries.add(entry);
+                        } else {
+                            notFoundCount.incrementAndGet();
+                        }
+                    } catch (NoSuchElementException e) {
+                        notFoundCount.incrementAndGet();
+                    } catch (IOException e) {
+                        log.error("Failed to read from replica {}", replicaId, e);
                     }
-                } catch (NoSuchElementException e) {
-                    notFoundCount++;
-                } catch (IOException e) {
-                    log.error("Failed to read from replica {}", replicaId, e);
-                }
+                }, executor);
+                futures.add(future);
             }
 
-            return aggregateReadResult(entries, notFoundCount);
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            return aggregateReadResult(entries, notFoundCount.get());
         }
 
         private ReadResult aggregateReadResult(List<VersionedInMemoryDao.VersionedEntry> entries, int notFoundCount) {
@@ -275,21 +354,26 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 return;
             }
 
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                try {
-                    VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                    if (tombstone) {
-                        dao.deleteWithVersion(id, maxVersion);
-                    } else {
-                        dao.upsertWithVersion(id, data, maxVersion);
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    try {
+                        VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+                        if (tombstone) {
+                            dao.deleteWithVersion(id, maxVersion);
+                        } else {
+                            dao.upsertWithVersion(id, data, maxVersion);
+                        }
+                    } catch (IOException e) {
+                        log.error("Failed to repair replica {}", replicaId, e);
                     }
-                } catch (IOException e) {
-                    log.error("Failed to repair replica {}", replicaId, e);
-                }
+                }, executor);
+                futures.add(future);
             }
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         }
 
         private void sendOkWithData(HttpExchange exchange, byte[] data) throws IOException {
@@ -308,22 +392,27 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             }
 
             byte[] data = exchange.getRequestBody().readAllBytes();
-            int confirmed = 0;
+            AtomicInteger confirmed = new AtomicInteger(0);
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-
-                try {
-                    replicas.get(replicaId).upsert(id, data);
-                    confirmed++;
-                } catch (IOException e) {
-                    log.error("Failed to write to replica {}", replicaId, e);
-                }
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    try {
+                        replicas.get(replicaId).upsert(id, data);
+                        confirmed.incrementAndGet();
+                    } catch (IOException e) {
+                        log.error("Failed to write to replica {}", replicaId, e);
+                    }
+                }, executor);
+                futures.add(future);
             }
 
-            if (confirmed >= ack) {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            if (confirmed.get() >= ack) {
                 exchange.sendResponseHeaders(STATUS_CREATED, -1);
             } else {
                 sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
@@ -337,22 +426,27 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 return;
             }
 
-            int confirmed = 0;
+            AtomicInteger confirmed = new AtomicInteger(0);
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-
-                try {
-                    replicas.get(replicaId).delete(id);
-                    confirmed++;
-                } catch (IOException e) {
-                    log.error("Failed to delete from replica {}", replicaId, e);
-                }
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    try {
+                        replicas.get(replicaId).delete(id);
+                        confirmed.incrementAndGet();
+                    } catch (IOException e) {
+                        log.error("Failed to delete from replica {}", replicaId, e);
+                    }
+                }, executor);
+                futures.add(future);
             }
 
-            if (confirmed >= ack) {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            if (confirmed.get() >= ack) {
                 exchange.sendResponseHeaders(STATUS_ACCEPTED, -1);
             } else {
                 sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");

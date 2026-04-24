@@ -6,15 +6,19 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class VersionedInMemoryDao implements Dao<byte[]> {
     private final Map<String, VersionedEntry> storage = new ConcurrentHashMap<>();
+    private final AtomicLong readCount = new AtomicLong(0);
+    private final AtomicLong writeCount = new AtomicLong(0);
     private boolean closed;
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         checkClosed();
         validateKey(key);
+        readCount.incrementAndGet();
 
         VersionedEntry entry = storage.get(key);
         if (entry == null || entry.tombstone) {
@@ -23,20 +27,15 @@ public class VersionedInMemoryDao implements Dao<byte[]> {
         return entry.data.clone();
     }
 
-    /**
-     * Возвращает версию ключа. Если ключ не найден, возвращает -1.
-     */
     public long getVersion(String key) throws IOException {
         checkClosed();
         VersionedEntry entry = storage.get(key);
         return (entry != null) ? entry.version : -1;
     }
 
-    /**
-     * Возвращает данные вместе с версией.
-     */
     public VersionedEntry getEntry(String key) throws IOException {
         checkClosed();
+        readCount.incrementAndGet();
         return storage.get(key);
     }
 
@@ -45,21 +44,19 @@ public class VersionedInMemoryDao implements Dao<byte[]> {
         checkClosed();
         validateKey(key);
         validateValue(value);
+        writeCount.incrementAndGet();
 
-        // Атомарное обновление с увеличением версии
         storage.compute(key, (k, existing) -> {
             long newVersion = (existing == null) ? 1L : existing.version + 1;
             return new VersionedEntry(value.clone(), newVersion, false);
         });
     }
 
-    /**
-     * Запись с указанной версией (используется для repair синхронизации).
-     */
     public void upsertWithVersion(String key, byte[] value, long version) throws IOException {
         checkClosed();
         validateKey(key);
         validateValue(value);
+        writeCount.incrementAndGet();
 
         storage.compute(key, (k, existing) -> {
             if (existing == null || version >= existing.version) {
@@ -73,20 +70,18 @@ public class VersionedInMemoryDao implements Dao<byte[]> {
     public void delete(String key) throws IllegalArgumentException, IOException {
         checkClosed();
         validateKey(key);
+        writeCount.incrementAndGet();
 
-        // Удаление – записываем tombstone с увеличенной версией
         storage.compute(key, (k, existing) -> {
             long newVersion = (existing == null) ? 1L : existing.version + 1;
             return new VersionedEntry(null, newVersion, true);
         });
     }
 
-    /**
-     * Удаление с указанной версией (для repair синхронизации).
-     */
     public void deleteWithVersion(String key, long version) throws IOException {
         checkClosed();
         validateKey(key);
+        writeCount.incrementAndGet();
 
         storage.compute(key, (k, existing) -> {
             if (existing == null || version >= existing.version) {
@@ -100,6 +95,18 @@ public class VersionedInMemoryDao implements Dao<byte[]> {
     public void close() throws IOException {
         closed = true;
         storage.clear();
+    }
+
+    public long getReadCount() {
+        return readCount.get();
+    }
+
+    public long getWriteCount() {
+        return writeCount.get();
+    }
+
+    public int getKeyCount() {
+        return storage.size();
     }
 
     private void validateKey(String key) {
