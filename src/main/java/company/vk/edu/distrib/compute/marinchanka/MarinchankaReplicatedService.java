@@ -17,6 +17,7 @@ import java.util.*;
 @SuppressWarnings("PMD.GodClass")
 public class MarinchankaReplicatedService implements ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(MarinchankaReplicatedService.class);
+    private static final byte[] EMPTY_DATA = new byte[0];
 
     private static final String METHOD_GET = "GET";
     private static final String METHOD_PUT = "PUT";
@@ -101,10 +102,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
 
         running = false;
-        if (server != null) {
-            server.stop(0);
-            server = null; // освобождаем ссылку на сервер
-        }
+        server = closeServer(server);
         replicas.forEach(dao -> {
             try {
                 dao.close();
@@ -112,6 +110,13 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 log.error("Error closing DAO", e);
             }
         });
+    }
+
+    private HttpServer closeServer(HttpServer s) {
+        if (s != null) {
+            s.stop(0);
+        }
+        return null;
     }
 
     /**
@@ -223,48 +228,46 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
 
         private ReadResult collectReadResults(String id) {
-            Optional<VersionedInMemoryDao.VersionedEntry> best = Optional.empty();
-            int foundCount = 0;
+            List<VersionedInMemoryDao.VersionedEntry> entries = new ArrayList<>();
             int notFoundCount = 0;
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                ReplicaReadOutcome outcome = processReplicaRead(replicaId, id);
-                if (outcome.present) {
-                    if (best.isEmpty() || outcome.version > best.get().version) {
-                        best = Optional.of(new VersionedInMemoryDao.VersionedEntry(
-                                outcome.data, outcome.version, outcome.tombstone));
+                try {
+                    VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+                    VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
+                    if (entry != null) {
+                        entries.add(entry);
+                    } else {
+                        notFoundCount++;
                     }
-                    foundCount++;
-                } else {
+                } catch (NoSuchElementException e) {
                     notFoundCount++;
+                } catch (IOException e) {
+                    log.error("Failed to read from replica {}", replicaId, e);
                 }
             }
 
-            if (best.isPresent()) {
-                VersionedInMemoryDao.VersionedEntry e = best.get();
-                return new ReadResult(e.version, e.tombstone ? null : e.data, e.tombstone, foundCount + notFoundCount);
-            } else {
-                return new ReadResult(-1, null, false, foundCount + notFoundCount);
-            }
+            return aggregateReadResult(entries, notFoundCount);
         }
 
-        private ReplicaReadOutcome processReplicaRead(int replicaId, String id) {
-            try {
-                VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
-                if (entry != null) {
-                    return new ReplicaReadOutcome(true, entry.version, entry.tombstone ? null : entry.data,
-                            entry.tombstone);
-                }
-            } catch (NoSuchElementException e) {
-                // ключ не найден на этой реплике
-            } catch (IOException e) {
-                log.error("Failed to read from replica {}", replicaId, e);
+        private ReadResult aggregateReadResult(List<VersionedInMemoryDao.VersionedEntry> entries, int notFoundCount) {
+            if (entries.isEmpty()) {
+                return new ReadResult(-1, EMPTY_DATA, false, notFoundCount);
             }
-            return new ReplicaReadOutcome(false, -1, null, false);
+
+            VersionedInMemoryDao.VersionedEntry best = entries.get(0);
+            for (int i = 1; i < entries.size(); i++) {
+                VersionedInMemoryDao.VersionedEntry e = entries.get(i);
+                if (e.version > best.version) {
+                    best = e;
+                }
+            }
+
+            byte[] data = best.tombstone ? EMPTY_DATA : best.data;
+            return new ReadResult(best.version, data, best.tombstone, entries.size() + notFoundCount);
         }
 
         private void performReadRepair(String id, long maxVersion, byte[] data, boolean tombstone) {
@@ -404,23 +407,9 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         ReadResult(long maxVersion, byte[] data, boolean tombstone, int totalResponses) {
             this.maxVersion = maxVersion;
-            this.data = data != null ? data.clone() : null;
+            this.data = data.clone();
             this.tombstone = tombstone;
             this.totalResponses = totalResponses;
-        }
-    }
-
-    private static class ReplicaReadOutcome {
-        final boolean present;
-        final long version;
-        final byte[] data;
-        final boolean tombstone;
-
-        ReplicaReadOutcome(boolean present, long version, byte[] data, boolean tombstone) {
-            this.present = present;
-            this.version = version;
-            this.data = data != null ? data.clone() : null;
-            this.tombstone = tombstone;
         }
     }
 
