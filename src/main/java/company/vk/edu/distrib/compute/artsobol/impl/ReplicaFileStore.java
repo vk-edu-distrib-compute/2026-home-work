@@ -14,9 +14,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.atomic.AtomicLong;
 
 final class ReplicaFileStore {
     private static final String ENTRY_GLOB = "*.entry";
@@ -33,7 +33,7 @@ final class ReplicaFileStore {
         createDirectory(basePath);
     }
 
-    ReplicationCoordinator.VersionedEntry read(String key) throws IOException {
+    VersionedEntry read(String key) throws IOException {
         ReadWriteLock lock = lockFor(key);
         lock.readLock().lock();
         try {
@@ -50,13 +50,13 @@ final class ReplicaFileStore {
         }
     }
 
-    boolean writeIfNewer(String key, ReplicationCoordinator.VersionedEntry entry, boolean countAccess) throws IOException {
+    boolean writeIfNewer(String key, VersionedEntry entry, boolean count) throws IOException {
         ReadWriteLock lock = lockFor(key);
         lock.writeLock().lock();
         try {
             Path entryPath = pathFor(key);
-            ReplicationCoordinator.VersionedEntry current = readCurrent(entryPath);
-            if (current != null && !isNewer(entry, current)) {
+            VersionedEntry current = readCurrent(entryPath);
+            if (current != null && !VersionedEntry.isNewer(entry, current)) {
                 return false;
             }
             Path tempPath = Files.createTempFile(basePath, "tmp-", ".tmp");
@@ -67,7 +67,7 @@ final class ReplicaFileStore {
                 Files.deleteIfExists(tempPath);
             }
 
-            if (countAccess) {
+            if (count) {
                 incrementWriteCounter(entry);
             }
             return true;
@@ -76,7 +76,7 @@ final class ReplicaFileStore {
         }
     }
 
-    ReplicationCoordinator.ReplicaStats stats(int replicaId, boolean enabled) throws IOException {
+    ReplicaStats stats(int replicaId, boolean enabled) throws IOException {
         int totalKeys = 0;
         int liveKeys = 0;
         int tombstones = 0;
@@ -84,7 +84,7 @@ final class ReplicaFileStore {
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(basePath, ENTRY_GLOB)) {
             for (Path entryPath : stream) {
-                ReplicationCoordinator.VersionedEntry entry = readCurrent(entryPath);
+                VersionedEntry entry = readCurrent(entryPath);
                 if (entry == null) {
                     continue;
                 }
@@ -100,11 +100,11 @@ final class ReplicaFileStore {
             }
         }
 
-        return new ReplicationCoordinator.ReplicaStats(replicaId, enabled, totalKeys, liveKeys, tombstones, bytes);
+        return new ReplicaStats(replicaId, enabled, totalKeys, liveKeys, tombstones, bytes);
     }
 
-    ReplicationCoordinator.ReplicaAccessStats accessStats(int replicaId) {
-        return new ReplicationCoordinator.ReplicaAccessStats(
+    ReplicaAccessStats accessStats(int replicaId) {
+        return new ReplicaAccessStats(
                 replicaId,
                 readCount.get(),
                 writeCount.get(),
@@ -112,7 +112,7 @@ final class ReplicaFileStore {
         );
     }
 
-    private void incrementWriteCounter(ReplicationCoordinator.VersionedEntry entry) {
+    private void incrementWriteCounter(VersionedEntry entry) {
         if (entry.tombstone()) {
             deleteCount.incrementAndGet();
         } else {
@@ -124,7 +124,7 @@ final class ReplicaFileStore {
         return basePath.resolve(hashKey(key) + ".entry");
     }
 
-    private static ReplicationCoordinator.VersionedEntry readCurrent(Path entryPath) throws IOException {
+    private static VersionedEntry readCurrent(Path entryPath) throws IOException {
         if (Files.notExists(entryPath)) {
             return null;
         }
@@ -140,7 +140,7 @@ final class ReplicaFileStore {
         return keyLocks[index];
     }
 
-    private static byte[] serialize(ReplicationCoordinator.VersionedEntry entry) throws IOException {
+    private static byte[] serialize(VersionedEntry entry) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (DataOutputStream data = new DataOutputStream(output)) {
             byte[] value = entry.body();
@@ -154,7 +154,7 @@ final class ReplicaFileStore {
         return output.toByteArray();
     }
 
-    private static ReplicationCoordinator.VersionedEntry deserialize(byte[] bytes) throws IOException {
+    private static VersionedEntry deserialize(byte[] bytes) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             long version = input.readLong();
             boolean tombstone = input.readBoolean();
@@ -164,18 +164,8 @@ final class ReplicaFileStore {
                 value = new byte[length];
                 input.readFully(value);
             }
-            return new ReplicationCoordinator.VersionedEntry(version, tombstone, value);
+            return new VersionedEntry(version, tombstone, value);
         }
-    }
-
-    private static boolean isNewer(
-            ReplicationCoordinator.VersionedEntry candidate,
-            ReplicationCoordinator.VersionedEntry current
-    ) {
-        if (candidate.version() != current.version()) {
-            return candidate.version() > current.version();
-        }
-        return candidate.tombstone() && !current.tombstone();
     }
 
     private static String hashKey(String key) {

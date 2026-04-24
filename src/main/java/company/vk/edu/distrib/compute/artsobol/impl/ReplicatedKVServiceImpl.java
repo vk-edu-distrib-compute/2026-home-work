@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.NoSuchElementException;
 
-@SuppressWarnings("PMD.GodClass")
 public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplicatedKVServiceImpl.class);
@@ -125,14 +124,14 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     }
 
     private void handleGet(HttpExchange exchange, EntityRequest request) throws IOException {
-        ReplicationCoordinator.ReadResult result = coordinator.read(request.id(), request.ack());
+        ReadResult result = coordinator.read(request.id(), request.ack());
         if (result.successfulResponses() < request.ack()) {
             logQuorumNotReached("Read", request.id(), request.ack(), result.successfulResponses());
             writeEmptyResponse(exchange, 500);
             return;
         }
 
-        ReplicationCoordinator.VersionedEntry entry = result.entry();
+        VersionedEntry entry = result.entry();
         if (entry == null || entry.tombstone()) {
             writeEmptyResponse(exchange, 404);
             return;
