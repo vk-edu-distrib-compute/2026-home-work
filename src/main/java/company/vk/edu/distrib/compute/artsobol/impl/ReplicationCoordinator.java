@@ -71,57 +71,26 @@ final class ReplicationCoordinator implements AutoCloseable {
     }
 
     ReadResult read(String key, int ack) {
-        List<Replica> orderedReplicas = orderedReplicasForKey(key);
-        log.debug("Replica read started: key={}, ack={}, replicas={}", key, ack, replicaIds(orderedReplicas));
+        List<Replica> orderedReplicas = enabledReplicasForKey(key);
+        logReadStarted(key, ack, orderedReplicas);
 
-        List<CompletableFuture<ReadOutcome>> futures = new ArrayList<>(orderedReplicas.size());
-        for (Replica replica : orderedReplicas) {
-            if (replica.isEnabled()) {
-                futures.add(readFuture(replica, key));
-            }
-        }
+        List<ReadOutcome> outcomes = readOutcomes(key, orderedReplicas);
+        int successfulResponses = successfulResponses(outcomes);
+        VersionedEntry freshest = freshestEntry(outcomes);
+        List<Replica> responsiveReplicas = responsiveReplicas(outcomes);
 
-        int successfulResponses = 0;
-        VersionedEntry freshest = null;
-        List<Replica> responsiveReplicas = new ArrayList<>(futures.size());
-        for (CompletableFuture<ReadOutcome> future : futures) {
-            ReadOutcome outcome = future.join();
-            if (!outcome.success()) {
-                continue;
-            }
-            successfulResponses++;
-            responsiveReplicas.add(outcome.replica());
-            VersionedEntry current = outcome.entry();
-            if (current != null && isNewer(current, freshest)) {
-                freshest = current;
-            }
-        }
-
-        if (successfulResponses >= ack && freshest != null) {
-            repair(key, freshest, responsiveReplicas);
-            log.debug("Replica read finished: key={}, ack={}, successes={}", key, ack, successfulResponses);
-        } else if (successfulResponses < ack) {
-            log.warn(
-                    "Replica read quorum not reached: key={}, ack={}, successes={}",
-                    key,
-                    ack,
-                    successfulResponses
-            );
-        }
-
+        finishRead(key, ack, successfulResponses, freshest, responsiveReplicas);
         return new ReadResult(successfulResponses, freshest);
     }
 
     private int replicate(String key, VersionedEntry entry) {
-        List<Replica> orderedReplicas = orderedReplicasForKey(key);
+        List<Replica> orderedReplicas = enabledReplicasForKey(key);
         String operation = entry.tombstone() ? "delete" : "put";
-        log.debug("Replica {} started: key={}, replicas={}", operation, key, replicaIds(orderedReplicas));
+        logReplicationStarted(operation, key, orderedReplicas);
 
         List<CompletableFuture<Boolean>> futures = new ArrayList<>(orderedReplicas.size());
         for (Replica replica : orderedReplicas) {
-            if (replica.isEnabled()) {
-                futures.add(writeFuture(replica, key, entry, true));
-            }
+            futures.add(writeFuture(replica, key, entry, true));
         }
 
         int successfulWrites = 0;
@@ -131,7 +100,7 @@ final class ReplicationCoordinator implements AutoCloseable {
             }
         }
 
-        log.debug("Replica {} finished: key={}, successes={}", operation, key, successfulWrites);
+        logReplicationFinished(operation, key, successfulWrites);
         return successfulWrites;
     }
 
@@ -165,12 +134,7 @@ final class ReplicationCoordinator implements AutoCloseable {
                 .supplyAsync(() -> replica.readAsync(key), ioExecutor)
                 .orTimeout(REPLICA_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .exceptionally(error -> {
-                    log.warn(
-                            "Replica read failed: key={}, replicaId={}, reason={}",
-                            key,
-                            replica.id(),
-                            error.toString()
-                    );
+                    logReplicaReadFailure(key, replica.id(), error);
                     return new ReadOutcome(replica, null, false);
                 });
     }
@@ -186,24 +150,24 @@ final class ReplicationCoordinator implements AutoCloseable {
                 .supplyAsync(() -> replica.writeAsync(key, entry, countAccess), ioExecutor)
                 .orTimeout(REPLICA_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .exceptionally(error -> {
-                    log.warn(
-                            "Replica {} failed: key={}, replicaId={}, reason={}",
-                            operation,
-                            key,
-                            replica.id(),
-                            error.toString()
-                    );
+                    logReplicaWriteFailure(operation, key, replica.id(), error);
                     return false;
                 });
     }
 
-    private List<Replica> orderedReplicasForKey(String key) {
+    private List<Replica> enabledReplicasForKey(String key) {
         List<Replica> ordered = new ArrayList<>(replicas);
         ordered.sort((left, right) -> Long.compareUnsigned(
                 rendezvousScore(key, right.id()),
                 rendezvousScore(key, left.id())
         ));
-        return ordered;
+        List<Replica> enabledReplicas = new ArrayList<>(ordered.size());
+        for (Replica replica : ordered) {
+            if (replica.isEnabled()) {
+                enabledReplicas.add(replica);
+            }
+        }
+        return enabledReplicas;
     }
 
     private static long rendezvousScore(String key, int replicaId) {
@@ -220,12 +184,13 @@ final class ReplicationCoordinator implements AutoCloseable {
     }
 
     private static long mix64(long value) {
-        value ^= value >>> 33;
-        value *= 0xff51afd7ed558ccdL;
-        value ^= value >>> 33;
-        value *= 0xc4ceb9fe1a85ec53L;
-        value ^= value >>> 33;
-        return value;
+        long mixed = value;
+        mixed ^= mixed >>> 33;
+        mixed *= 0xff51afd7ed558ccdL;
+        mixed ^= mixed >>> 33;
+        mixed *= 0xc4ceb9fe1a85ec53L;
+        mixed ^= mixed >>> 33;
+        return mixed;
     }
 
     private static String replicaIds(List<Replica> orderedReplicas) {
@@ -234,6 +199,128 @@ final class ReplicationCoordinator implements AutoCloseable {
             ids.add(replica.id());
         }
         return ids.toString();
+    }
+
+    private List<ReadOutcome> readOutcomes(String key, List<Replica> orderedReplicas) {
+        List<CompletableFuture<ReadOutcome>> futures = new ArrayList<>(orderedReplicas.size());
+        for (Replica replica : orderedReplicas) {
+            futures.add(readFuture(replica, key));
+        }
+
+        List<ReadOutcome> outcomes = new ArrayList<>(futures.size());
+        for (CompletableFuture<ReadOutcome> future : futures) {
+            outcomes.add(future.join());
+        }
+        return outcomes;
+    }
+
+    private static int successfulResponses(List<ReadOutcome> outcomes) {
+        int successfulResponses = 0;
+        for (ReadOutcome outcome : outcomes) {
+            if (outcome.success()) {
+                successfulResponses++;
+            }
+        }
+        return successfulResponses;
+    }
+
+    private static VersionedEntry freshestEntry(List<ReadOutcome> outcomes) {
+        VersionedEntry freshest = null;
+        for (ReadOutcome outcome : outcomes) {
+            if (!outcome.success()) {
+                continue;
+            }
+            VersionedEntry current = outcome.entry();
+            if (current != null && isNewer(current, freshest)) {
+                freshest = current;
+            }
+        }
+        return freshest;
+    }
+
+    private static List<Replica> responsiveReplicas(List<ReadOutcome> outcomes) {
+        List<Replica> responsiveReplicas = new ArrayList<>(outcomes.size());
+        for (ReadOutcome outcome : outcomes) {
+            if (outcome.success()) {
+                responsiveReplicas.add(outcome.replica());
+            }
+        }
+        return responsiveReplicas;
+    }
+
+    private void finishRead(
+            String key,
+            int ack,
+            int successfulResponses,
+            VersionedEntry freshest,
+            List<Replica> responsiveReplicas
+    ) {
+        if (successfulResponses >= ack && freshest != null) {
+            repair(key, freshest, responsiveReplicas);
+            logReadFinished(key, ack, successfulResponses);
+            return;
+        }
+        if (successfulResponses < ack) {
+            logReadQuorumFailure(key, ack, successfulResponses);
+        }
+    }
+
+    private static void logReadStarted(String key, int ack, List<Replica> orderedReplicas) {
+        if (log.isDebugEnabled()) {
+            log.debug("Replica read started: key={}, ack={}, replicas={}", key, ack, replicaIds(orderedReplicas));
+        }
+    }
+
+    private static void logReadFinished(String key, int ack, int successfulResponses) {
+        if (log.isDebugEnabled()) {
+            log.debug("Replica read finished: key={}, ack={}, successes={}", key, ack, successfulResponses);
+        }
+    }
+
+    private static void logReadQuorumFailure(String key, int ack, int successfulResponses) {
+        if (log.isWarnEnabled()) {
+            log.warn(
+                    "Replica read quorum not reached: key={}, ack={}, successes={}",
+                    key,
+                    ack,
+                    successfulResponses
+            );
+        }
+    }
+
+    private static void logReplicationStarted(String operation, String key, List<Replica> orderedReplicas) {
+        if (log.isDebugEnabled()) {
+            log.debug("Replica {} started: key={}, replicas={}", operation, key, replicaIds(orderedReplicas));
+        }
+    }
+
+    private static void logReplicationFinished(String operation, String key, int successfulWrites) {
+        if (log.isDebugEnabled()) {
+            log.debug("Replica {} finished: key={}, successes={}", operation, key, successfulWrites);
+        }
+    }
+
+    private static void logReplicaReadFailure(String key, int replicaId, Throwable error) {
+        if (log.isWarnEnabled()) {
+            log.warn(
+                    "Replica read failed: key={}, replicaId={}, reason={}",
+                    key,
+                    replicaId,
+                    error.toString()
+            );
+        }
+    }
+
+    private static void logReplicaWriteFailure(String operation, String key, int replicaId, Throwable error) {
+        if (log.isWarnEnabled()) {
+            log.warn(
+                    "Replica {} failed: key={}, replicaId={}, reason={}",
+                    operation,
+                    key,
+                    replicaId,
+                    error.toString()
+            );
+        }
     }
 
     record ReadResult(int successfulResponses, VersionedEntry entry) {
@@ -286,17 +373,17 @@ final class ReplicationCoordinator implements AutoCloseable {
     }
 
     private static final class Replica {
-        private final int id;
+        private final int replicaId;
         private final AtomicBoolean enabled = new AtomicBoolean(true);
         private final ReplicaFileStore store;
 
-        private Replica(int id, Path replicaPath) {
-            this.id = id;
+        private Replica(int replicaId, Path replicaPath) {
+            this.replicaId = replicaId;
             this.store = new ReplicaFileStore(replicaPath);
         }
 
         private int id() {
-            return id;
+            return replicaId;
         }
 
         private boolean isEnabled() {

@@ -18,24 +18,30 @@ import java.util.NoSuchElementException;
 public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplicatedKVServiceImpl.class);
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
     private static final String ENTITY_PATH = "/v0/entity";
     private static final String STATUS_PATH = "/v0/status";
     private static final String REPLICA_STATS_PATH = "/stats/replica";
+    private static final String ROOT_SUFFIX = "/";
     private static final String ACCESS_SUFFIX = "access";
+    private static final int SINGLE_PATH_SEGMENT = 1;
+    private static final int ACCESS_PATH_SEGMENTS = 2;
 
     private final HttpServer server;
-    private final int port;
+    private final int serverPort;
     private final ReplicationCoordinator coordinator;
     private boolean started;
     private boolean stopped;
 
-    public ReplicatedKVServiceImpl(int port, int replicaCount, Path storageRoot) {
+    public ReplicatedKVServiceImpl(int serverPort, int replicaCount, Path storageRoot) {
         try {
             server = HttpServer.create();
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to create HTTP server", e);
         }
-        this.port = port;
+        this.serverPort = serverPort;
         this.coordinator = new ReplicationCoordinator(replicaCount, storageRoot);
         initServer();
     }
@@ -48,7 +54,9 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
         if (stopped) {
             throw new IllegalStateException("Service has already been stopped");
         }
-        log.info("Replicated server starting on port: {}, replicas={}", port, coordinator.replicaCount());
+        if (log.isInfoEnabled()) {
+            log.info("Replicated server starting on port: {}, replicas={}", serverPort, coordinator.replicaCount());
+        }
         bindServer();
         server.start();
         started = true;
@@ -61,7 +69,9 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
             stopped = true;
             return;
         }
-        log.info("Replicated server stopping");
+        if (log.isInfoEnabled()) {
+            log.info("Replicated server stopping");
+        }
         server.stop(0);
         coordinator.close();
         started = false;
@@ -70,7 +80,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return serverPort;
     }
 
     @Override
@@ -95,7 +105,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        if (!METHOD_GET.equals(exchange.getRequestMethod())) {
             writeEmptyResponse(exchange, 405);
             return;
         }
@@ -107,9 +117,9 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
         coordinator.validateAck(request.ack());
 
         switch (exchange.getRequestMethod()) {
-            case "GET" -> handleGet(exchange, request);
-            case "PUT" -> handlePut(exchange, request);
-            case "DELETE" -> handleDelete(exchange, request);
+            case METHOD_GET -> handleGet(exchange, request);
+            case METHOD_PUT -> handlePut(exchange, request);
+            case METHOD_DELETE -> handleDelete(exchange, request);
             default -> writeEmptyResponse(exchange, 405);
         }
     }
@@ -117,12 +127,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     private void handleGet(HttpExchange exchange, EntityRequest request) throws IOException {
         ReplicationCoordinator.ReadResult result = coordinator.read(request.id(), request.ack());
         if (result.successfulResponses() < request.ack()) {
-            log.warn(
-                    "Read quorum not reached: key={}, ack={}, successes={}",
-                    request.id(),
-                    request.ack(),
-                    result.successfulResponses()
-            );
+            logQuorumNotReached("Read", request.id(), request.ack(), result.successfulResponses());
             writeEmptyResponse(exchange, 500);
             return;
         }
@@ -135,7 +140,9 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
         byte[] body = entry.body();
         if (body == null) {
-            log.error("Fresh entry without body: key={}", request.id());
+            if (log.isErrorEnabled()) {
+                log.error("Fresh entry without body: key={}", request.id());
+            }
             writeEmptyResponse(exchange, 500);
             return;
         }
@@ -147,12 +154,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
         byte[] body = exchange.getRequestBody().readAllBytes();
         int successfulWrites = coordinator.put(request.id(), body);
         if (successfulWrites < request.ack()) {
-            log.warn(
-                    "Write quorum not reached: key={}, ack={}, successes={}",
-                    request.id(),
-                    request.ack(),
-                    successfulWrites
-            );
+            logQuorumNotReached("Write", request.id(), request.ack(), successfulWrites);
             writeEmptyResponse(exchange, 500);
             return;
         }
@@ -162,12 +164,7 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     private void handleDelete(HttpExchange exchange, EntityRequest request) throws IOException {
         int successfulWrites = coordinator.delete(request.id());
         if (successfulWrites < request.ack()) {
-            log.warn(
-                    "Delete quorum not reached: key={}, ack={}, successes={}",
-                    request.id(),
-                    request.ack(),
-                    successfulWrites
-            );
+            logQuorumNotReached("Delete", request.id(), request.ack(), successfulWrites);
             writeEmptyResponse(exchange, 500);
             return;
         }
@@ -175,26 +172,26 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
     }
 
     private void handleReplicaStats(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        if (!METHOD_GET.equals(exchange.getRequestMethod())) {
             writeEmptyResponse(exchange, 405);
             return;
         }
 
         String path = exchange.getRequestURI().getPath();
         String suffix = path.substring(REPLICA_STATS_PATH.length());
-        if (suffix.isEmpty() || "/".equals(suffix)) {
+        if (suffix.isEmpty() || ROOT_SUFFIX.equals(suffix)) {
             throw new IllegalArgumentException("Missing replica id");
         }
 
         String[] parts = suffix.substring(1).split("/");
         int replicaId = parseReplicaId(parts[0]);
 
-        if (parts.length == 1) {
+        if (parts.length == SINGLE_PATH_SEGMENT) {
             writeJsonResponse(exchange, coordinator.replicaStats(replicaId).toJson());
             return;
         }
 
-        if (parts.length == 2 && ACCESS_SUFFIX.equals(parts[1])) {
+        if (parts.length == ACCESS_PATH_SEGMENTS && ACCESS_SUFFIX.equals(parts[1])) {
             writeJsonResponse(exchange, coordinator.replicaAccessStats(replicaId).toJson());
             return;
         }
@@ -215,9 +212,21 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     private void bindServer() {
         try {
-            server.bind(new InetSocketAddress(port), 0);
+            server.bind(new InetSocketAddress(serverPort), 0);
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to bind HTTP server to port " + port, e);
+            throw new UncheckedIOException("Failed to bind HTTP server to port " + serverPort, e);
+        }
+    }
+
+    private static void logQuorumNotReached(String operation, String key, int ack, int successfulResponses) {
+        if (log.isWarnEnabled()) {
+            log.warn(
+                    "{} quorum not reached: key={}, ack={}, successes={}",
+                    operation,
+                    key,
+                    ack,
+                    successfulResponses
+            );
         }
     }
 
@@ -252,7 +261,9 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
                 } catch (IOException e) {
                     writeEmptyResponse(exchange, 500);
                 } catch (RuntimeException e) {
-                    log.error("Unexpected exception while handling request", e);
+                    if (log.isErrorEnabled()) {
+                        log.error("Unexpected exception while handling request", e);
+                    }
                     writeEmptyResponse(exchange, 500);
                 }
             }
