@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +38,8 @@ public class DPKvCluster implements KVCluster {
         this.replicationFactor = replicationFactor;
         this.shardSelector = createSelector(algorithm, endpoints);
         this.nodesByEndpoint = new LinkedHashMap<>();
-        for (String endpoint : endpoints) {
-            registerNode(endpoint);
+        for (int replicaId = 0; replicaId < endpoints.size(); replicaId++) {
+            registerNode(endpoints.get(replicaId), replicaId);
         }
     }
 
@@ -101,8 +102,13 @@ public class DPKvCluster implements KVCluster {
         log.info("Node stopped. endpoint={}", nodeState.endpoint);
     }
 
-    private void registerNode(String endpoint) {
-        this.nodesByEndpoint.put(endpoint, new NodeState(endpoint, new DPDao()));
+    private void registerNode(String endpoint, int replicaId) {
+        final Path storageDir = Path.of("daria-prindina-storage", "cluster-replica-" + replicaId);
+        try {
+            this.nodesByEndpoint.put(endpoint, new NodeState(endpoint, new DPFileDao(storageDir)));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Can't init storage for " + endpoint, e);
+        }
     }
 
     private NodeState findNode(String endpoint) {
