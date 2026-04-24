@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.kirillmedvedev23;
 
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVCluster;
+import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.kirillmedvedev23.exceptions.ClusterNodeException;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
@@ -19,8 +20,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
@@ -32,24 +32,63 @@ import com.sun.net.httpserver.HttpExchange;
         value = {"REC_CCC_EXCEPTION_NOT_THROWN", "DM_BOXED_PRIMITIVE_FOR_PARSING", "UMAC_UNCALLED_METHOD"},
         justification = "Required for hash computation and HTTP handling")
 @SuppressWarnings("PMD.CouplingBetweenObjects")
-public class KirillmedvedevKVCluster implements KVCluster {
+public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KirillmedvedevKVCluster.class);
     private static final int VIRTUAL_NODES = 150;
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
     private static final String HTTP_METHOD_DELETE = "DELETE";
     private static final String QUERY_PARAM_ID = "id";
+    private static final String QUERY_PARAM_ACK = "ack";
     private static final int HTTP_STATUS_ACCEPTED = 202;
     private static final int HTTP_STATUS_METHOD_NOT_ALLOWED = 405;
+    private static final int DEFAULT_REPLICA_FACTOR = 3;
 
     private final List<Integer> ports;
     private final Map<Integer, HttpServer> servers = new ConcurrentHashMap<>();
     private final Map<Integer, Dao<byte[]>> daos = new ConcurrentHashMap<>();
     private final ConsistentHashingRing ring;
     private final ReentrantLock lock = new ReentrantLock();
+    private final int replicaFactor;
+    private final Set<Integer> disabledReplicas = ConcurrentHashMap.newKeySet();
+    private final Random random = new Random();
 
     public KirillmedvedevKVCluster(List<Integer> ports) {
+        this(ports, DEFAULT_REPLICA_FACTOR);
+    }
+
+    public KirillmedvedevKVCluster(List<Integer> ports, int replicaFactor) {
         this.ports = new ArrayList<>(ports);
+        this.replicaFactor = replicaFactor;
         this.ring = new ConsistentHashingRing(this.ports);
+    }
+
+    @Override
+    public int port() {
+        return ports.get(0);
+    }
+
+    @Override
+    public int numberOfReplicas() {
+        return replicaFactor;
+    }
+
+    @Override
+    public void disableReplica(int nodeId) {
+        if (nodeId >= 0 && nodeId < ports.size()) {
+            disabledReplicas.add(nodeId);
+            log.info("Disabled replica {}", nodeId);
+        }
+    }
+
+    @Override
+    public void enableReplica(int nodeId) {
+        disabledReplicas.remove(nodeId);
+        log.info("Enabled replica {}", nodeId);
+    }
+
+    private Dao<byte[]> getDao(int portIndex) {
+        Integer port = ports.get(portIndex);
+        return daos.get(port);
     }
 
     @Override
@@ -182,6 +221,32 @@ public class KirillmedvedevKVCluster implements KVCluster {
         return ring.getNode(key);
     }
 
+    private List<Integer> getReplicaPorts(String key) {
+        List<Integer> replicaPorts = new ArrayList<>();
+        int primaryPort = ring.getNode(key);
+        int startIndex = ports.indexOf(primaryPort);
+
+        for (int i = 0; i < replicaFactor; i++) {
+            int index = (startIndex + i) % ports.size();
+            replicaPorts.add(ports.get(index));
+        }
+        return replicaPorts;
+    }
+
+    private boolean isReplicaEnabled(int index) {
+        return !disabledReplicas.contains(index);
+    }
+
+    private int getAvailableReplicaCount() {
+        int count = 0;
+        for (int i = 0; i < ports.size(); i++) {
+            if (isReplicaEnabled(i)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private final class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
@@ -197,7 +262,7 @@ public class KirillmedvedevKVCluster implements KVCluster {
         }
     }
 
-    private final class EntityHandler implements HttpHandler {
+private final class EntityHandler implements HttpHandler {
         private final Dao<byte[]> localDao;
         private final int localPort;
 
@@ -215,13 +280,18 @@ public class KirillmedvedevKVCluster implements KVCluster {
                     return;
                 }
 
-                int targetPort = getTargetPort(id);
-                String targetEndpoint = "http://localhost:" + targetPort;
+                int ack = extractAck(exchange.getRequestURI());
+                if (ack > replicaFactor) {
+                    exchange.sendResponseHeaders(400, -1);
+                    return;
+                }
 
-                if (targetPort == localPort) {
-                    handleLocal(exchange, id);
-                } else {
-                    proxyRequest(exchange, targetEndpoint, id);
+                String method = exchange.getRequestMethod();
+                switch (method) {
+                    case "GET" -> handleGet(exchange, id, ack);
+                    case "PUT" -> handlePut(exchange, id, ack);
+                    case "DELETE" -> handleDelete(exchange, id, ack);
+                    default -> exchange.sendResponseHeaders(HTTP_STATUS_METHOD_NOT_ALLOWED, -1);
                 }
             } catch (NoSuchElementException e) {
                 try {
@@ -239,76 +309,154 @@ public class KirillmedvedevKVCluster implements KVCluster {
             }
         }
 
-        private void handleLocal(HttpExchange exchange, String id) throws IOException {
-            String method = exchange.getRequestMethod();
-            switch (method) {
-                case "GET" -> handleGet(exchange, id);
-                case "PUT" -> handlePut(exchange, id);
-                case "DELETE" -> handleDelete(exchange, id);
-                default -> exchange.sendResponseHeaders(HTTP_STATUS_METHOD_NOT_ALLOWED, -1);
+        private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
+            List<Integer> replicaPorts = getReplicaPorts(id);
+
+            ExecutorService executor = Executors.newFixedThreadPool(Math.min(replicaPorts.size(), 10));
+            List<Future<byte[]>> futures = new ArrayList<>();
+
+            for (int port : replicaPorts) {
+                int index = ports.indexOf(port);
+                if (!isReplicaEnabled(index)) {
+                    continue;
+                }
+                final int replicaIndex = index;
+                futures.add(executor.submit(() -> {
+                    try {
+                        Dao<byte[]> dao = getDao(replicaIndex);
+                        if (dao != null) {
+                            return dao.get(id);
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to get from replica {}", replicaIndex, e);
+                    }
+                    return null;
+                }));
             }
-        }
 
-        private void handleGet(HttpExchange exchange, String id) throws IOException {
-            byte[] value = localDao.get(id);
-            exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
-            exchange.sendResponseHeaders(200, value.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(value);
-            }
-        }
+            int successCount = 0;
+            byte[] latestValue = null;
 
-        private void handlePut(HttpExchange exchange, String id) throws IOException {
-            try (InputStream is = exchange.getRequestBody()) {
-                byte[] body = is.readAllBytes();
-                localDao.upsert(id, body);
-            }
-            exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
-        }
-
-        private void handleDelete(HttpExchange exchange, String id) throws IOException {
-            localDao.delete(id);
-            exchange.sendResponseHeaders(HTTP_STATUS_ACCEPTED, -1);
-        }
-
-        private void proxyRequest(HttpExchange exchange, String targetEndpoint, String id) throws IOException {
-            String url = targetEndpoint + "/v0/entity?id=" + id;
-
-            byte[] body = new byte[0];
-            if (!HTTP_METHOD_DELETE.equals(exchange.getRequestMethod())) {
-                try (InputStream is = exchange.getRequestBody()) {
-                    body = is.readAllBytes();
+            for (Future<byte[]> future : futures) {
+                try {
+                    byte[] value = future.get(5, TimeUnit.SECONDS);
+                    if (value != null) {
+                        successCount++;
+                        latestValue = value;
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to get from replica", e);
                 }
             }
+            executor.shutdown();
 
-            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .method(exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofByteArray(body));
-
-            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-            if (contentType != null) {
-                requestBuilder.header("Content-Type", contentType);
-            }
-
-            HttpResponse<byte[]> response;
-            try {
-                response = HTTP_CLIENT.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofByteArray());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            if (successCount >= ack) {
+                if (latestValue != null) {
+                    exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
+                    exchange.sendResponseHeaders(200, latestValue.length);
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(latestValue);
+                    }
+                } else {
+                    exchange.sendResponseHeaders(404, -1);
+                }
+            } else {
                 exchange.sendResponseHeaders(500, -1);
-                return;
-            } catch (Exception e) {
-                log.error("Proxy request failed", e);
-                exchange.sendResponseHeaders(404, -1);
-                return;
+            }
+        }
+
+        private void handlePut(HttpExchange exchange, String id, int ack) throws IOException {
+            try (InputStream is = exchange.getRequestBody()) {
+                byte[] body = is.readAllBytes();
+
+                List<Integer> replicaPorts = getReplicaPorts(id);
+                int successCount = 0;
+
+                ExecutorService executor = Executors.newFixedThreadPool(Math.min(replicaPorts.size(), 10));
+                List<Future<Boolean>> futures = new ArrayList<>();
+
+                for (int port : replicaPorts) {
+                    int index = ports.indexOf(port);
+                    if (!isReplicaEnabled(index)) {
+                        continue;
+                    }
+                    final int replicaIndex = index;
+                    final byte[] data = body;
+                    futures.add(executor.submit(() -> {
+                        try {
+                            Dao<byte[]> dao = getDao(replicaIndex);
+                            if (dao != null) {
+                                dao.upsert(id, data);
+                                return true;
+                            }
+                        } catch (Exception e) {
+                            log.debug("Failed to put to replica {}", replicaIndex, e);
+                        }
+                        return false;
+                    }));
+                }
+
+                for (Future<Boolean> future : futures) {
+                    try {
+                        if (Boolean.TRUE.equals(future.get(5, TimeUnit.SECONDS))) {
+                            successCount++;
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to put to replica", e);
+                    }
+                }
+                executor.shutdown();
+
+                if (successCount >= ack) {
+                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
+                } else {
+                    exchange.sendResponseHeaders(500, -1);
+                }
+            }
+        }
+
+        private void handleDelete(HttpExchange exchange, String id, int ack) throws IOException {
+            List<Integer> replicaPorts = getReplicaPorts(id);
+            int successCount = 0;
+
+            ExecutorService executor = Executors.newFixedThreadPool(Math.min(replicaPorts.size(), 10));
+            List<Future<Boolean>> futures = new ArrayList<>();
+
+            for (int port : replicaPorts) {
+                int index = ports.indexOf(port);
+                if (!isReplicaEnabled(index)) {
+                    continue;
+                }
+                final int replicaIndex = index;
+                futures.add(executor.submit(() -> {
+                    try {
+                        Dao<byte[]> dao = getDao(replicaIndex);
+                        if (dao != null) {
+                            dao.delete(id);
+                            return true;
+                        }
+                    } catch (Exception e) {
+                        log.debug("Failed to delete from replica {}", replicaIndex, e);
+                    }
+                    return false;
+                }));
             }
 
-            for (String name : response.headers().map().keySet()) {
-                exchange.getResponseHeaders().add(name, String.join(",", response.headers().allValues(name)));
+            for (Future<Boolean> future : futures) {
+                try {
+                    if (Boolean.TRUE.equals(future.get(5, TimeUnit.SECONDS))) {
+                        successCount++;
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to delete from replica", e);
+                }
             }
-            exchange.sendResponseHeaders(response.statusCode(), response.body().length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(response.body());
+            executor.shutdown();
+
+            if (successCount >= ack) {
+                exchange.sendResponseHeaders(HttpURLConnection.HTTP_ACCEPTED, -1);
+            } else {
+                exchange.sendResponseHeaders(500, -1);
             }
         }
 
@@ -324,6 +472,24 @@ public class KirillmedvedevKVCluster implements KVCluster {
                 }
             }
             return null;
+        }
+
+        private int extractAck(URI uri) {
+            String query = uri.getRawQuery();
+            if (query == null || query.isEmpty()) {
+                return 1;
+            }
+            for (String param : query.split("&")) {
+                String[] kv = param.split("=", 2);
+                if (kv.length == 2 && QUERY_PARAM_ACK.equals(kv[0])) {
+                    try {
+                        return Integer.parseInt(kv[1]);
+                    } catch (NumberFormatException e) {
+                        return 1;
+                    }
+                }
+            }
+            return 1;
         }
     }
 
