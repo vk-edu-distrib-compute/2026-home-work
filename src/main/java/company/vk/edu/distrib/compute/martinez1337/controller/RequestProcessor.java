@@ -6,5 +6,5 @@ import java.io.IOException;
 
 @FunctionalInterface
 public interface RequestProcessor {
-    void process(HttpExchange exchange, String id) throws IOException;
+    void process(HttpExchange exchange, String id, Integer ack) throws IOException;
 }

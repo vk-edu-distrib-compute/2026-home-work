@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -24,7 +25,9 @@ public abstract class BaseHttpHandler implements HttpHandler {
     protected final ShardingStrategy sharding;
     protected int myNodeId;
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(1))
+            .build();
 
     protected BaseHttpHandler(List<String> clusterEndpoints, ShardingStrategy sharding) {
         this.clusterEndpoints = clusterEndpoints;
@@ -71,9 +74,12 @@ public abstract class BaseHttpHandler implements HttpHandler {
     }
 
     protected final void sendError(HttpExchange exchange, ResponseStatus status) throws IOException {
-        if (log.isErrorEnabled()) {
-            log.error(status.getMessage());
-            log.error(exchange.getRequestURI().toString());
+        if (status.getCode() >= 500) {
+            if (log.isErrorEnabled()) {
+                log.error("{} {}", status.getMessage(), exchange.getRequestURI());
+            }
+        } else if (log.isDebugEnabled()) {
+            log.debug("{} {}", status.getMessage(), exchange.getRequestURI());
         }
         exchange.sendResponseHeaders(status.getCode(), 0);
     }
@@ -101,16 +107,23 @@ public abstract class BaseHttpHandler implements HttpHandler {
                 + (rawQuery != null ? "?" + rawQuery : "");
         log.debug("Target URI: {}", targetUri);
 
-        byte[] body;
-        try (var is = exchange.getRequestBody()) {
-            body = is.readAllBytes();
-        }
+        String method = exchange.getRequestMethod();
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(targetUri))
                 .header("X-Proxy", "true")
-                .method(exchange.getRequestMethod(), body.length > 0
-                        ? HttpRequest.BodyPublishers.ofByteArray(body)
-                        : HttpRequest.BodyPublishers.noBody());
+                .timeout(Duration.ofSeconds(2));
+
+        if ("PUT".equals(method)) {
+            byte[] body;
+            try (var is = exchange.getRequestBody()) {
+                body = is.readAllBytes();
+            }
+            requestBuilder.method(method, body.length > 0
+                    ? HttpRequest.BodyPublishers.ofByteArray(body)
+                    : HttpRequest.BodyPublishers.noBody());
+        } else {
+            requestBuilder.method(method, HttpRequest.BodyPublishers.noBody());
+        }
 
         try {
             var req = requestBuilder.build();

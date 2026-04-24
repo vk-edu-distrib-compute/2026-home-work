@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.martinez1337.dao;
 import company.vk.edu.distrib.compute.Dao;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -47,7 +48,7 @@ public class FileDao implements Dao<byte[]> {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("key cannot be empty");
         }
-        String safeKey = Base64.getUrlEncoder().encodeToString(key.getBytes());
+        String safeKey = Base64.getUrlEncoder().encodeToString(key.getBytes(StandardCharsets.UTF_8));
         return baseDir.resolve(safeKey);
     }
 }

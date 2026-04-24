@@ -25,14 +25,18 @@ public final class QueryHelper {
             String key;
             String value;
 
-            if (idx > 0) {
-                key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8);
-                value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8);
-            } else if (idx == 0) {
-                continue;
-            } else {
-                key = URLDecoder.decode(pair, StandardCharsets.UTF_8);
-                value = "";
+            try {
+                if (idx > 0) {
+                    key = URLDecoder.decode(pair.substring(0, idx), StandardCharsets.UTF_8);
+                    value = URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8);
+                } else if (idx == 0) {
+                    continue;
+                } else {
+                    key = URLDecoder.decode(pair, StandardCharsets.UTF_8);
+                    value = "";
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("bad query", e);
             }
 
             addValueToMap(queryPairs, key, value);
