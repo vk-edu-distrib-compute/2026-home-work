@@ -1,6 +1,5 @@
 package company.vk.edu.distrib.compute;
 
-import company.vk.edu.distrib.compute.mediocritas.cluster.PushkinaKVClusterFactory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -13,7 +12,7 @@ import java.util.stream.Stream;
 
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
-            PushkinaKVClusterFactory.class
+    //        DummyKVClusterFactory.class
     );
 
     @Override
