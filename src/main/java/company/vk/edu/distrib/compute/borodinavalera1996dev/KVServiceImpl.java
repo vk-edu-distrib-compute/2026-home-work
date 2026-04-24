@@ -29,13 +29,13 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     private final Path path;
 
     protected HttpServer server;
-    protected final int port;
+    protected final int servicePort;
     protected int numberOfReplications;
     protected List<ReplicaNode> replicaNodes = new ArrayList<>();
 
-    public KVServiceImpl(int port, Path path, int numberOfReplications) throws IOException {
+    public KVServiceImpl(int servicePort, Path path, int numberOfReplications) throws IOException {
         this.path = path;
-        this.port = port;
+        this.servicePort = servicePort;
         this.numberOfReplications = numberOfReplications;
         initReplications();
     }
@@ -265,25 +265,25 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     @Override
     public void start() {
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
+            server = HttpServer.create(new InetSocketAddress(servicePort), 0);
             initServer();
             server.start();
-            log.info("Started {}", port);
+            log.info("Started {}", servicePort);
         } catch (IOException e) {
-            log.error("Server is failed to start in {}", port, e);
+            log.error("Server is failed to start in {}", servicePort, e);
             throw new UncheckedIOException("Server is failed to start", e);
         }
     }
 
     @Override
     public void stop() {
-        log.info("Stopping {}", port);
+        log.info("Stopping {}", servicePort);
         server.stop(0);
     }
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override
