@@ -8,6 +8,6 @@ import java.io.IOException;
 public class LillymegaKVServiceFactory extends KVServiceFactory {
     @Override
     protected KVService doCreate(int port) throws IOException {
-        return new LillymegaKVService(port, new LillymegaDao());
+        return new LillymegaReplicatedService(port);
     }
 }
