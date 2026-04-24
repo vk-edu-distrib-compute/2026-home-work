@@ -31,7 +31,7 @@ import com.sun.net.httpserver.HttpExchange;
 @SuppressFBWarnings(
         value = {"REC_CCC_EXCEPTION_NOT_THROWN", "DM_BOXED_PRIMITIVE_FOR_PARSING", "UMAC_UNCALLED_METHOD"},
         justification = "Required for hash computation and HTTP handling")
-@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity", "PMD.CyclomaticComplexity", "PMD.ExcessiveMethodLength"})
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity"})
 public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KirillmedvedevKVCluster.class);
     private static final int VIRTUAL_NODES = 150;
