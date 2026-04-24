@@ -7,10 +7,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 public class CeFelloKVServiceFactory extends KVServiceFactory {
-    private static final Path STORAGE_ROOT = Path.of(".data", "ce_fello");
+    private static final Path STORAGE_ROOT = Path.of(".data", "ce_fello", "replicated");
 
     @Override
     protected KVService doCreate(int port) throws IOException {
-        return new CeFelloKVService(port, new CeFelloFileSystemDao(STORAGE_ROOT.resolve(String.valueOf(port))));
+        return new CeFelloReplicatedKVService(
+                port,
+                STORAGE_ROOT.resolve(String.valueOf(port)),
+                CeFelloReplicationConfig.fromSystemProperties()
+        );
     }
 }

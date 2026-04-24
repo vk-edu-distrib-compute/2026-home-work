@@ -81,3 +81,37 @@ The distribution algorithm defaults to rendezvous hashing. To run the cluster wi
 ```bash
 ./gradlew run -Dce_fello.distribution=consistent --args="cluster"
 ```
+
+## Replication
+
+The replication-aware `ce_fello` service is controlled by two JVM properties:
+
+```bash
+-Dce_fello.replication.factor=3
+-Dce_fello.replication.nodes=6
+```
+
+Start the service with the replication defaults:
+
+```bash
+./gradlew run -Dce_fello.replication.factor=3 -Dce_fello.replication.nodes=6
+```
+
+Run the quorum scenario (`ack_w + ack_r > n`, default `2 + 2 > 3`):
+
+```bash
+wrk -t2 -c100 -R200 -d30s --latency -s loadtest/replication_quorum.lua \
+  http://localhost:8080 > loadtest/replication-quorum.out
+```
+
+Run the non-quorum scenario (`ack_w + ack_r <= n`, default `1 + 1 <= 3`):
+
+```bash
+wrk -t2 -c100 -R200 -d30s --latency -s loadtest/replication_non_quorum.lua \
+  http://localhost:8080 > loadtest/replication-non-quorum.out
+```
+
+The scripts alternate `PUT` and `GET` on per-request keys and attach `ack` directly in the query string.
+Use the resulting `Requests/sec`, percentile latency and `Non-2xx or 3xx responses` sections in the report. For
+latency charts, upload the `Detailed Percentile spectrum` sections to
+<https://hdrhistogram.github.io/HdrHistogram/plotFiles.html>.

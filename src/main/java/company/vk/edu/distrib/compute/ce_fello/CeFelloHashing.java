@@ -6,6 +6,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 final class CeFelloHashing {
+    private static final int REPLICA_HASH_OFFSET = Integer.BYTES;
+
     private CeFelloHashing() {
     }
 
@@ -17,6 +19,12 @@ final class CeFelloHashing {
         MessageDigest messageDigest = messageDigest();
         byte[] digest = messageDigest.digest(value);
         return ByteBuffer.wrap(digest, 0, Long.BYTES).getLong();
+    }
+
+    static long replicaHash64(String value) {
+        MessageDigest messageDigest = messageDigest();
+        byte[] digest = messageDigest.digest(value.getBytes(StandardCharsets.UTF_8));
+        return ByteBuffer.wrap(digest, REPLICA_HASH_OFFSET, Long.BYTES).getLong();
     }
 
     private static MessageDigest messageDigest() {
