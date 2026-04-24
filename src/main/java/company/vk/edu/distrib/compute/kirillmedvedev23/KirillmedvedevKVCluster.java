@@ -31,7 +31,7 @@ import com.sun.net.httpserver.HttpExchange;
 @SuppressFBWarnings(
         value = {"REC_CCC_EXCEPTION_NOT_THROWN", "DM_BOXED_PRIMITIVE_FOR_PARSING", "UMAC_UNCALLED_METHOD"},
         justification = "Required for hash computation and HTTP handling")
-@SuppressWarnings("PMD.CouplingBetweenObjects")
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity"})
 public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KirillmedvedevKVCluster.class);
     private static final int VIRTUAL_NODES = 150;
@@ -238,16 +238,6 @@ public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
         return !disabledReplicas.contains(index);
     }
 
-    private int getAvailableReplicaCount() {
-        int count = 0;
-        for (int i = 0; i < ports.size(); i++) {
-            if (isReplicaEnabled(i)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
     private final class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
@@ -316,14 +306,14 @@ private final class EntityHandler implements HttpHandler {
         private void handleLocal(HttpExchange exchange, String id, int ack) throws IOException {
             String method = exchange.getRequestMethod();
             switch (method) {
-                case "GET" -> handleGet(exchange, id, ack);
+                case "GET" -> handleGet(exchange, id);
                 case "PUT" -> handlePut(exchange, id, ack);
                 case "DELETE" -> handleDelete(exchange, id, ack);
                 default -> exchange.sendResponseHeaders(HTTP_STATUS_METHOD_NOT_ALLOWED, -1);
             }
         }
 
-        private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
+        private void handleGet(HttpExchange exchange, String id) throws IOException {
             try {
                 byte[] value = localDao.get(id);
                 exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
