@@ -22,9 +22,9 @@ import java.util.stream.Collectors;
 @SuppressWarnings("PMD.GodClass")
 public class KVServiceImpl implements KVService, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
-    public static final String GET = "GET";
-    public static final String PUT = "PUT";
-    public static final String DELETE = "DELETE";
+    public static final String HTTP_METHOD_GET = "GET";
+    public static final String HTTP_METHOD_PUT = "PUT";
+    public static final String HTTP_METHOD_DELETE = "DELETE";
     public static final String PATH_STATUS = "/v0/status";
     public static final String PATH_ENTITY = "/v0/entity";
     private final Path path;
@@ -76,16 +76,16 @@ public class KVServiceImpl implements KVService, ReplicatedService {
             }
 
             switch (requestMethod) {
-                case GET:
-                    byte[] value = get(id, ack);
+                case HTTP_METHOD_GET:
+                    byte[] value = callGet(id, ack);
                     exchange.sendResponseHeaders(200, value.length);
                     exchange.getResponseBody().write(value);
                     break;
-                case PUT:
+                case HTTP_METHOD_PUT:
                     put(id, exchange.getRequestBody().readAllBytes(), ack);
                     exchange.sendResponseHeaders(201, -1);
                     break;
-                case DELETE:
+                case HTTP_METHOD_DELETE:
                     delete(id, ack);
                     exchange.sendResponseHeaders(202, -1);
                     break;
@@ -96,8 +96,25 @@ public class KVServiceImpl implements KVService, ReplicatedService {
         };
     }
 
-    private byte[] get(String id, String ackParam) throws IOException {
+    private byte[] callGet(String id, String ackParam) throws IOException {
         int ack = ackParam == null ? 1 : Integer.parseInt(ackParam);
+        FileStorage.Data freshest = getFreshData(id, ack);
+
+        if (freshest == null) {
+            log.error("Key {} not found on any of the responding replicas", id);
+            throw new NoSuchElementException("Key " + id + " not found");
+        }
+
+        if (freshest.deleted()) {
+            repairNodes(id, freshest);
+            throw new NoSuchElementException("Key " + id + " was deleted");
+        }
+
+        repairNodes(id, freshest);
+        return freshest.value();
+    }
+
+    private FileStorage.Data getFreshData(String id, int ack) throws IOException {
         int ackCount = 0;
 
         List<FileStorage.Data> result = new ArrayList<>(numberOfReplications);
@@ -112,32 +129,17 @@ public class KVServiceImpl implements KVService, ReplicatedService {
                 }
             }
             if (ackCount >= ack) {
-               freshest = result.stream()
+                freshest = result.stream()
                         .max(Comparator.comparing(FileStorage.Data::time))
                         .orElseThrow();
-               break;
+                break;
             }
         }
 
         if (ackCount < ack) {
             throw new NotEnoughReplicasException(ackCount, ack);
         }
-
-        if (freshest == null) {
-            log.error("Key {} not found on any of the responding replicas", id);
-            throw new NoSuchElementException("Key " + id + " not found");
-        }
-
-        if (freshest.deleted()) {
-            repairNodes(id, freshest);
-            throw new NoSuchElementException("Key " + id + " was deleted");
-        }
-
-        if (freshest != null) {
-            repairNodes(id, freshest);
-            return freshest.value();
-        }
-        return freshest.value();
+        return freshest;
     }
 
     private void repairNodes(String id, FileStorage.Data freshest) {
@@ -213,7 +215,7 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     private static HttpHandler getStatusHttpHandler() {
         return exchange -> {
             String requestMethod = exchange.getRequestMethod();
-            if (GET.equals(requestMethod)) {
+            if (HTTP_METHOD_GET.equals(requestMethod)) {
                 exchange.sendResponseHeaders(200, -1);
             } else {
                 exchange.sendResponseHeaders(405, -1);
@@ -294,7 +296,7 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     public void disableReplica(int nodeId) {
         for (ReplicaNode replicaNode : replicaNodes) {
             if (replicaNode.getId() == nodeId) {
-                replicaNode.setIsAlive(new AtomicBoolean(false));
+                replicaNode.getIsAlive().set(false);
             }
         }
     }
@@ -303,7 +305,7 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     public void enableReplica(int nodeId) {
         for (ReplicaNode replicaNode : replicaNodes) {
             if (replicaNode.getId() == nodeId) {
-                replicaNode.setIsAlive(new AtomicBoolean(true));
+                replicaNode.getIsAlive().set(true);
             }
         }
     }

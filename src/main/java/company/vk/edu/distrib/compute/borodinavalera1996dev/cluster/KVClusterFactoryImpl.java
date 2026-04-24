@@ -19,6 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class KVClusterFactoryImpl extends KVClusterFactory {
 
     public static final int NUMBER_OF_REPLICATION = 3;
+    public static final String CONSISTENT_HASHING = "consistent";
+    public static final String HASHING_STRATEGY = "hashingStrategy";
+    public static final String NUMBER_OF_REPLICATIONS = "numberOfReplications";
 
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
@@ -40,8 +43,8 @@ public class KVClusterFactoryImpl extends KVClusterFactory {
     }
 
     private static HashingStrategy getHashingStrategy(List<Node> nodes) {
-        String hashingStrategy = System.getProperty("hashingStrategy");
-        if (StringUtils.isNullOrEmpty(hashingStrategy) || "consistent".equals(hashingStrategy)) {
+        String hashingStrategy = System.getProperty(HASHING_STRATEGY);
+        if (StringUtils.isNullOrEmpty(hashingStrategy) || CONSISTENT_HASHING.equals(hashingStrategy)) {
             return new ConsistentStrategy(nodes);
         } else {
             return new RendezvousStrategy(nodes);
@@ -49,7 +52,7 @@ public class KVClusterFactoryImpl extends KVClusterFactory {
     }
 
     private static int getNumberOfReplications() {
-        String numberOfReplications = System.getProperty("numberOfReplications");
+        String numberOfReplications = System.getProperty(NUMBER_OF_REPLICATIONS);
         if (StringUtils.isNullOrEmpty(numberOfReplications)) {
             return NUMBER_OF_REPLICATION;
         } else {
