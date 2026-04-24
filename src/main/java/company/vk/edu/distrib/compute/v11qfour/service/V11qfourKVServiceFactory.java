@@ -109,13 +109,38 @@ public class V11qfourKVServiceFactory implements KVService {
         }
     }
 
+    private byte[] extractBody(HttpExchange exchange) throws IOException {
+        if (METHOD_PUT.equals(exchange.getRequestMethod())) {
+            return exchange.getRequestBody().readAllBytes();
+        }
+        return null;
+    }
+
+    private boolean replicate(String id, String method, byte[] body, List<V11qfourNode> targets, int ack) {
+        List<V11qfourNode> others = targets.stream()
+                .filter(n -> !n.url().equals(selfUrl))
+                .toList();
+
+        if (ack <= 1 || others.isEmpty()) {
+            return true;
+        }
+
+        return replicator.sendWithAck(id, method, body, others, ack - 1).join();
+    }
+
+    private int getSuccessCode(String method) {
+        return switch (method) {
+            case METHOD_PUT -> 201;
+            case METHOD_DELETE -> 202;
+            default -> 200;
+        };
+    }
+
     private void handleWithReplication(HttpExchange exchange, String id,
                                        List<V11qfourNode> targets, int ack) throws IOException {
         String method = exchange.getRequestMethod();
-        byte[] body = null;
-        if (METHOD_PUT.equals(method)) {
-            body = exchange.getRequestBody().readAllBytes();
-        }
+        byte[] body = extractBody(exchange);
+
         LocalResult local = performLocalOperation(id, method, body);
 
         if (METHOD_GET.equals(method) && local.notFound) {
@@ -123,15 +148,10 @@ public class V11qfourKVServiceFactory implements KVService {
             return;
         }
 
-        boolean remoteSuccess = true;
-        List<V11qfourNode> others = targets.stream().filter(n -> !n.url().equals(selfUrl)).toList();
-        if (ack > 1 && !others.isEmpty()) {
-            remoteSuccess = replicator.sendWithAck(id, method, body, others, ack - 1).join();
-        }
+        boolean remoteSuccess = replicate(id, method, body, targets, ack);
 
         if (local.success && remoteSuccess) {
-            int code = METHOD_PUT.equals(method) ? 201 : (METHOD_DELETE.equals(method) ? 202 : 200);
-            sendResponse(exchange, code, local.data);
+            sendResponse(exchange, getSuccessCode(method), local.data);
         } else {
             exchange.sendResponseHeaders(503, -1);
         }
