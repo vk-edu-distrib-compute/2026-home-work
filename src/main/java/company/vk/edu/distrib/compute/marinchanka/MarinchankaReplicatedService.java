@@ -34,16 +34,16 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private static final int STATUS_ACCEPTED = 202;
     private static final int SERVICE_UNAVAILABLE = 503;
 
-    private final int port;
-    private final int numberOfReplicas;
+    private final int servicePort;
+    private final int replicationFactor;
     private final List<Dao<byte[]>> replicas;
     private final boolean[] replicaEnabled;
     private HttpServer server;
     private boolean running;
 
     public MarinchankaReplicatedService(int port, int numberOfReplicas, List<Dao<byte[]>> replicas) {
-        this.port = port;
-        this.numberOfReplicas = numberOfReplicas;
+        this.servicePort = port;
+        this.replicationFactor = numberOfReplicas;
         this.replicas = replicas;
         this.replicaEnabled = new boolean[numberOfReplicas];
         Arrays.fill(replicaEnabled, true);
@@ -51,17 +51,17 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override
     public int numberOfReplicas() {
-        return numberOfReplicas;
+        return replicationFactor;
     }
 
     @Override
     public void disableReplica(int nodeId) {
-        if (nodeId >= 0 && nodeId < numberOfReplicas) {
+        if (nodeId >= 0 && nodeId < replicationFactor) {
             replicaEnabled[nodeId] = false;
             log.info("Replica {} disabled", nodeId);
         }
@@ -69,7 +69,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
     @Override
     public void enableReplica(int nodeId) {
-        if (nodeId >= 0 && nodeId < numberOfReplicas) {
+        if (nodeId >= 0 && nodeId < replicationFactor) {
             replicaEnabled[nodeId] = true;
             log.info("Replica {} enabled", nodeId);
         }
@@ -82,15 +82,15 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
 
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
+            server = HttpServer.create(new InetSocketAddress(servicePort), 0);
             server.createContext("/v0/status", new StatusHandler());
             server.createContext("/v0/entity", new EntityHandler());
             server.setExecutor(null);
             server.start();
             running = true;
-            log.info("ReplicatedService started on port {} with {} replicas", port, numberOfReplicas);
+            log.info("ReplicatedService started on port {} with {} replicas", servicePort, replicationFactor);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to start server on port " + port, e);
+            throw new IllegalStateException("Failed to start server on port " + servicePort, e);
         }
     }
 
@@ -124,8 +124,8 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private List<Integer> getReplicasForKey(String key) {
         List<Integer> result = new ArrayList<>();
         int hash = Math.abs(key.hashCode());
-        for (int i = 0; i < numberOfReplicas; i++) {
-            result.add((hash + i) % numberOfReplicas);
+        for (int i = 0; i < replicationFactor; i++) {
+            result.add((hash + i) % replicationFactor);
         }
         return result;
     }
@@ -172,24 +172,24 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 return;
             }
 
-            if (ack > numberOfReplicas) {
+            if (ack > replicationFactor) {
                 sendError(exchange, BAD_REQUEST, "ack > numberOfReplicas");
                 return;
             }
 
+            handleRequest(exchange, method, id, ack);
+        }
+
+        private void handleRequest(HttpExchange exchange, String method, String id, int ack) throws IOException {
             try {
-                switch (method) {
-                    case METHOD_GET:
-                        handleGet(exchange, id, ack);
-                        break;
-                    case METHOD_PUT:
-                        handlePut(exchange, id, ack);
-                        break;
-                    case METHOD_DELETE:
-                        handleDelete(exchange, id, ack);
-                        break;
-                    default:
-                        exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
+                if (METHOD_GET.equals(method)) {
+                    handleGet(exchange, id, ack);
+                } else if (METHOD_PUT.equals(method)) {
+                    handlePut(exchange, id, ack);
+                } else if (METHOD_DELETE.equals(method)) {
+                    handleDelete(exchange, id, ack);
+                } else {
+                    exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
                 }
             } catch (IllegalArgumentException e) {
                 sendError(exchange, BAD_REQUEST, e.getMessage());
@@ -215,10 +215,10 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 return;
             }
 
-            performReadRepair(id, result.maxVersion, result.resultData);
+            performReadRepair(id, result.maxVersion, result.data, result.tombstone);
 
-            if (result.maxVersion >= 0 && result.resultData != null) {
-                sendOkWithData(exchange, result.resultData);
+            if (result.maxVersion >= 0 && !result.tombstone) {
+                sendOkWithData(exchange, result.data);
             } else if (result.maxVersion >= 0) {
                 sendError(exchange, NOT_FOUND, "Key not found");
             } else {
@@ -229,6 +229,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         private ReadResult collectReadResults(String id) {
             long maxVersion = -1;
             byte[] resultData = null;
+            boolean tombstone = false;
             int foundCount = 0;
             int notFoundCount = 0;
 
@@ -243,9 +244,11 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                     if (entry != null && !entry.tombstone && entry.version > maxVersion) {
                         maxVersion = entry.version;
                         resultData = entry.data;
+                        tombstone = false;
                     } else if (entry != null && entry.tombstone && entry.version > maxVersion) {
                         maxVersion = entry.version;
                         resultData = null;
+                        tombstone = true;
                     }
                     foundCount++;
                 } catch (NoSuchElementException e) {
@@ -255,10 +258,10 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 }
             }
 
-            return new ReadResult(maxVersion, resultData, foundCount + notFoundCount);
+            return new ReadResult(maxVersion, resultData, tombstone, foundCount + notFoundCount);
         }
 
-        private void performReadRepair(String id, long maxVersion, byte[] resultData) {
+        private void performReadRepair(String id, long maxVersion, byte[] data, boolean tombstone) {
             if (maxVersion < 0) {
                 return;
             }
@@ -269,10 +272,10 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 }
                 try {
                     VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                    if (resultData != null) {
-                        dao.upsertWithVersion(id, resultData, maxVersion);
-                    } else {
+                    if (tombstone) {
                         dao.deleteWithVersion(id, maxVersion);
+                    } else {
+                        dao.upsertWithVersion(id, data, maxVersion);
                     }
                 } catch (IOException e) {
                     log.error("Failed to repair replica {}", replicaId, e);
@@ -354,7 +357,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         private int extractAck(String query) {
             String ackStr = extractParam(query, PARAM_ACK);
             if (ackStr == null) {
-                return (numberOfReplicas / 2) + 1;
+                return (replicationFactor / 2) + 1;
             }
             try {
                 return Integer.parseInt(ackStr);
@@ -389,12 +392,14 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
     private static class ReadResult {
         final long maxVersion;
-        final byte[] resultData;
+        final byte[] data;
+        final boolean tombstone;
         final int totalResponses;
 
-        ReadResult(long maxVersion, byte[] resultData, int totalResponses) {
+        ReadResult(long maxVersion, byte[] data, boolean tombstone, int totalResponses) {
             this.maxVersion = maxVersion;
-            this.resultData = resultData != null ? resultData.clone() : null;
+            this.data = data != null ? data.clone() : null;
+            this.tombstone = tombstone;
             this.totalResponses = totalResponses;
         }
     }
