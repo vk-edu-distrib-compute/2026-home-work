@@ -27,9 +27,10 @@ class ReplicationHandler implements HttpHandler {
 
     private record ReplicaResponse(int responded, List<VersionedValue> found) {}
 
-    ReplicationHandler(MyKVCluster cluster, String[] replicaEndpoints, boolean[] enabled) {
+    @SuppressWarnings("PMD.ArrayIsStoredDirectly")
+    ReplicationHandler(MyKVCluster cluster, String[] replicaEndpoints, boolean... enabled) {
         this.cluster = cluster;
-        this.replicaEndpoints = replicaEndpoints;
+        this.replicaEndpoints = replicaEndpoints.clone();
         this.enabled = enabled;
         this.versionCounter = new AtomicLong(System.currentTimeMillis());
     }
