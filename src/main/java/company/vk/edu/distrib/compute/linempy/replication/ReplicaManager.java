@@ -156,7 +156,9 @@ public class ReplicaManager {
                     deleted++;
                 }
             } catch (IOException e) {
-                log.warn("Delete failed idx={}: {}", idx, e.getMessage());
+                if (log.isWarnEnabled()) {
+                    log.warn("Delete failed idx={}: {}", idx, e.getMessage());
+                }
             }
         }
         keyExists.remove(key);

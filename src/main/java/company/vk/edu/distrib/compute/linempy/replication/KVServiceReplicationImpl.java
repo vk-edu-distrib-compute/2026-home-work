@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.linempy.HttpCodes;
+import company.vk.edu.distrib.compute.linempy.RequestParseHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,14 +48,13 @@ public class KVServiceReplicationImpl implements ReplicatedService {
 
     private void handleEntity(HttpExchange exchange) throws IOException {
         try (exchange) {
-            String id = extractId(exchange);
+            String id = RequestParseHelper.extractId(exchange);
             if (id == null || id.isEmpty()) {
                 exchange.sendResponseHeaders(400, -1);
                 return;
             }
 
-            int ack = extractAck(exchange, config.getDefaultAck());
-
+            int ack = RequestParseHelper.extractAck(exchange, config.getDefaultAck());
             if (ack > config.getFactor()) {
                 exchange.sendResponseHeaders(400, -1);
                 return;
@@ -160,37 +160,6 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     private void handleDelete(HttpExchange exchange, String id, int ack) throws IOException {
         int deleted = replicaManager.deleteAllReplicas(id);
         exchange.sendResponseHeaders(deleted >= ack ? HttpCodes.ACCEPTED : HttpCodes.SERVER_ERROR, -1);
-    }
-
-    private String extractId(HttpExchange exchange) {
-        String query = exchange.getRequestURI().getQuery();
-        if (query == null) {
-            return null;
-        }
-        for (String param : query.split("&")) {
-            String[] pair = param.split("=");
-            if (pair.length == 2 && "id".equals(pair[0])) {
-                return pair[1];
-            }
-        }
-        return null;
-    }
-
-    private int extractAck(HttpExchange exchange, int defaultValue) {
-        String query = exchange.getRequestURI().getQuery();
-        if (query == null) {
-            return defaultValue;
-        }
-        for (String param : query.split("&")) {
-            if (param.startsWith("ack=")) {
-                try {
-                    return Integer.parseInt(param.substring(4));
-                } catch (NumberFormatException e) {
-                    return defaultValue;
-                }
-            }
-        }
-        return defaultValue;
     }
 
     @Override
