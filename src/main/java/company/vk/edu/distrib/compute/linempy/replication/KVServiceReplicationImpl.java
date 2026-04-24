@@ -34,10 +34,8 @@ public class KVServiceReplicationImpl implements ReplicatedService {
         server.createContext("/v0/entity", this::handleEntity);
         server.createContext("/stats/replica", this::handleStats);
 
-        if (log.isInfoEnabled()) {
-            log.info("KVServiceReplicationImpl started on port {} with factor={}",
-                    serverPort, config.getFactor());
-        }
+        log.info("KVServiceReplicationImpl started on port {} with factor={}",
+                serverPort, config.getFactor());
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -66,9 +64,7 @@ public class KVServiceReplicationImpl implements ReplicatedService {
 
             dispatchRequest(exchange, id, ack);
         } catch (Exception e) {
-            if (log.isErrorEnabled()) {
-                log.error("Error handling request", e);
-            }
+            log.error("Error handling request", e);
             exchange.sendResponseHeaders(500, -1);
         }
     }
@@ -76,11 +72,7 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     private boolean isEnoughReplicas(String id, int ack, HttpExchange exchange) throws IOException {
         int available = replicaManager.getAvailableReplicasCount(id);
         if (available < ack) {
-            if (log.isWarnEnabled()) {
-                if (log.isWarnEnabled()) {
-                    log.warn("Not enough replicas: need={}, available={}", ack, available);
-                }
-            }
+            log.warn("Not enough replicas: need={}, available={}", ack, available);
             exchange.sendResponseHeaders(503, -1);
             return false;
         }
@@ -200,18 +192,14 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     @Override
     public void start() {
         server.start();
-        if (log.isInfoEnabled()) {
-            log.info("Server started on port {}", serverPort);
-        }
+        log.info("Server started on port {}", serverPort);
     }
 
     @Override
     public void stop() {
         replicaManager.close();
         server.stop(0);
-        if (log.isInfoEnabled()) {
-            log.info("Server stopped on port {}", serverPort);
-        }
+        log.info("Server stopped on port {}", serverPort);
     }
 
     @Override
@@ -227,17 +215,13 @@ public class KVServiceReplicationImpl implements ReplicatedService {
     @Override
     public void disableReplica(int nodeId) {
         replicaManager.disableReplica(nodeId);
-        if (log.isInfoEnabled()) {
-            log.info("Replica {} disabled", nodeId);
-        }
+        log.info("Replica {} disabled", nodeId);
     }
 
     @Override
     public void enableReplica(int nodeId) {
         replicaManager.enableReplica(nodeId);
         replicaManager.syncReplica(nodeId);
-        if (log.isInfoEnabled()) {
-            log.info("Replica {} enabled and synced", nodeId);
-        }
+        log.info("Replica {} enabled and synced", nodeId);
     }
 }
