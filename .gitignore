@@ -31,4 +31,9 @@ build/
 .idea/
 out/
 
+.data/
+data*/
+ekaterina-gavrilova-storage/
+storage/
+vitos23-storage
 .vscode/
