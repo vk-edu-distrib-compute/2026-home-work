@@ -21,7 +21,7 @@ public class Nst1610KVService implements KVService, ReplicatedService {
     private static final int DEFAULT_REPLICATION_FACTOR = 9;
     private static final String REPLICATION_FACTOR_ENV = "NST1610_REPLICATION_FACTOR";
 
-    private final int port;
+    private final int servicePort;
     private final HttpServer server;
     private final String localEndpoint;
     private final HashingStrategy strategy;
@@ -38,7 +38,7 @@ public class Nst1610KVService implements KVService, ReplicatedService {
 
     public Nst1610KVService(int port, List<String> clusterEndpoints, String localEndpoint, int replicationFactor)
         throws IOException {
-        this.port = port;
+        this.servicePort = port;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.localEndpoint = localEndpoint;
         this.strategy = new RendezvousHashingStrategy();
@@ -78,7 +78,7 @@ public class Nst1610KVService implements KVService, ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override

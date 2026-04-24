@@ -15,7 +15,7 @@ public class ReplicatedFileStorage {
     private static final Logger log = LoggerFactory.getLogger(ReplicatedFileStorage.class);
 
     private final List<Dao<byte[]>> replicas;
-    private boolean[] enabledReplicas;
+    private final boolean[] enabledReplicas;
     private long versionClock = System.currentTimeMillis();
 
     public ReplicatedFileStorage(Path storagePath, int numberOfReplicas) throws IOException {
@@ -118,9 +118,13 @@ public class ReplicatedFileStorage {
                     encodedLatestValue = latestValue.encode();
                 }
                 replicas.get(snapshot.replicaId()).upsert(key, encodedLatestValue);
-                log.info("Updated replica={} key={}", snapshot.replicaId(), key);
+                if (log.isInfoEnabled()) {
+                    log.info("Updated replica={} key={}", snapshot.replicaId(), key);
+                }
             } catch (IOException e) {
-                log.error("Updated failed on replica={} key={}", snapshot.replicaId(), key, e);
+                if (log.isErrorEnabled()) {
+                    log.error("Updated failed on replica={} key={}", snapshot.replicaId(), key, e);
+                }
             }
         }
     }
