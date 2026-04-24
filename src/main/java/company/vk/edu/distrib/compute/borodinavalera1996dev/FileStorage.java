@@ -11,6 +11,8 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 public record FileStorage(Path path) {
+    private static final Object INSTANCE_LOCK = new Object();
+
     public record Data(byte[] value, Instant time, Boolean deleted) {
     }
 
@@ -25,7 +27,7 @@ public record FileStorage(Path path) {
         }
     }
 
-    public synchronized void save(String key, Data data) {
+    public void save(String key, Data data) {
         checkKey(key);
         Path filePath = path.resolve(key);
         try {
@@ -33,9 +35,10 @@ public record FileStorage(Path path) {
             buffer.put((byte) 0);
             buffer.putLong(data.time.toEpochMilli());
             buffer.put(data.value);
-
-            Files.write(filePath, buffer.array(),
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            synchronized (INSTANCE_LOCK) {
+                Files.write(filePath, buffer.array(),
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Error save", e);
         }
@@ -86,8 +89,10 @@ public record FileStorage(Path path) {
             ByteBuffer buffer = ByteBuffer.allocate(1 + Long.BYTES);
             buffer.put((byte) 1);
             buffer.putLong(Instant.now().toEpochMilli());
-            Files.write(filePath, buffer.array(), StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
+            synchronized (INSTANCE_LOCK) {
+                Files.write(filePath, buffer.array(),
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("PMD.GodClass")
@@ -198,11 +197,11 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     private void put(String id, byte[] bytes, String ackParam) throws IOException {
         int ack = ackParam == null ? 1 : Integer.parseInt(ackParam);
         int ackCount = 0;
-        Instant current = Instant.now();
+        FileStorage.Data dataToSave = new FileStorage.Data(bytes, Instant.now(), false);
 
         for (ReplicaNode replicaNode : replicaNodes) {
             if (replicaNode.getIsAlive().get()) {
-                replicaNode.getDao().upsert(id, new FileStorage.Data(bytes, current, false));
+                replicaNode.getDao().upsert(id, dataToSave);
                 ackCount++;
             }
             if (ackCount >= ack) {
@@ -311,6 +310,8 @@ public class KVServiceImpl implements KVService, ReplicatedService {
     }
 
     public class NotEnoughReplicasException extends IOException {
+        private static final long serialVersionUID = 1L;
+
         public NotEnoughReplicasException(int actual, int required) {
             super("Not enough replicas: " + actual + " acknowledge(s), but " + required + " required");
         }
