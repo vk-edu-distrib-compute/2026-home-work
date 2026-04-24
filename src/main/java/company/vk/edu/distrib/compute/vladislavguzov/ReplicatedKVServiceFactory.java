@@ -1,0 +1,14 @@
+package company.vk.edu.distrib.compute.vladislavguzov;
+
+import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.KVServiceFactory;
+
+import java.io.IOException;
+
+public class ReplicatedKVServiceFactory extends KVServiceFactory {
+
+    @Override
+    protected KVService doCreate(int port) throws IOException {
+        return new ReplicatedKVServiceImpl(port);
+    }
+}
