@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class InFileDao implements Dao<byte[]> {
 
     private static final String FILE_EXTENSION = ".bin";
+    private static final int MAX_KEY_LENGTH = 1024;
 
     private final Path directory;
     private final Map<String, byte[]> cache;
@@ -99,7 +100,7 @@ public class InFileDao implements Dao<byte[]> {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Key cannot be null or blank");
         }
-        if (key.length() > 1024) {
+        if (key.length() > MAX_KEY_LENGTH) {
             throw new IllegalArgumentException("Key is too long");
         }
     }

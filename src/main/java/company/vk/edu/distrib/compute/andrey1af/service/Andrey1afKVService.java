@@ -64,7 +64,9 @@ public class Andrey1afKVService implements KVService {
     @Override
     public void start() {
         server.start();
-        log.info("Starting Andrey1afKVService on {}", server.getAddress());
+        if (log.isInfoEnabled()) {
+            log.info("Starting Andrey1afKVService on {}", server.getAddress());
+        }
     }
 
     @Override
@@ -81,6 +83,8 @@ public class Andrey1afKVService implements KVService {
             log.error("Failed to close DAO", e);
         }
 
-        log.info("Andrey1afKVService stopped");
+        if (log.isInfoEnabled()) {
+            log.info("Andrey1afKVService stopped");
+        }
     }
 }

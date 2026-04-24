@@ -17,7 +17,7 @@ public class Andrey1afReplicatedServiceImpl implements ReplicatedService {
     private static final String STATUS_PATH = "/v0/status";
     private static final int HTTP_OK = 200;
 
-    private final int port;
+    private final int servicePort;
     private final HttpServer server;
     private final ExecutorService executor;
     private final ReplicatedStorage storage;
@@ -28,7 +28,7 @@ public class Andrey1afReplicatedServiceImpl implements ReplicatedService {
     }
 
     public Andrey1afReplicatedServiceImpl(int port, int replicaCount) throws IOException {
-        this.port = port;
+        this.servicePort = port;
         this.storage = new ReplicatedStorage(replicaCount);
         this.executor = Executors.newFixedThreadPool(Math.max(2, Runtime.getRuntime().availableProcessors()));
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -38,7 +38,7 @@ public class Andrey1afReplicatedServiceImpl implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override

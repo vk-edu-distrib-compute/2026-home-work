@@ -8,11 +8,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 final class ReplicatedStorage {
+    private static final int MIN_REPLICA_COUNT = 1;
+    private static final int FIRST_REPLICA_INDEX = 0;
+    private static final boolean REPLICA_ENABLED = true;
+
     private final Replica[] replicas;
     private final AtomicLong versionSequence = new AtomicLong();
 
     ReplicatedStorage(int replicaCount) {
-        if (replicaCount < 1) {
+        if (replicaCount < MIN_REPLICA_COUNT) {
             throw new IllegalArgumentException("replicaCount must be positive");
         }
 
@@ -82,7 +86,7 @@ final class ReplicatedStorage {
     }
 
     private Replica replica(int nodeId) {
-        if (nodeId < 0 || nodeId >= replicas.length) {
+        if (nodeId < FIRST_REPLICA_INDEX || nodeId >= replicas.length) {
             throw new IllegalArgumentException("Unknown replica: " + nodeId);
         }
         return replicas[nodeId];
@@ -117,7 +121,7 @@ final class ReplicatedStorage {
 
     private static final class Replica {
         private final Map<String, VersionedRecord> storage = new ConcurrentHashMap<>();
-        private final AtomicBoolean enabled = new AtomicBoolean(true);
+        private final AtomicBoolean enabled = new AtomicBoolean(REPLICA_ENABLED);
 
         boolean isEnabled() {
             return enabled.get();
