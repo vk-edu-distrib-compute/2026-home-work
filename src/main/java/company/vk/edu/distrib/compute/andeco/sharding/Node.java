@@ -29,14 +29,12 @@ public class Node<T> {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof Node<?> node)) {
-            return false;
-        }
-        return Objects.equals(value, node.value) && Objects.equals(id, node.id);
+        return o instanceof Node<?> node
+                && Objects.equals(id, node.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, id);
+        return Objects.hash(id);
     }
 }

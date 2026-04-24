@@ -1,25 +1,29 @@
 package company.vk.edu.distrib.compute.andeco;
 
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.andeco.controller.EntityController;
-import company.vk.edu.distrib.compute.andeco.controller.StatusController;
+import company.vk.edu.distrib.compute.andeco.replica.Controller;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 public class KVServiceImpl implements KVService {
-    protected EntityController entityController;
-    protected StatusController statusController;
+    protected final int port;
+    protected Controller entityController;
+    protected Controller statusController;
     protected final HttpServer server;
 
-    public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
-        entityController = new EntityController(dao);
-        statusController = new StatusController();
-        server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+    public KVServiceImpl(int port, Controller entityController, Controller statusController) throws IOException {
+        this.port = port;
+        this.entityController = entityController;
+        this.statusController = statusController;
+        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    public int port() {
+        return port;
     }
 
     public void registerDefault() {

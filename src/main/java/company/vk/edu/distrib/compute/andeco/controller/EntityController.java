@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.andeco.Method;
 import company.vk.edu.distrib.compute.andeco.QueryUtil;
 import company.vk.edu.distrib.compute.andeco.ServerConfigConstants;
+import company.vk.edu.distrib.compute.andeco.replica.Controller;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -14,10 +15,7 @@ import java.util.NoSuchElementException;
 import static company.vk.edu.distrib.compute.andeco.ServerConfigConstants.CONTENT_TYPE_HEADER;
 import static company.vk.edu.distrib.compute.andeco.ServerConfigConstants.OCTET_STREAM;
 
-public class EntityController {
-
-    public static final String REQUEST_MAPPING =
-            ServerConfigConstants.API_PATH + ServerConfigConstants.ENTITY_PATH;
+public class EntityController implements Controller {
 
     private final Dao<byte[]> dao;
 
@@ -25,9 +23,10 @@ public class EntityController {
         this.dao = dao;
     }
 
+    @Override
     public void processRequest(HttpExchange exchange) throws IOException {
         try (exchange) {
-            if (!REQUEST_MAPPING.equals(exchange.getRequestURI().getPath())) {
+            if (!ServerConfigConstants.REQUEST_MAPPING.equals(exchange.getRequestURI().getPath())) {
                 exchange.sendResponseHeaders(HttpURLConnection.HTTP_NOT_FOUND, -1);
                 return;
             }

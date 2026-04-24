@@ -50,4 +50,10 @@ public class FileDao implements Dao<byte[]> {
     private Path filePath(String key) {
         return baseDir.resolve(key);
     }
+
+    public int size() throws IOException {
+        try (var stream = Files.list(baseDir)) {
+            return (int) stream.filter(Files::isRegularFile).count();
+        }
+    }
 }

@@ -1,11 +1,11 @@
 package company.vk.edu.distrib.compute.andeco.sharding;
 
 import com.sun.net.httpserver.HttpExchange;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.andeco.KVServiceImpl;
 import company.vk.edu.distrib.compute.andeco.Method;
 import company.vk.edu.distrib.compute.andeco.QueryUtil;
 import company.vk.edu.distrib.compute.andeco.ServerConfigConstants;
+import company.vk.edu.distrib.compute.andeco.replica.Controller;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -22,13 +22,16 @@ public class AndecoShardingKVServiceImpl extends KVServiceImpl {
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
     private final ShardingStrategy<String> strategy;
-    private final Node selfEndpoint;
+    private final Node<String> selfEndpoint;
 
-    public AndecoShardingKVServiceImpl(int port, Dao<byte[]> dao, ShardingStrategy<String> strategy)
-            throws IOException {
-        super(port, dao);
+    public AndecoShardingKVServiceImpl(int port,
+                                       ShardingStrategy<String> strategy,
+                                       Controller entityController,
+                                       Controller statusController) throws IOException {
+        super(port, entityController, statusController);
         this.strategy = strategy;
-        this.selfEndpoint = new Node<>(this, ServerConfigConstants.LOCALHOST + port);
+        this.selfEndpoint = new Node<>(null, ServerConfigConstants.LOCALHOST + port);
+
         server.createContext(ServerConfigConstants.API_PATH
                 + ServerConfigConstants.ENTITY_PATH, this::handleEntity);
         server.createContext(ServerConfigConstants.API_PATH
@@ -50,9 +53,13 @@ public class AndecoShardingKVServiceImpl extends KVServiceImpl {
             return;
         }
 
-        Node targetEndpoint = strategy.get(entityId);
+        Node<String> targetEndpoint = strategy.get(entityId);
+        if (targetEndpoint == null) {
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_SERVER_ERROR, -1);
+            return;
+        }
 
-        if (!selfEndpoint.equals(targetEndpoint)) {
+        if (!selfEndpoint.getId().equals(targetEndpoint.getId())) {
             URI targetUri = buildEntityUri(targetEndpoint.getId(), entityId);
             proxyRequest(exchange, targetUri);
             return;
@@ -64,11 +71,10 @@ public class AndecoShardingKVServiceImpl extends KVServiceImpl {
     private void proxyRequest(HttpExchange exchange, URI uri) {
         try (OutputStream os = exchange.getResponseBody()) {
             HttpRequest.Builder builder = HttpRequest.newBuilder();
+
             switch (Method.valueOf(exchange.getRequestMethod())) {
                 case GET -> builder = builder.GET();
-                case PUT -> builder = builder.PUT(
-                        HttpRequest.BodyPublishers.ofInputStream(exchange::getRequestBody)
-                );
+                case PUT -> builder = builder.PUT(HttpRequest.BodyPublishers.ofInputStream(exchange::getRequestBody));
                 case DELETE -> builder = builder.DELETE();
             }
 

@@ -2,10 +2,10 @@ package company.vk.edu.distrib.compute.andeco.sharding;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.andeco.FileDao;
 import company.vk.edu.distrib.compute.andeco.ServerConfigConstants;
-import company.vk.edu.distrib.compute.andeco.consistent_hash.ConsistentHash;
 import company.vk.edu.distrib.compute.andeco.consistent_hash.MD5HashFunction;
+import company.vk.edu.distrib.compute.andeco.rendezvous_hash.RendezvousHash;
+import company.vk.edu.distrib.compute.andeco.replica.AndecoReplicatedService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,7 +26,7 @@ public class AndecoKVClusterImpl implements KVCluster {
         var nodes = endpoints.stream()
                 .map(e -> new Node<>(null, e))
                 .toList();
-        this.shardingType = new ConsistentHash<>(new MD5HashFunction(),ServerConfigConstants.VIRTUAL_NODES, nodes);
+        this.shardingType = new RendezvousHash<>(new MD5HashFunction(), nodes);
     }
 
     @Override
@@ -43,15 +43,14 @@ public class AndecoKVClusterImpl implements KVCluster {
         try {
             int port = endpointToPort.get(endpoint);
 
-            KVService service = new AndecoShardingKVServiceImpl(
+            KVService service = new AndecoReplicatedService(
                     port,
-                    new FileDao(String.valueOf(port)),
-                    shardingType
+                    shardingType,
+                        3
             );
 
             service.start();
             endpointToService.put(endpoint, service);
-
         } catch (IOException e) {
             throw new IllegalStateException(endpoint + " failed to start", e);
         }
