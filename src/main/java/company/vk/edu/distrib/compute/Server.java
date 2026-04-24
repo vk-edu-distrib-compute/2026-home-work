@@ -2,8 +2,6 @@ package company.vk.edu.distrib.compute;
 
 import module java.base;
 import company.vk.edu.distrib.compute.andeco.sharding.AndecoKVClusterFactoryImpl;
-import company.vk.edu.distrib.compute.andeco.sharding.AndecoKVClusterImpl;
-import company.vk.edu.distrib.compute.dummy.DummyKVClusterFactory;
 import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
 import org.slf4j.LoggerFactory;
 
