@@ -20,21 +20,21 @@ public class PGReplicatedService implements ReplicatedService {
     private static final int DEFAULT_REPLICA_COUNT = 3;
     private static final int DEFAULT_ACK = 1;
 
-    private final int port;
-    private final int numberOfReplicas;
+    private final int servicePort;
+    private final int replicaCount;
     private final List<ReplicaNode> replicas;
     private final HttpServer server;
     private final AtomicLong versionCounter;
 
     public PGReplicatedService(int port) throws IOException {
-        this.port = port;
-        this.numberOfReplicas = DEFAULT_REPLICA_COUNT;
-        this.replicas = new ArrayList<>(numberOfReplicas);
-        for (int i = 0; i < numberOfReplicas; i++) {
+        this.servicePort = port;
+        this.replicaCount = DEFAULT_REPLICA_COUNT;
+        this.replicas = new ArrayList<>(replicaCount);
+        for (int i = 0; i < replicaCount; i++) {
             replicas.add(new ReplicaNode(i));
         }
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.server.setExecutor(Executors.newFixedThreadPool(numberOfReplicas * 4));
+        this.server.setExecutor(Executors.newFixedThreadPool(replicaCount * 4));
         this.versionCounter = new AtomicLong();
         initServer();
     }
@@ -83,7 +83,7 @@ public class PGReplicatedService implements ReplicatedService {
         if (successes >= ack) {
             http.sendResponseHeaders(201, 0);
         } else {
-            http.sendResponseHeaders(500, 0);
+            http.sendResponseHeaders(504, 0);
         }
     }
 
@@ -102,7 +102,7 @@ public class PGReplicatedService implements ReplicatedService {
         if (successes >= ack) {
             http.sendResponseHeaders(202, 0);
         } else {
-            http.sendResponseHeaders(500, 0);
+            http.sendResponseHeaders(504, 0);
         }
     }
 
@@ -123,7 +123,7 @@ public class PGReplicatedService implements ReplicatedService {
         }
 
         if (responses < ack) {
-            http.sendResponseHeaders(500, 0);
+            http.sendResponseHeaders(504, 0);
             return;
         }
 
@@ -142,7 +142,7 @@ public class PGReplicatedService implements ReplicatedService {
     }
 
     private void validateAck(int ack) {
-        if (ack <= 0 || ack > numberOfReplicas) {
+        if (ack <= 0 || ack > replicaCount) {
             throw new IllegalArgumentException("invalid ack");
         }
     }
@@ -191,12 +191,12 @@ public class PGReplicatedService implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override
     public int numberOfReplicas() {
-        return numberOfReplicas;
+        return replicaCount;
     }
 
     @Override
