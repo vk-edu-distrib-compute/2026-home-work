@@ -2,8 +2,8 @@ package company.vk.edu.distrib.compute.artsobol.impl;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 final class EntityRequest {
     private static final String ID_PARAM = "id";
@@ -27,7 +27,7 @@ final class EntityRequest {
     }
 
     private static Map<String, String> parseParams(String rawQuery) {
-        Map<String, String> params = new HashMap<>();
+        Map<String, String> params = new ConcurrentHashMap<>();
         for (String part : rawQuery.split("&")) {
             int separator = part.indexOf('=');
             if (separator <= 0) {
