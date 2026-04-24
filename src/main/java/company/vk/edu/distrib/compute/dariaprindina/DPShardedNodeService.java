@@ -28,9 +28,21 @@ import java.util.concurrent.ConcurrentHashMap;
 @SuppressWarnings("PMD.GodClass")
 public class DPShardedNodeService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(DPShardedNodeService.class);
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
     private static final String ID_PARAM = "id";
     private static final String ACK_PARAM = "ack";
+    private static final int MIN_ACK = 1;
     private static final int DEFAULT_ACK = 1;
+    private static final int STATUS_OK = 200;
+    private static final int STATUS_CREATED = 201;
+    private static final int STATUS_ACCEPTED = 202;
+    private static final int STATUS_BAD_REQUEST = 400;
+    private static final int STATUS_NOT_FOUND = 404;
+    private static final int STATUS_METHOD_NOT_ALLOWED = 405;
+    private static final int STATUS_INTERNAL_ERROR = 500;
+    private static final int STATUS_GATEWAY_TIMEOUT = 504;
     private static final String INTERNAL_REPLICA_HEADER = "X-DP-Internal-Replica";
     private static final Duration PROXY_TIMEOUT = Duration.ofSeconds(2);
 
@@ -63,10 +75,10 @@ public class DPShardedNodeService implements KVService {
 
     private void initServer() {
         server.createContext("/v0/status", new ErrorHttpHandler(exchange -> {
-            if (Objects.equals("GET", exchange.getRequestMethod())) {
-                sendResponse(exchange, 200, null);
+            if (Objects.equals(METHOD_GET, exchange.getRequestMethod())) {
+                sendResponse(exchange, STATUS_OK, null);
             } else {
-                sendResponse(exchange, 405, null);
+                sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, null);
             }
         }));
 
@@ -88,11 +100,11 @@ public class DPShardedNodeService implements KVService {
 
     private void routeReplicated(HttpExchange exchange, String id, int ack, List<String> replicas) throws IOException {
         final String method = exchange.getRequestMethod();
-        if ("GET".equals(method)) {
+        if (METHOD_GET.equals(method)) {
             handleReplicatedGet(exchange, id, ack, replicas);
             return;
         }
-        if ("PUT".equals(method)) {
+        if (METHOD_PUT.equals(method)) {
             final byte[] body;
             try (var requestBody = exchange.getRequestBody()) {
                 body = requestBody.readAllBytes();
@@ -100,11 +112,11 @@ public class DPShardedNodeService implements KVService {
             handleReplicatedWrite(exchange, id, body, ack, replicas, method);
             return;
         }
-        if ("DELETE".equals(method)) {
+        if (METHOD_DELETE.equals(method)) {
             handleReplicatedWrite(exchange, id, null, ack, replicas, method);
             return;
         }
-        sendResponse(exchange, 405, null);
+        sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, null);
     }
 
     private void handleReplicatedGet(
@@ -117,26 +129,26 @@ public class DPShardedNodeService implements KVService {
         int missing = 0;
         byte[] value = null;
         for (String replicaEndpoint : replicas) {
-            final OperationResult result = executeOnReplica(replicaEndpoint, "GET", id, null);
-            if (result.statusCode == 200) {
+            final OperationResult result = executeOnReplica(replicaEndpoint, METHOD_GET, id, null);
+            if (result.statusCode == STATUS_OK) {
                 found++;
                 if (value == null) {
                     value = result.body;
                 }
-            } else if (result.statusCode == 404) {
+            } else if (result.statusCode == STATUS_NOT_FOUND) {
                 missing++;
             }
         }
 
         if (found >= ack) {
-            sendResponse(exchange, 200, value);
+            sendResponse(exchange, STATUS_OK, value);
             return;
         }
         if (missing >= ack) {
-            sendResponse(exchange, 404, null);
+            sendResponse(exchange, STATUS_NOT_FOUND, null);
             return;
         }
-        sendResponse(exchange, 504, null);
+        sendResponse(exchange, STATUS_GATEWAY_TIMEOUT, null);
     }
 
     private void handleReplicatedWrite(
@@ -156,33 +168,33 @@ public class DPShardedNodeService implements KVService {
         }
 
         if (successfulAcks >= ack) {
-            final int successCode = "PUT".equals(method) ? 201 : 202;
+            final int successCode = METHOD_PUT.equals(method) ? STATUS_CREATED : STATUS_ACCEPTED;
             sendResponse(exchange, successCode, null);
             return;
         }
-        sendResponse(exchange, 504, null);
+        sendResponse(exchange, STATUS_GATEWAY_TIMEOUT, null);
     }
 
     private void handleLocally(HttpExchange exchange, String id) throws IOException {
         final String method = exchange.getRequestMethod();
-        if ("GET".equals(method)) {
+        if (METHOD_GET.equals(method)) {
             final byte[] value = dao.get(id);
-            sendResponse(exchange, 200, value);
+            sendResponse(exchange, STATUS_OK, value);
             return;
         }
-        if ("PUT".equals(method)) {
+        if (METHOD_PUT.equals(method)) {
             try (var requestBody = exchange.getRequestBody()) {
                 dao.upsert(id, requestBody.readAllBytes());
             }
-            sendResponse(exchange, 201, null);
+            sendResponse(exchange, STATUS_CREATED, null);
             return;
         }
-        if ("DELETE".equals(method)) {
+        if (METHOD_DELETE.equals(method)) {
             dao.delete(id);
-            sendResponse(exchange, 202, null);
+            sendResponse(exchange, STATUS_ACCEPTED, null);
             return;
         }
-        sendResponse(exchange, 405, null);
+        sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, null);
     }
 
     private OperationResult executeOnReplica(String replicaEndpoint, String method, String id, byte[] body) {
@@ -194,24 +206,24 @@ public class DPShardedNodeService implements KVService {
 
     private OperationResult executeLocally(String method, String id, byte[] body) {
         try {
-            if ("GET".equals(method)) {
-                return new OperationResult(200, dao.get(id));
+            if (METHOD_GET.equals(method)) {
+                return new OperationResult(STATUS_OK, dao.get(id));
             }
-            if ("PUT".equals(method)) {
+            if (METHOD_PUT.equals(method)) {
                 dao.upsert(id, body);
-                return new OperationResult(201, null);
+                return new OperationResult(STATUS_CREATED, null);
             }
-            if ("DELETE".equals(method)) {
+            if (METHOD_DELETE.equals(method)) {
                 dao.delete(id);
-                return new OperationResult(202, null);
+                return new OperationResult(STATUS_ACCEPTED, null);
             }
-            return new OperationResult(405, null);
+            return new OperationResult(STATUS_METHOD_NOT_ALLOWED, null);
         } catch (NoSuchElementException e) {
-            return new OperationResult(404, null);
+            return new OperationResult(STATUS_NOT_FOUND, null);
         } catch (IllegalArgumentException e) {
-            return new OperationResult(400, null);
+            return new OperationResult(STATUS_BAD_REQUEST, null);
         } catch (IOException e) {
-            return new OperationResult(500, null);
+            return new OperationResult(STATUS_INTERNAL_ERROR, null);
         }
     }
 
@@ -222,31 +234,31 @@ public class DPShardedNodeService implements KVService {
             .timeout(PROXY_TIMEOUT)
             .header(INTERNAL_REPLICA_HEADER, "true");
 
-        if ("GET".equals(method)) {
+        if (METHOD_GET.equals(method)) {
             requestBuilder.GET();
-        } else if ("DELETE".equals(method)) {
+        } else if (METHOD_DELETE.equals(method)) {
             requestBuilder.DELETE();
-        } else if ("PUT".equals(method)) {
+        } else if (METHOD_PUT.equals(method)) {
             requestBuilder.PUT(HttpRequest.BodyPublishers.ofByteArray(body));
         } else {
-            return new OperationResult(405, null);
+            return new OperationResult(STATUS_METHOD_NOT_ALLOWED, null);
         }
 
         final HttpResponse<byte[]> response;
         try {
             response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofByteArray());
         } catch (IOException e) {
-            return new OperationResult(504, null);
+            return new OperationResult(STATUS_GATEWAY_TIMEOUT, null);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new OperationResult(504, null);
+            return new OperationResult(STATUS_GATEWAY_TIMEOUT, null);
         }
         return new OperationResult(response.statusCode(), response.body());
     }
 
     private static boolean isSuccessfulWriteStatus(int statusCode, String method) {
-        return ("PUT".equals(method) && statusCode == 201)
-            || ("DELETE".equals(method) && statusCode == 202);
+        return (METHOD_PUT.equals(method) && statusCode == STATUS_CREATED)
+            || (METHOD_DELETE.equals(method) && statusCode == STATUS_ACCEPTED);
     }
 
     private static boolean isInternalReplicaRequest(HttpExchange exchange) {
@@ -259,7 +271,7 @@ public class DPShardedNodeService implements KVService {
             return DEFAULT_ACK;
         }
         final int ack = Integer.parseInt(ackRaw);
-        if (ack < 1) {
+        if (ack < MIN_ACK) {
             throw new IllegalArgumentException("ack should be positive");
         }
         return ack;
@@ -329,11 +341,11 @@ public class DPShardedNodeService implements KVService {
             try {
                 delegate.handle(exchange);
             } catch (IllegalArgumentException e) {
-                sendResponse(exchange, 400, null);
+                sendResponse(exchange, STATUS_BAD_REQUEST, null);
             } catch (NoSuchElementException e) {
-                sendResponse(exchange, 404, null);
+                sendResponse(exchange, STATUS_NOT_FOUND, null);
             } catch (IOException e) {
-                sendResponse(exchange, 500, null);
+                sendResponse(exchange, STATUS_INTERNAL_ERROR, null);
             }
         }
     }
