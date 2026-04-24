@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.linempy.replication;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
 
 /**
  * Статистика обращений к репликам.
@@ -13,11 +14,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ReplicaStats {
     private final ConcurrentMap<Integer, ReplicaStatData> stats = new ConcurrentHashMap<>();
 
-    @SuppressWarnings("ForLoopReplaceableByForEach")
     public ReplicaStats(int replicationFactor) {
-        for (int i = 0; i < replicationFactor; i++) {
-            stats.put(i, new ReplicaStatData());
-        }
+        IntStream.range(0, replicationFactor)
+                .forEach(i -> stats.put(i, new ReplicaStatData()));
     }
 
     public void recordRead(int replicaId) {

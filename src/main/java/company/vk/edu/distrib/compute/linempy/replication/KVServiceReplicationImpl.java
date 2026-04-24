@@ -34,8 +34,10 @@ public class KVServiceReplicationImpl implements ReplicatedService {
         server.createContext("/v0/entity", this::handleEntity);
         server.createContext("/stats/replica", this::handleStats);
 
-        log.info("KVServiceReplicationImpl started on port {} with factor={}",
-                serverPort, config.getFactor());
+        if (log.isInfoEnabled()) {
+            log.info("KVServiceReplicationImpl started on port {} with factor={}",
+                    serverPort, config.getFactor());
+        }
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -139,7 +141,9 @@ public class KVServiceReplicationImpl implements ReplicatedService {
         ReadResult result = replicaManager.readWithAck(id, ack);
 
         if (!result.success()) {
-            log.warn("GET key={}: responded={} < ack={}", id, result.responded(), ack);
+            if (log.isWarnEnabled()) {
+                log.warn("GET key={}: responded={} < ack={}", id, result.responded(), ack);
+            }
             exchange.sendResponseHeaders(HttpCodes.SERVER_ERROR, -1);
             return;
         }

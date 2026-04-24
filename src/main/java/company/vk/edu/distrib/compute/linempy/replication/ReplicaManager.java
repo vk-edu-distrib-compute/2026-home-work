@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ReplicaManager {
     private static final Logger log = LoggerFactory.getLogger(ReplicaManager.class);
     private static final String ACK_ERROR = "ack > factor";
+    private static final String REPLICA_DISABLED_WARN = "Not enough replicas: available={}, required={}";
 
     private final ReplicaStorage storage;
     private final ReplicationConfig config;
@@ -68,7 +69,9 @@ public class ReplicaManager {
         int available = (int) indexes.stream().filter(this::isReplicaEnabled).count();
 
         if (available < requiredAck) {
-            log.warn("Not enough replicas: available={}, required={}", available, requiredAck);
+            if (log.isWarnEnabled()) {
+                log.warn(REPLICA_DISABLED_WARN, available, requiredAck);
+            }
             return 0;
         }
 
@@ -106,7 +109,9 @@ public class ReplicaManager {
 
         int available = (int) indexes.stream().filter(this::isReplicaEnabled).count();
         if (available < requiredAck) {
-            log.warn("Not enough replicas for read: available={}, required={}", available, requiredAck);
+            if (log.isWarnEnabled()) {
+                log.warn(REPLICA_DISABLED_WARN, available, requiredAck);
+            }
             return new ReadResult(false, null, 0);
         }
 
