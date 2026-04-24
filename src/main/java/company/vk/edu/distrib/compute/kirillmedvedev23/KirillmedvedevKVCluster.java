@@ -39,6 +39,7 @@ public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
     private static final String HTTP_METHOD_DELETE = "DELETE";
     private static final String QUERY_PARAM_ID = "id";
     private static final String QUERY_PARAM_ACK = "ack";
+    private static final int DEFAULT_ACK = 1;
     private static final int HTTP_STATUS_ACCEPTED = 202;
     private static final int HTTP_STATUS_METHOD_NOT_ALLOWED = 405;
     private static final int DEFAULT_REPLICA_FACTOR = 3;
@@ -278,7 +279,7 @@ private final class EntityHandler implements HttpHandler {
                     return;
                 }
                 if (ack <= 0) {
-                    ack = 1;
+                    ack = DEFAULT_ACK;
                 }
 
                 int targetPort = getTargetPort(id);
@@ -340,7 +341,7 @@ private final class EntityHandler implements HttpHandler {
         }
 
         private void replicateWrite(String id, byte[] data, int ack) throws IOException {
-            if (ack <= 1) {
+            if (ack <= DEFAULT_ACK) {
                 localDao.upsert(id, data);
                 return;
             }
@@ -389,7 +390,7 @@ private final class EntityHandler implements HttpHandler {
         }
 
         private void replicateDelete(String id, int ack) throws IOException {
-            if (ack <= 1) {
+            if (ack <= DEFAULT_ACK) {
                 localDao.delete(id);
                 return;
             }
