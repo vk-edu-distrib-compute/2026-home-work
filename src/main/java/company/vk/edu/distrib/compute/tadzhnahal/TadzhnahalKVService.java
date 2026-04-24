@@ -12,13 +12,13 @@ import java.util.List;
 
 public class TadzhnahalKVService implements ReplicatedService {
     private static final String STATUS_PATH = "/v0/status";
+    private static final String ENTITY_PATH = "/v0/entity";
     private static final String METHOD_GET = "GET";
     private static final String LOCALHOST = "http://localhost:";
 
     private final int port;
     private final Path rootDir;
-    private final int replicaCount;
-    private final List<TadzhnahalReplicaNode> replicaNodes;
+    private final TadzhnahalReplicaManager replicaManager;
 
     private final String localEndpoint;
     private final List<String> clusterEndpoints;
@@ -52,8 +52,7 @@ public class TadzhnahalKVService implements ReplicatedService {
 
         this.port = port;
         this.rootDir = rootDir;
-        this.replicaCount = replicaCount;
-        this.replicaNodes = createReplicaNodes(rootDir, replicaCount);
+        this.replicaManager = new TadzhnahalReplicaManager(rootDir, replicaCount);
 
         this.localEndpoint = buildEndpoint(port);
         this.clusterEndpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
@@ -71,10 +70,10 @@ public class TadzhnahalKVService implements ReplicatedService {
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext(STATUS_PATH, this::handleStatus);
             server.createContext(
-                    "/v0/entity",
+                    ENTITY_PATH,
                     new TadzhnahalEntityHandler(
                             localEndpoint,
-                            replicaNodes.getFirst().dao(),
+                            replicaManager.replicaNodes().get(0).dao(),
                             rendezvousHashing,
                             proxyClient
                     )
@@ -104,33 +103,25 @@ public class TadzhnahalKVService implements ReplicatedService {
 
     @Override
     public int numberOfReplicas() {
-        return replicaCount;
+        return replicaManager.replicaCount();
     }
 
     @Override
     public void disableReplica(int nodeId) {
-        replica(nodeId).disable();
+        replicaManager.disableReplica(nodeId);
     }
 
     @Override
     public void enableReplica(int nodeId) {
-        replica(nodeId).enable();
+        replicaManager.enableReplica(nodeId);
     }
 
     public Path rootDir() {
         return rootDir;
     }
 
-    public List<TadzhnahalReplicaNode> replicaNodes() {
-        return List.copyOf(replicaNodes);
-    }
-
-    private TadzhnahalReplicaNode replica(int nodeId) {
-        if (nodeId < 0 || nodeId >= replicaNodes.size()) {
-            throw new IllegalArgumentException("Unknown replica id: " + nodeId);
-        }
-
-        return replicaNodes.get(nodeId);
+    TadzhnahalReplicaManager replicaManager() {
+        return replicaManager;
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -168,18 +159,5 @@ public class TadzhnahalKVService implements ReplicatedService {
         }
 
         return List.copyOf(endpoints);
-    }
-
-    private static List<TadzhnahalReplicaNode> createReplicaNodes(Path rootDir, int replicaCount)
-            throws IOException {
-        List<TadzhnahalReplicaNode> nodes = new ArrayList<>();
-
-        for (int nodeId = 0; nodeId < replicaCount; nodeId++) {
-            Path replicaDir = rootDir.resolve("replica-" + nodeId);
-            FileDao dao = new FileDao(replicaDir);
-            nodes.add(new TadzhnahalReplicaNode(nodeId, dao));
-        }
-
-        return List.copyOf(nodes);
     }
 }
