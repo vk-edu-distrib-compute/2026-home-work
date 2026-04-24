@@ -27,6 +27,8 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private static final String PARAM_ID = "id";
     private static final String PARAM_ACK = "ack";
     private static final String CONTENT_TYPE_VALUE = "application/octet-stream";
+    private static final String HEADER_CONTENT_TYPE = "Content-Type";
+    private static final String STATS_ACCESS_PATH = "access";
 
     private static final int METHOD_NOT_ALLOWED = 405;
     private static final int BAD_REQUEST = 400;
@@ -177,7 +179,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private final class StatsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if (!"GET".equals(exchange.getRequestMethod())) {
+            if (!METHOD_GET.equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
                 return;
             }
@@ -202,9 +204,9 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 return;
             }
 
-            boolean accessStats = parts.length >= 5 && "access".equals(parts[4]);
-            VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+            boolean accessStats = parts.length >= 5 && STATS_ACCESS_PATH.equals(parts[4]);
 
+            VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
             StringBuilder json = new StringBuilder(64);
             json.append('{');
             if (accessStats) {
@@ -216,7 +218,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             json.append('}');
 
             byte[] response = json.toString().getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, "application/json");
             exchange.sendResponseHeaders(STATUS_OK, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
@@ -225,7 +227,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         private void sendError(HttpExchange exchange, int code, String message) throws IOException {
             byte[] response = message.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8");
             exchange.sendResponseHeaders(code, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
@@ -377,7 +379,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
 
         private void sendOkWithData(HttpExchange exchange, byte[] data) throws IOException {
-            exchange.getResponseHeaders().set("Content-Type", CONTENT_TYPE_VALUE);
+            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, CONTENT_TYPE_VALUE);
             exchange.sendResponseHeaders(STATUS_OK, data.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(data);
@@ -485,7 +487,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         private void sendError(HttpExchange exchange, int code, String message) throws IOException {
             byte[] response = message.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, "text/plain; charset=utf-8");
             exchange.sendResponseHeaders(code, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
