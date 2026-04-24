@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 public class KVServiceImpl implements KVService {
-    protected final int port;
+    protected int port;
     protected Controller entityController;
     protected Controller statusController;
     protected final HttpServer server;

@@ -19,7 +19,6 @@ repositories {
     mavenCentral()
 }
 
-
 val reactiveGrpcVersion = "1.2.4"
 val grpcVersion = "1.58.0"
 val protobufVersion = "3.4.0"
@@ -52,6 +51,7 @@ protobuf {
         artifact = "com.google.protobuf:protoc:${protobufVersion}"
     }
     plugins {
+
         id("grpc") {
             artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
         }

@@ -26,57 +26,82 @@ public class StatsController implements Controller {
     @Override
     public void processRequest(HttpExchange exchange) throws IOException {
         try (exchange) {
-            if (!Method.GET.name().equals(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_METHOD, -1);
+            if (!isGet(exchange) || !hasValidPrefix(exchange)) {
                 return;
             }
 
-            String path = exchange.getRequestURI().getPath();
-            if (!path.startsWith(PREFIX)) {
-                exchange.sendResponseHeaders(HttpURLConnection.HTTP_NOT_FOUND, -1);
+            ParsedPath parsedPath = parsePath(exchange);
+            if (parsedPath == null) {
                 return;
             }
 
-            String tail = path.substring(PREFIX.length());
-            if (tail.isEmpty()) {
-                exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, -1);
-                return;
-            }
-
-            boolean accessStats = false;
-            if (tail.endsWith("/access")) {
-                accessStats = true;
-                tail = tail.substring(0, tail.length() - "/access".length());
-            }
-
-            int replicaId;
-            try {
-                replicaId = Integer.parseInt(tail);
-            } catch (NumberFormatException e) {
-                exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, -1);
-                return;
-            }
-
-            Replica replica = replicas.getReplica(replicaId);
+            Replica replica = replicas.getReplica(parsedPath.replicaId());
             if (replica == null) {
                 exchange.sendResponseHeaders(HttpURLConnection.HTTP_NOT_FOUND, -1);
                 return;
             }
 
-            String response;
-            if (accessStats) {
-                response = "reads=" + replica.readAccessCount()
-                        + ",writes=" + replica.writeAccessCount() + "\n";
-            } else {
-                response = "keys=" + replica.keysCount() + "\n";
-            }
-
-            byte[] body = response.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
-            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(body);
-            }
+            writeResponse(exchange, buildResponse(replica, parsedPath.accessStats()));
         }
+    }
+
+    private boolean isGet(HttpExchange exchange) throws IOException {
+        if (!Method.GET.name().equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_METHOD, -1);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean hasValidPrefix(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        if (!path.startsWith(PREFIX)) {
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_NOT_FOUND, -1);
+            return false;
+        }
+        return true;
+    }
+
+    private ParsedPath parsePath(HttpExchange exchange) throws IOException {
+        String tail = exchange.getRequestURI().getPath().substring(PREFIX.length());
+
+        if (tail.isEmpty()) {
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, -1);
+            return null;
+        }
+
+        boolean accessStats = false;
+        if (tail.endsWith("/access")) {
+            accessStats = true;
+            tail = tail.substring(0, tail.length() - "/access".length());
+        }
+
+        try {
+            return new ParsedPath(Integer.parseInt(tail), accessStats);
+        } catch (NumberFormatException e) {
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, -1);
+            return null;
+        }
+    }
+
+    private String buildResponse(Replica replica, boolean accessStats) throws IOException {
+        if (accessStats) {
+            return "reads=" + replica.readAccessCount()
+                    + ",writes=" + replica.writeAccessCount() + "\n";
+        }
+        return "keys=" + replica.keysCount() + "\n";
+    }
+
+    private void writeResponse(HttpExchange exchange, String response) throws IOException {
+        byte[] body = response.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+        exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(body);
+        }
+    }
+
+    private record ParsedPath(int replicaId, boolean accessStats) {
     }
 }

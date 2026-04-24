@@ -7,25 +7,41 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Replicas {
     private static final Logger log = LoggerFactory.getLogger(Replicas.class);
+
     private final int numberOfReplicas;
     private final List<Replica> replicas;
+    private final Map<Integer, Replica> replicaMap;
+
     private final AtomicReference<BigInteger> version = new AtomicReference<>(BigInteger.ZERO);
+
+    private final ExecutorService executor;
 
     public Replicas(int port, int numberOfReplicas) {
         this.numberOfReplicas = numberOfReplicas;
-        this.replicas = new ArrayList<>();
+
+        this.replicas = new ArrayList<>(numberOfReplicas);
+        this.replicaMap = new HashMap<>(numberOfReplicas);
+
+        this.executor = Executors.newCachedThreadPool();
 
         for (int i = 0; i < numberOfReplicas; i++) {
-            try {
-                replicas.add(new Replica(i, new FileDao(port + "-" + i)));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            Replica replica = createReplica(port, i);
+            replicas.add(replica);
+            replicaMap.put(i, replica);
+        }
+    }
+
+    private Replica createReplica(int port, int replicaId) {
+        try {
+            return new Replica(replicaId, new FileDao(port + "-" + replicaId));
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
         }
     }
 
@@ -34,21 +50,18 @@ public class Replicas {
     }
 
     public Replica getReplica(int id) {
-        return replicas.stream()
-                .filter(r -> r.getId() == id)
-                .findFirst()
-                .orElse(null);
+        return replicaMap.get(id);
     }
 
     public void disableNode(int id) {
-        Replica replica = getReplica(id);
+        Replica replica = replicaMap.get(id);
         if (replica != null) {
             replica.setAvailable(false);
         }
     }
 
     public void enableNode(int id) {
-        Replica replica = getReplica(id);
+        Replica replica = replicaMap.get(id);
         if (replica != null) {
             replica.setAvailable(true);
         }
@@ -62,24 +75,22 @@ public class Replicas {
         BigInteger ver = nextVersion();
         AtomicInteger success = new AtomicInteger();
 
-        List<Thread> threads = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
+
         for (Replica replica : replicas) {
-            if (!replica.isAvailable()) {
-                continue;
-            }
-            Thread t = new Thread(() -> {
+            if (!replica.isAvailable()) continue;
+
+            futures.add(executor.submit(() -> {
                 try {
                     replica.write(key, value, ver);
                     success.incrementAndGet();
-                } catch (Exception ignored) {
-                    log.warn("replica is ignored");
+                } catch (Exception e) {
+                    log.warn("replica write failed", e);
                 }
-            });
-            threads.add(t);
-            t.start();
+            }));
         }
 
-        joinAll(threads);
+        waitAll(futures);
         return success.get();
     }
 
@@ -87,67 +98,69 @@ public class Replicas {
         BigInteger ver = nextVersion();
         AtomicInteger success = new AtomicInteger();
 
-        List<Thread> threads = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
+
         for (Replica replica : replicas) {
-            if (!replica.isAvailable()) {
-                continue;
-            }
-            Thread t = new Thread(() -> {
+            if (!replica.isAvailable()) continue;
+
+            futures.add(executor.submit(() -> {
                 try {
                     replica.delete(key, ver);
                     success.incrementAndGet();
-                } catch (Exception ignored) {
-                    log.warn("replica is ignored");
+                } catch (Exception e) {
+                    log.warn("replica delete failed", e);
                 }
-            });
-            threads.add(t);
-            t.start();
+            }));
         }
 
-        joinAll(threads);
+        waitAll(futures);
         return success.get();
     }
 
     public ReplicaValue readData(int ack, String key) {
-        List<ReplicaValue> replies = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger success = new AtomicInteger();
+        ConcurrentLinkedQueue<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
 
-        List<Thread> threads = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
+
         for (Replica replica : replicas) {
-            if (!replica.isAvailable()) {
-                continue;
-            }
-            Thread t = new Thread(() -> {
+            if (!replica.isAvailable()) continue;
+
+            futures.add(executor.submit(() -> {
                 try {
-                    replies.add(replica.read(key));
+                    ReplicaValue value = replica.read(key);
+                    if (value != null) {
+                        replies.add(value);
+                    }
                     success.incrementAndGet();
-                } catch (Exception ignored) {
-                    log.warn("replica is ignored");
+                } catch (Exception e) {
+                    log.warn("replica read failed", e);
                 }
-            });
-            threads.add(t);
-            t.start();
+            }));
         }
 
-        joinAll(threads);
+        waitAll(futures);
 
         if (success.get() < ack) {
-            throw new IllegalStateException();
+            throw new IllegalStateException("Not enough replicas responded");
         }
 
         return replies.stream()
-                .filter(Objects::nonNull)
                 .max(Comparator.comparing(ReplicaValue::version))
                 .orElse(null);
     }
 
-    private static void joinAll(List<Thread> threads) {
-        for (Thread t : threads) {
+    private void waitAll(List<Future<?>> futures) {
+        for (Future<?> f : futures) {
             try {
-                t.join();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                f.get();
+            } catch (Exception e) {
+                log.warn("task execution failed", e);
             }
         }
+    }
+
+    public void shutdown() {
+        executor.shutdown();
     }
 }

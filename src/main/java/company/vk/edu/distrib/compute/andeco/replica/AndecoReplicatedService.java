@@ -9,25 +9,23 @@ import company.vk.edu.distrib.compute.andeco.sharding.ShardingStrategy;
 import java.io.IOException;
 
 public class AndecoReplicatedService extends AndecoShardingKVServiceImpl implements ReplicatedService {
-    private final int port;
-    private final int numberOfReplicas;
+    private final int replicas;
     private final ReplicaEntityController controller;
-    private final StatsController statsController;
 
-    public AndecoReplicatedService(int port, ShardingStrategy<String> strategy, int numberOfReplicas)
+    public AndecoReplicatedService(int port, ShardingStrategy<String> strategy, int replicas)
             throws IOException {
-        this(port, strategy, numberOfReplicas, new ReplicaEntityController(port, numberOfReplicas));
+        this(port, strategy, replicas, new ReplicaEntityController(port, replicas));
     }
 
     private AndecoReplicatedService(int port,
                                     ShardingStrategy<String> strategy,
-                                    int numberOfReplicas,
+                                    int replicas,
                                     ReplicaEntityController controller) throws IOException {
         super(port, strategy, controller, new StatusController());
         this.port = port;
-        this.numberOfReplicas = numberOfReplicas;
+        this.replicas = replicas;
         this.controller = controller;
-        this.statsController = new StatsController(controller.getReplicas());
+        StatsController statsController = new StatsController(controller.getReplicas());
 
         server.createContext("/v0/stats", statsController::processRequest);
     }
@@ -39,7 +37,7 @@ public class AndecoReplicatedService extends AndecoShardingKVServiceImpl impleme
 
     @Override
     public int numberOfReplicas() {
-        return numberOfReplicas;
+        return replicas;
     }
 
     @Override
