@@ -26,4 +26,13 @@ public class Server {
     private boolean isClusterMode(String... args) {
         return args.length > 0 && args[0].startsWith("cluster");
     }
+
+    private int replicationFactor(String... args) {
+        if (args.length > 1){
+            return Integer.parseInt(args[1]);
+        }
+        return 0;
+    }
+
+
 }

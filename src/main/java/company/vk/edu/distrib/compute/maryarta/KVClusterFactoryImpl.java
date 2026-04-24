@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.maryarta;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
+import company.vk.edu.distrib.compute.maryarta.sharding.ShardingStrategy;
 
 import java.util.List;
 

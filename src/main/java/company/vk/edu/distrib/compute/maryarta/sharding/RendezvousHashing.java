@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.maryarta;
+package company.vk.edu.distrib.compute.maryarta.sharding;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
