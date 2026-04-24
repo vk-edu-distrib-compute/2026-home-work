@@ -9,21 +9,21 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 public class KVServiceImpl implements KVService {
-    protected int port;
+    protected int currentPort;
     protected Controller entityController;
     protected Controller statusController;
     protected final HttpServer server;
 
-    public KVServiceImpl(int port, Controller entityController, Controller statusController) throws IOException {
-        this.port = port;
+    public KVServiceImpl(int currentPort, Controller entityController, Controller statusController) throws IOException {
+        this.currentPort = currentPort;
         this.entityController = entityController;
         this.statusController = statusController;
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.server = HttpServer.create(new InetSocketAddress(currentPort), 0);
         this.server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
     }
 
     public int port() {
-        return port;
+        return currentPort;
     }
 
     public void registerDefault() {

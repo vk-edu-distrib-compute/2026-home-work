@@ -22,7 +22,7 @@ public class AndecoReplicatedService extends AndecoShardingKVServiceImpl impleme
                                     int replicas,
                                     ReplicaEntityController controller) throws IOException {
         super(port, strategy, controller, new StatusController());
-        this.port = port;
+        this.currentPort = port;
         this.replicas = replicas;
         this.controller = controller;
         StatsController statsController = new StatsController(controller.getReplicas());
@@ -32,7 +32,7 @@ public class AndecoReplicatedService extends AndecoShardingKVServiceImpl impleme
 
     @Override
     public int port() {
-        return port;
+        return currentPort;
     }
 
     @Override

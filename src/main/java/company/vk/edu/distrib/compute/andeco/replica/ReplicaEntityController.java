@@ -58,7 +58,7 @@ public class ReplicaEntityController implements Controller {
 
     private void processPut(HttpExchange exchange, String id, int ack) throws IOException {
         byte[] body = exchange.getRequestBody().readAllBytes();
-        int success = replicas.writeData(ack, id, body);
+        int success = replicas.writeData(id, body);
 
         if (success < ack) {
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_UNAVAILABLE, -1);
@@ -69,7 +69,7 @@ public class ReplicaEntityController implements Controller {
     }
 
     private void processDelete(HttpExchange exchange, String id, int ack) throws IOException {
-        int success = replicas.deleteData(ack, id);
+        int success = replicas.deleteData(id);
 
         if (success < ack) {
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_UNAVAILABLE, -1);

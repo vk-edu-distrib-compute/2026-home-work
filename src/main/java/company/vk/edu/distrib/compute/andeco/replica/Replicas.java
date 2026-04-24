@@ -15,7 +15,7 @@ public class Replicas {
     private static final Logger log = LoggerFactory.getLogger(Replicas.class);
 
     private final int numberOfReplicas;
-    private final List<Replica> replicas;
+    private final List<Replica> replicaList;
     private final Map<Integer, Replica> replicaMap;
 
     private final AtomicReference<BigInteger> version = new AtomicReference<>(BigInteger.ZERO);
@@ -25,14 +25,14 @@ public class Replicas {
     public Replicas(int port, int numberOfReplicas) {
         this.numberOfReplicas = numberOfReplicas;
 
-        this.replicas = new ArrayList<>(numberOfReplicas);
+        this.replicaList = new ArrayList<>(numberOfReplicas);
         this.replicaMap = new HashMap<>(numberOfReplicas);
 
         this.executor = Executors.newCachedThreadPool();
 
         for (int i = 0; i < numberOfReplicas; i++) {
             Replica replica = createReplica(port, i);
-            replicas.add(replica);
+            replicaList.add(replica);
             replicaMap.put(i, replica);
         }
     }
@@ -71,14 +71,16 @@ public class Replicas {
         return version.updateAndGet(v -> v.add(BigInteger.ONE));
     }
 
-    public int writeData(int ack, String key, byte[] value) {
+    public int writeData(String key, byte[] value) {
         BigInteger ver = nextVersion();
         AtomicInteger success = new AtomicInteger();
 
         List<Future<?>> futures = new ArrayList<>();
 
-        for (Replica replica : replicas) {
-            if (!replica.isAvailable()) continue;
+        for (Replica replica : replicaList) {
+            if (!replica.isAvailable()) {
+                continue;
+            }
 
             futures.add(executor.submit(() -> {
                 try {
@@ -94,14 +96,16 @@ public class Replicas {
         return success.get();
     }
 
-    public int deleteData(int ack, String key) {
+    public int deleteData(String key) {
         BigInteger ver = nextVersion();
         AtomicInteger success = new AtomicInteger();
 
         List<Future<?>> futures = new ArrayList<>();
 
-        for (Replica replica : replicas) {
-            if (!replica.isAvailable()) continue;
+        for (Replica replica : replicaList) {
+            if (!replica.isAvailable()) {
+                continue;
+            }
 
             futures.add(executor.submit(() -> {
                 try {
@@ -119,12 +123,14 @@ public class Replicas {
 
     public ReplicaValue readData(int ack, String key) {
         AtomicInteger success = new AtomicInteger();
-        ConcurrentLinkedQueue<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
+        Collection<ReplicaValue> replies = new ConcurrentLinkedQueue<>();
 
         List<Future<?>> futures = new ArrayList<>();
 
-        for (Replica replica : replicas) {
-            if (!replica.isAvailable()) continue;
+        for (Replica replica : replicaList) {
+            if (!replica.isAvailable()) {
+                continue;
+            }
 
             futures.add(executor.submit(() -> {
                 try {
