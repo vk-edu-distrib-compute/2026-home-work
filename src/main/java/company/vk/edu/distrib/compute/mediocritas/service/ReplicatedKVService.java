@@ -1,6 +1,7 @@
 package company.vk.edu.distrib.compute.mediocritas.service;
 
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.mediocritas.storage.VersionedFileDao;
 import company.vk.edu.distrib.compute.mediocritas.storage.VersionedValue;
@@ -11,7 +12,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,10 +26,12 @@ public class ReplicatedKVService extends AbstractKvByteService implements Replic
 
     private static final int DEFAULT_REPLICATION_FACTOR = 3;
     private static final int DEFAULT_ACK = 1;
+    private static final int UPSERT_TIMEOUT_SECONDS = 5;
 
     private final int replicationFactor;
     private final List<VersionedFileDao> replicas;
     private final List<AtomicBoolean> replicaStatus;
+    private final ReplicaStats stats;
     private final ExecutorService executor;
 
     public ReplicatedKVService(int port) {
@@ -42,10 +49,11 @@ public class ReplicatedKVService extends AbstractKvByteService implements Replic
             try {
                 replicas.add(new VersionedFileDao("./data-replica-" + port + "-" + i));
             } catch (IOException e) {
-                throw new RuntimeException("Failed to initialize replica " + i, e);
+                throw new IllegalStateException("Failed to initialize replica " + i, e);
             }
             replicaStatus.add(new AtomicBoolean(true));
         }
+        this.stats = new ReplicaStats(replicationFactor, replicas, replicaStatus);
     }
 
     @Override
@@ -95,6 +103,11 @@ public class ReplicatedKVService extends AbstractKvByteService implements Replic
         }
     }
 
+    @Override
+    protected void registerAdditionalHandlers(HttpServer server) {
+        server.createContext(stats.pathPrefix(), wrapHandler(stats.asHttpHandler()));
+    }
+
     private void handleGet(HttpExchange http, String id, int ack) throws IOException {
         List<Integer> activeReplicas = getActiveReplicasForKey(id);
 
@@ -105,22 +118,25 @@ public class ReplicatedKVService extends AbstractKvByteService implements Replic
 
         List<CompletableFuture<VersionedValue>> futures = activeReplicas.subList(0, ack).stream()
                 .map(replicaId -> CompletableFuture.supplyAsync(
-                        () -> replicas.get(replicaId).get(id),
+                        () -> {
+                            stats.recordRead(replicaId);
+                            return replicas.get(replicaId).get(id);
+                        },
                         executor))
                 .toList();
 
         VersionedValue latestValue = futures.stream()
                 .map(CompletableFuture::join)
                 .filter(Objects::nonNull)
-                .max((a, b) -> Long.compare(a.getTimestamp(), b.getTimestamp()))
+                .max((a, b) -> Long.compare(a.timestamp(), b.timestamp()))
                 .orElse(null);
 
-        if (latestValue == null || latestValue.isDeleted()) {
+        if (latestValue == null || latestValue.tombstone()) {
             http.sendResponseHeaders(404, -1);
             return;
         }
 
-        byte[] data = latestValue.getData();
+        byte[] data = latestValue.data();
         http.sendResponseHeaders(200, data.length);
         sendBody(http, data);
     }
@@ -169,18 +185,21 @@ public class ReplicatedKVService extends AbstractKvByteService implements Replic
         AtomicInteger successCount = new AtomicInteger(0);
         CountDownLatch latch = new CountDownLatch(ack);
 
-        activeReplicas.subList(0, ack).stream()
+        activeReplicas.subList(0, ack)
                 .forEach(replicaId -> executor.submit(() -> {
                     try {
+                        stats.recordWrite(replicaId);
                         replicas.get(replicaId).upsert(id, value);
                         if (successCount.incrementAndGet() <= ack) {
                             latch.countDown();
                         }
-                    } catch (Exception ignored) {}
+                    } catch (IOException e) {
+                        log.warn("Replica {} upsert failed for key '{}'", replicaId, id, e);
+                    }
                 }));
 
         try {
-            boolean awaited = latch.await(5, TimeUnit.SECONDS);
+            boolean awaited = latch.await(UPSERT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!awaited) {
                 log.error("Timeout during awaiting ack from replicas");
             }

@@ -1,5 +1,8 @@
 package company.vk.edu.distrib.compute.mediocritas.storage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -9,13 +12,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static company.vk.edu.distrib.compute.mediocritas.storage.validation.DaoKeyValidatorUtils.validateKey;
 
 public class VersionedFileDao {
+
+    private static final Logger log = LoggerFactory.getLogger(VersionedFileDao.class);
 
     private static final String FILE_NAME = "data.bin";
 
@@ -55,12 +59,12 @@ public class VersionedFileDao {
             ByteBuffer tombstoneBuffer = ByteBuffer.allocate(TOMBSTONE_SIZE);
             readFully(tombstoneBuffer, offset);
             tombstoneBuffer.flip();
-            boolean isDeleted = tombstoneBuffer.get() == DELETED;
+            final boolean isDeleted = tombstoneBuffer.get() == DELETED;
 
             ByteBuffer valueLenBuffer = ByteBuffer.allocate(VALUE_LENGTH_SIZE);
             readFully(valueLenBuffer, offset + TOMBSTONE_SIZE + KEY_LENGTH_SIZE);
             valueLenBuffer.flip();
-            int valueLength = valueLenBuffer.getInt();
+            final int valueLength = valueLenBuffer.getInt();
 
             ByteBuffer timestampBuffer = ByteBuffer.allocate(TIMESTAMP_SIZE);
             readFully(timestampBuffer, offset + TOMBSTONE_SIZE + KEY_LENGTH_SIZE + VALUE_LENGTH_SIZE);
@@ -83,8 +87,8 @@ public class VersionedFileDao {
     public void upsert(String key, VersionedValue value) throws IOException {
         validateKey(key);
 
-        byte[] data = value.getData() != null ? value.getData() : new byte[0];
-        byte tombstone = value.isDeleted() ? DELETED : ALIVE;
+        byte[] data = value.data() != null ? value.data() : new byte[0];
+        byte tombstone = value.tombstone() ? DELETED : ALIVE;
 
         int recordSize = HEADER_SIZE + data.length + key.length();
         long offset = writePosition.getAndAdd(recordSize);
@@ -93,7 +97,7 @@ public class VersionedFileDao {
                 .put(tombstone)
                 .putInt(key.length())
                 .putInt(data.length)
-                .putLong(value.getTimestamp())
+                .putLong(value.timestamp())
                 .put(data)
                 .put(key.getBytes(StandardCharsets.UTF_8));
 
@@ -104,6 +108,23 @@ public class VersionedFileDao {
 
     public void close() throws IOException {
         channel.close();
+    }
+
+    public int keyCount() {
+        int count = 0;
+        for (Map.Entry<String, Long> entry : index.entrySet()) {
+            try {
+                ByteBuffer tombstoneBuffer = ByteBuffer.allocate(TOMBSTONE_SIZE);
+                readFully(tombstoneBuffer, entry.getValue());
+                tombstoneBuffer.flip();
+                if (tombstoneBuffer.get() == ALIVE) {
+                    count++;
+                }
+            } catch (IOException e) {
+                log.warn("Failed to read tombstone for key '{}', skipping", entry.getKey(), e);
+            }
+        }
+        return count;
     }
 
     private void readFully(ByteBuffer buf, long offset) throws IOException {

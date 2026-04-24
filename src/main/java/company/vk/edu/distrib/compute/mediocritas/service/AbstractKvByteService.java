@@ -74,7 +74,16 @@ public abstract class AbstractKvByteService implements KVService {
     private void registerHandlers() {
         httpServer.createContext("/v0/status", wrap(this::handleStatus));
         httpServer.createContext("/v0/entity", wrap(this::handleEntity));
+        registerAdditionalHandlers(httpServer);
         httpServer.createContext("/", wrap(http -> http.sendResponseHeaders(404, -1)));
+    }
+
+    protected void registerAdditionalHandlers(HttpServer server) {
+        log.debug("No additional HTTP handlers registered for {}", server.getAddress());
+    }
+
+    protected HttpHandler wrapHandler(HttpHandler handler) {
+        return wrap(handler);
     }
 
     private void handleStatus(HttpExchange http) throws IOException {
@@ -145,7 +154,7 @@ public abstract class AbstractKvByteService implements KVService {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Parameter 'ack' must be a number");
+            throw new IllegalArgumentException("Parameter 'ack' must be a number", e);
         }
     }
 
