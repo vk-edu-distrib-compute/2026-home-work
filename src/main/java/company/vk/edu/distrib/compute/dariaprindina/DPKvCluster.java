@@ -17,15 +17,24 @@ public class DPKvCluster implements KVCluster {
     private final List<String> endpoints;
     private final Map<String, NodeState> nodesByEndpoint;
     private final DPShardSelector shardSelector;
+    private final int replicationFactor;
 
     public DPKvCluster(List<Integer> ports) {
-        this(ports, DPShardingAlgorithm.MODULO);
+        this(ports, DPShardingAlgorithm.MODULO, 1);
     }
 
     public DPKvCluster(List<Integer> ports, DPShardingAlgorithm algorithm) {
+        this(ports, algorithm, 1);
+    }
+
+    public DPKvCluster(List<Integer> ports, DPShardingAlgorithm algorithm, int replicationFactor) {
         this.endpoints = ports.stream()
             .map(port -> "http://localhost:" + port)
             .toList();
+        if (replicationFactor < 1 || replicationFactor > endpoints.size()) {
+            throw new IllegalArgumentException("replicationFactor must be in range [1, " + endpoints.size() + "]");
+        }
+        this.replicationFactor = replicationFactor;
         this.shardSelector = createSelector(algorithm, endpoints);
         this.nodesByEndpoint = new LinkedHashMap<>();
         for (String endpoint : endpoints) {
@@ -69,7 +78,12 @@ public class DPKvCluster implements KVCluster {
             return;
         }
         try {
-            nodeState.service = new DPShardedNodeService(nodeState.endpoint, nodeState.dao, shardSelector);
+            nodeState.service = new DPShardedNodeService(
+                nodeState.endpoint,
+                nodeState.dao,
+                shardSelector,
+                replicationFactor
+            );
             nodeState.service.start();
             nodeState.started = true;
             log.info("Node started. endpoint={}", nodeState.endpoint);

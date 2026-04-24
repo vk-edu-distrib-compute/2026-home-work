@@ -2,10 +2,12 @@ package company.vk.edu.distrib.compute.dariaprindina;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
-@FunctionalInterface
 interface DPShardSelector {
     String ownerForKey(String key);
+
+    List<String> replicasForKey(String key, int count);
 
     static DPShardSelector modulo(List<String> endpoints) {
         return new ModuloShardSelector(endpoints);
@@ -27,6 +29,17 @@ interface DPShardSelector {
             final int index = Math.floorMod(key.hashCode(), endpoints.size());
             return endpoints.get(index);
         }
+
+        @Override
+        public List<String> replicasForKey(String key, int count) {
+            if (count < 1 || count > endpoints.size()) {
+                throw new IllegalArgumentException("bad replicas count");
+            }
+            final int startIndex = Math.floorMod(key.hashCode(), endpoints.size());
+            return java.util.stream.IntStream.range(0, count)
+                .mapToObj(offset -> endpoints.get((startIndex + offset) % endpoints.size()))
+                .toList();
+        }
     }
 
     final class RendezvousShardSelector implements DPShardSelector {
@@ -38,16 +51,18 @@ interface DPShardSelector {
 
         @Override
         public String ownerForKey(String key) {
-            String bestEndpoint = endpoints.getFirst();
-            long bestScore = Long.MIN_VALUE;
-            for (String endpoint : endpoints) {
-                final long score = score(key, endpoint);
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestEndpoint = endpoint;
-                }
+            return replicasForKey(key, 1).getFirst();
+        }
+
+        @Override
+        public List<String> replicasForKey(String key, int count) {
+            if (count < 1 || count > endpoints.size()) {
+                throw new IllegalArgumentException("bad replicas count");
             }
-            return bestEndpoint;
+            return endpoints.stream()
+                .sorted((left, right) -> Long.compare(score(key, right), score(key, left)))
+                .limit(count)
+                .collect(Collectors.toList());
         }
 
         private static long score(String key, String endpoint) {
