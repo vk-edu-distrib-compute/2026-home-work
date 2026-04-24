@@ -20,24 +20,26 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class CeFelloReplicatedKVService implements ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(CeFelloReplicatedKVService.class);
     private static final String REPLICA_DIRECTORY_PREFIX = "replica-";
     private static final String STATS_PATH = "/stats/replica";
 
-    private final int port;
+    private final int servicePort;
     private final int replicationFactor;
     private final HttpServer server;
     private final List<CeFelloReplicaNode> replicas;
     private final CeFelloReplicationCoordinator coordinator;
     private final ExecutorService executor;
+    private final ReentrantLock lifecycleLock = new ReentrantLock();
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final CompletableFuture<Void> termination = new CompletableFuture<>();
 
     public CeFelloReplicatedKVService(int port, Path storageRoot, CeFelloReplicationConfig config) throws IOException {
-        this.port = port;
+        this.servicePort = port;
         this.replicationFactor = config.replicationFactor();
         this.server = HttpServer.create();
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -55,40 +57,50 @@ public class CeFelloReplicatedKVService implements ReplicatedService {
     }
 
     @Override
-    public synchronized void start() {
-        if (!started.compareAndSet(false, true)) {
-            throw new IllegalStateException("Service is already started");
-        }
-
+    public void start() {
+        lifecycleLock.lock();
         try {
-            bindAddress(port);
-            server.start();
-        } catch (IOException e) {
-            started.set(false);
-            throw new IllegalStateException("Failed to start service", e);
+            if (!started.compareAndSet(false, true)) {
+                throw new IllegalStateException("Service is already started");
+            }
+
+            try {
+                bindAddress(servicePort);
+                server.start();
+            } catch (IOException e) {
+                started.set(false);
+                throw new IllegalStateException("Failed to start service", e);
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 
     @Override
-    public synchronized void stop() {
-        if (!started.get() || !stopped.compareAndSet(false, true)) {
-            throw new IllegalStateException("Service is not running");
-        }
-
+    public void stop() {
+        lifecycleLock.lock();
         try {
-            server.stop(0);
-            executor.shutdownNow();
-            for (CeFelloReplicaNode replica : replicas) {
-                replica.close();
+            if (!started.get() || !stopped.compareAndSet(false, true)) {
+                throw new IllegalStateException("Service is not running");
+            }
+
+            try {
+                server.stop(0);
+                executor.shutdownNow();
+                for (CeFelloReplicaNode replica : replicas) {
+                    replica.close();
+                }
+            } finally {
+                termination.complete(null);
             }
         } finally {
-            termination.complete(null);
+            lifecycleLock.unlock();
         }
     }
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override

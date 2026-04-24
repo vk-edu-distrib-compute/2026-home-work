@@ -10,6 +10,9 @@ import java.util.Objects;
 
 final class CeFelloReplicaStatsHandler implements HttpHandler {
     private static final String STATS_PREFIX = "/stats/replica/";
+    private static final int STATS_SEGMENTS = 1;
+    private static final int ACCESS_SEGMENTS = 2;
+    private static final String ACCESS_PATH = "access";
 
     private final List<CeFelloReplicaNode> replicas;
 
@@ -39,11 +42,11 @@ final class CeFelloReplicaStatsHandler implements HttpHandler {
 
         int replicaId = parseReplicaId(parts[0]);
         CeFelloReplicaNode replica = replica(replicaId);
-        if (parts.length == 1) {
+        if (parts.length == STATS_SEGMENTS) {
             sendJson(exchange, replicaStatsJson(replica));
             return;
         }
-        if (parts.length == 2 && "access".equals(parts[1])) {
+        if (parts.length == ACCESS_SEGMENTS && ACCESS_PATH.equals(parts[1])) {
             sendJson(exchange, replicaAccessJson(replica));
             return;
         }

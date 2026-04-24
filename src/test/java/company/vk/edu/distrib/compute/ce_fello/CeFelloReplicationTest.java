@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -36,15 +37,15 @@ class CeFelloReplicationTest {
 
     @Test
     void serviceSupportsReplicationAndRejectsBadAck() throws Exception {
-        withService(service -> {
+        assertDoesNotThrow(() -> withService(service -> {
             assertInstanceOf(ReplicatedService.class, service);
             assertEquals(400, get(service.port(), "bad-ack-key", service.numberOfReplicas() + 1).statusCode());
-        });
+        }));
     }
 
     @Test
     void quorumWithFaultyNodes() throws Exception {
-        withService(service -> {
+        assertDoesNotThrow(() -> withService(service -> {
             service.disableReplica(0);
             int n = service.numberOfReplicas();
             int writeAck = n - 1;
@@ -59,12 +60,12 @@ class CeFelloReplicationTest {
             HttpResponse<byte[]> response = get(service.port(), "k3", readAck);
             assertEquals(200, response.statusCode());
             assertEquals("v3", new String(response.body(), StandardCharsets.UTF_8));
-        });
+        }));
     }
 
     @Test
     void returnsFreshestValueWhenReplicasDiverge() throws Exception {
-        withService(service -> {
+        assertDoesNotThrow(() -> withService(service -> {
             service.disableReplica(0);
             int n = service.numberOfReplicas();
 
@@ -83,12 +84,12 @@ class CeFelloReplicationTest {
             HttpResponse<byte[]> response = get(service.port(), "k4", n);
             assertEquals(200, response.statusCode());
             assertEquals("v4_1", new String(response.body(), StandardCharsets.UTF_8));
-        });
+        }));
     }
 
     @Test
     void returnsFiveHundredWhenNotEnoughReplicasForReadOrWrite() throws Exception {
-        withService(service -> {
+        assertDoesNotThrow(() -> withService(service -> {
             int n = service.numberOfReplicas();
 
             service.disableReplica(0);
@@ -100,12 +101,12 @@ class CeFelloReplicationTest {
             service.disableReplica(1);
 
             assertEquals(500, get(service.port(), "k6", n).statusCode());
-        });
+        }));
     }
 
     @Test
     void hidesDeletedValueAndUpdatesStats() throws Exception {
-        withService(service -> {
+        assertDoesNotThrow(() -> withService(service -> {
             int n = service.numberOfReplicas();
 
             assertEquals(201, upsert(service.port(), "k7", "v7".getBytes(StandardCharsets.UTF_8), n).statusCode());
@@ -121,7 +122,7 @@ class CeFelloReplicationTest {
 
             assertEquals(200, getStats(service.port(), 0).statusCode());
             assertEquals(200, getAccessStats(service.port(), 0).statusCode());
-        });
+        }));
     }
 
     private static void withService(ServiceAction action) throws Exception {

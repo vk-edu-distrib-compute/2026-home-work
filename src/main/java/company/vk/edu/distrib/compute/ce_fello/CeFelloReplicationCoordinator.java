@@ -103,7 +103,9 @@ final class CeFelloReplicationCoordinator {
                 try {
                     result.replica().write(key, freshest);
                 } catch (IOException e) {
-                    log.warn("Failed to repair replica {}", result.replica().id(), e);
+                    if (log.isWarnEnabled()) {
+                        log.warn("Failed to repair replica {}", result.replica().id(), e);
+                    }
                 }
             }, executor);
         }
@@ -114,7 +116,9 @@ final class CeFelloReplicationCoordinator {
             try {
                 return new ReplicaReadResult(replica, true, replica.read(key));
             } catch (IOException e) {
-                log.info("Replica {} is unavailable for read key={}", replica.id(), key);
+                if (log.isInfoEnabled()) {
+                    log.info("Replica {} is unavailable for read key={}", replica.id(), key);
+                }
                 return new ReplicaReadResult(replica, false, Optional.empty());
             }
         }, executor).completeOnTimeout(
@@ -130,7 +134,9 @@ final class CeFelloReplicationCoordinator {
                 replica.write(key, record);
                 return true;
             } catch (IOException e) {
-                log.info("Replica {} is unavailable for write key={}", replica.id(), key);
+                if (log.isInfoEnabled()) {
+                    log.info("Replica {} is unavailable for write key={}", replica.id(), key);
+                }
                 return false;
             }
         }, executor).completeOnTimeout(false, REPLICA_TIMEOUT_SECONDS, TimeUnit.SECONDS);

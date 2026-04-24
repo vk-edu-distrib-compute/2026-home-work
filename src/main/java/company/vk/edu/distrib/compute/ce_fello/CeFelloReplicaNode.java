@@ -8,26 +8,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 final class CeFelloReplicaNode {
-    private final int id;
+    private final int replicaId;
     private final CeFelloReplicaFileDao dao;
     private final AtomicBoolean enabled = new AtomicBoolean(true);
-    private final AtomicLong keyCount = new AtomicLong();
-    private final AtomicLong bytesOnDisk = new AtomicLong();
-    private final AtomicLong readCount = new AtomicLong();
-    private final AtomicLong writeCount = new AtomicLong();
-    private final AtomicLong deleteCount = new AtomicLong();
+    private final AtomicLong storedKeyCount = new AtomicLong();
+    private final AtomicLong storedBytes = new AtomicLong();
+    private final AtomicLong totalReadCount = new AtomicLong();
+    private final AtomicLong totalWriteCount = new AtomicLong();
+    private final AtomicLong totalDeleteCount = new AtomicLong();
 
     CeFelloReplicaNode(int id, Path rootDirectory) throws IOException {
-        this.id = id;
+        this.replicaId = id;
         this.dao = new CeFelloReplicaFileDao(Objects.requireNonNull(rootDirectory, "rootDirectory"));
 
         CeFelloReplicaFileDao.ScanMetadata metadata = dao.scan();
-        this.keyCount.set(metadata.keyCount());
-        this.bytesOnDisk.set(metadata.totalBytes());
+        this.storedKeyCount.set(metadata.keyCount());
+        this.storedBytes.set(metadata.totalBytes());
     }
 
     int id() {
-        return id;
+        return replicaId;
     }
 
     long initializeMaxVersion() throws IOException {
@@ -49,42 +49,42 @@ final class CeFelloReplicaNode {
     Optional<CeFelloReplicaRecord> read(String key) throws IOException {
         ensureEnabled();
         Optional<CeFelloReplicaRecord> record = dao.read(key);
-        readCount.incrementAndGet();
+        totalReadCount.incrementAndGet();
         return record;
     }
 
     void write(String key, CeFelloReplicaRecord record) throws IOException {
         ensureEnabled();
         CeFelloReplicaFileDao.WriteMetadata metadata = dao.write(key, record);
-        bytesOnDisk.addAndGet(metadata.currentBytes() - metadata.previousBytes());
+        storedBytes.addAndGet(metadata.currentBytes() - metadata.previousBytes());
         if (!metadata.existed()) {
-            keyCount.incrementAndGet();
+            storedKeyCount.incrementAndGet();
         }
         if (record.tombstone()) {
-            deleteCount.incrementAndGet();
+            totalDeleteCount.incrementAndGet();
         } else {
-            writeCount.incrementAndGet();
+            totalWriteCount.incrementAndGet();
         }
     }
 
     long keyCount() {
-        return keyCount.get();
+        return storedKeyCount.get();
     }
 
     long bytesOnDisk() {
-        return bytesOnDisk.get();
+        return storedBytes.get();
     }
 
     long readCount() {
-        return readCount.get();
+        return totalReadCount.get();
     }
 
     long writeCount() {
-        return writeCount.get();
+        return totalWriteCount.get();
     }
 
     long deleteCount() {
-        return deleteCount.get();
+        return totalDeleteCount.get();
     }
 
     void close() {
@@ -93,7 +93,7 @@ final class CeFelloReplicaNode {
 
     private void ensureEnabled() throws IOException {
         if (!enabled.get()) {
-            throw new IOException("Replica " + id + " is disabled");
+            throw new IOException("Replica " + replicaId + " is disabled");
         }
     }
 }

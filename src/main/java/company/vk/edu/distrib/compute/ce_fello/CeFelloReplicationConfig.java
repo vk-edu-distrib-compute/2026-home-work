@@ -3,19 +3,20 @@ package company.vk.edu.distrib.compute.ce_fello;
 final class CeFelloReplicationConfig {
     private static final int DEFAULT_REPLICATION_FACTOR = 3;
     private static final int DEFAULT_STORAGE_REPLICAS = 6;
+    private static final int MIN_REPLICATION_FACTOR = 1;
 
-    private final int replicationFactor;
-    private final int totalReplicas;
+    private final int configuredReplicationFactor;
+    private final int configuredTotalReplicas;
 
     private CeFelloReplicationConfig(int replicationFactor, int totalReplicas) {
-        this.replicationFactor = replicationFactor;
-        this.totalReplicas = totalReplicas;
+        this.configuredReplicationFactor = replicationFactor;
+        this.configuredTotalReplicas = totalReplicas;
     }
 
     static CeFelloReplicationConfig fromSystemProperties() {
         int replicationFactor = Integer.getInteger("ce_fello.replication.factor", DEFAULT_REPLICATION_FACTOR);
         int totalReplicas = Integer.getInteger("ce_fello.replication.nodes", DEFAULT_STORAGE_REPLICAS);
-        if (replicationFactor < 1) {
+        if (replicationFactor < MIN_REPLICATION_FACTOR) {
             throw new IllegalArgumentException("Replication factor must be positive");
         }
         if (totalReplicas < replicationFactor) {
@@ -25,10 +26,10 @@ final class CeFelloReplicationConfig {
     }
 
     int replicationFactor() {
-        return replicationFactor;
+        return configuredReplicationFactor;
     }
 
     int totalReplicas() {
-        return totalReplicas;
+        return configuredTotalReplicas;
     }
 }
