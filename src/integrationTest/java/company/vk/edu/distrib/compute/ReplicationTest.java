@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 
-@Disabled
 @ParameterizedClass
 @ArgumentsSource(KVServiceFactoryArgumentsProvider.class)
 public class ReplicationTest extends TestBase {
