@@ -18,7 +18,7 @@ public class KVServiceImpl implements ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
 
     private final HttpServer server;
-    private final int port;
+    private final int serverPort;
     private final ReplicaList replicas;
 
     private static final String PATH_STATUS = "/v0/status";
@@ -30,7 +30,7 @@ public class KVServiceImpl implements ReplicatedService {
 
     public KVServiceImpl(int port) throws IOException {
         this.server = initServer(port);
-        this.port = port;
+        this.serverPort = port;
         int factor = ReplicationConfigUtils.loadReplicationFactor();
         this.replicas = new ReplicaList(factor);
     }
@@ -62,7 +62,7 @@ public class KVServiceImpl implements ReplicatedService {
 
     @Override
     public int port() {
-        return this.port;
+        return this.serverPort;
     }
 
     @Override
@@ -108,6 +108,20 @@ public class KVServiceImpl implements ReplicatedService {
         }
     }
 
+    private Integer getAck(Map<String, String> args) throws IOException {
+        boolean hasAsk = args.containsKey("ack") && args.get("ack") != null;
+        if (!hasAsk) {
+            log.info("Ack size set to default 1.");
+        }
+        int ack = hasAsk ? Integer.parseInt(args.get("ack")) : 1;
+        if (ack > replicas.numberOfReplicas() || ack < 0) {
+            log.error("Bad ack size {}", ack);
+            return null;
+        }
+
+        return ack;
+    }
+
     private void handleEntity(HttpExchange exchange) throws IOException {
         try (exchange) {
             String query = exchange.getRequestURI().getQuery();
@@ -125,29 +139,28 @@ public class KVServiceImpl implements ReplicatedService {
                 return;
             }
 
-            boolean hasAsk = args.containsKey("ack") && args.get("ack") != null;
-            if (!hasAsk) {
-                log.info("Ack size set to default 1.");
-            }
-            int ack = hasAsk ? Integer.parseInt(args.get("ack")) : 1;
-            if (ack > replicas.numberOfReplicas() || ack < 0) {
-                log.error("Bad ack size {}", ack);
+            Integer ack = getAck(args);
+            if (ack == null) {
                 exchange.sendResponseHeaders(400, 0);
                 return;
             }
 
-            String method = exchange.getRequestMethod();
-            switch (method) {
-                case GET ->
-                    handleGet(exchange, id, ack);
-                case PUT ->
-                    handlePut(exchange, id, ack);
-                case DELETE ->
-                    handleDelete(exchange, id, ack);
-                default ->
-                    exchange.sendResponseHeaders(405, 0);
-            }
+            executeMethod(exchange, id, ack);
             log.debug("Entity handled.");
+        }
+    }
+
+    private void executeMethod(HttpExchange exchange, String id, int ack) throws IOException {
+        String method = exchange.getRequestMethod();
+        switch (method) {
+            case GET ->
+                handleGet(exchange, id, ack);
+            case PUT ->
+                handlePut(exchange, id, ack);
+            case DELETE ->
+                handleDelete(exchange, id, ack);
+            default ->
+                exchange.sendResponseHeaders(405, 0);
         }
     }
 

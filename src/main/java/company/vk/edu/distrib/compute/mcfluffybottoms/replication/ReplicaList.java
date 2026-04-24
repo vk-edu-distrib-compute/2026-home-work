@@ -24,23 +24,23 @@ public class ReplicaList {
 
     class Node {
         public final Dao<byte[]> dao;
-        AtomicBoolean enabled = new AtomicBoolean(false);
+        AtomicBoolean enable = new AtomicBoolean(false);
 
         Node(int i) throws IllegalArgumentException, IOException {
-            this.enabled.set(true);
+            this.enable.set(true);
             this.dao = new FileDao(Path.of("node-" + i));
         }
 
         public void disable() {
-            this.enabled.set(false);
+            this.enable.set(false);
         }
 
         public void enable() {
-            this.enabled.set(true);
+            this.enable.set(true);
         }
 
         public boolean enabled() {
-            return this.enabled.get();
+            return this.enable.get();
         }
     }
 
@@ -179,7 +179,7 @@ public class ReplicaList {
                 node.dao.upsert(id, body);
                 responded++;
             } catch (NoSuchElementException e) {
-                log.warn("Failed to upsert id {} on node: {}", id, e.getMessage());
+                log.warn("Failed to upsert id {} on node {}", id, e);
             }
         }
 
@@ -203,7 +203,7 @@ public class ReplicaList {
                 node.dao.delete(id);
                 responded++;
             } catch (NoSuchElementException e) {
-                log.warn("Failed to delete id {} on node: {}", id, e.getMessage());
+                log.warn("Failed to delete id {} on node {}", id, e);
             }
         }
 

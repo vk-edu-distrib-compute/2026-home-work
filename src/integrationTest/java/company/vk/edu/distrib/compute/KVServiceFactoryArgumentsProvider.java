@@ -45,7 +45,6 @@ public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
         PopovIgorKVServiceFactoryImpl.class,
         McfluffybottomsFileKVServiceFactory.class,
         McfluffybottomsInMemoryKVServiceFactory.class,
-        NesterukiaInMemoryKVServiceFactory.class,
         NesterukiaFileSystemKVServiceFactory.class,
         KirillmedvedevKVServiceFactory.class,
         KirillmedvedevFileSystemKVServiceFactory.class,
