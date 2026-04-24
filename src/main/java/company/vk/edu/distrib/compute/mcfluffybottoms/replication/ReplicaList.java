@@ -24,23 +24,23 @@ public class ReplicaList {
 
     class Node {
         public final Dao<byte[]> dao;
-        AtomicBoolean enable = new AtomicBoolean(false);
+        AtomicBoolean isEnabled = new AtomicBoolean(false);
 
         Node(int i) throws IllegalArgumentException, IOException {
-            this.enable.set(true);
+            this.isEnabled.set(true);
             this.dao = new FileDao(Path.of("node-" + i));
         }
 
         public void disable() {
-            this.enable.set(false);
+            this.isEnabled.set(false);
         }
 
         public void enable() {
-            this.enable.set(true);
+            this.isEnabled.set(true);
         }
 
         public boolean enabled() {
-            return this.enable.get();
+            return this.isEnabled.get();
         }
     }
 
