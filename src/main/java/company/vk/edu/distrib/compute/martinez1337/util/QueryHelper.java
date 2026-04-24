@@ -35,13 +35,13 @@ public final class QueryHelper {
                 value = "";
             }
 
-            List<String> values = queryPairs.get(key);
-            if (values == null) {
-                values = new ArrayList<>();
-                queryPairs.put(key, values);
-            }
-            values.add(value);
+            addValueToMap(queryPairs, key, value);
         }
         return queryPairs;
+    }
+
+    private static void addValueToMap(Map<String, List<String>> map, String key, String value) {
+        List<String> values = map.computeIfAbsent(key, k -> new ArrayList<>());
+        values.add(value);
     }
 }
