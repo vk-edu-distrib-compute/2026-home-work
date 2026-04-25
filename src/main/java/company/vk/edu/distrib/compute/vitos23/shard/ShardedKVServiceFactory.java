@@ -21,8 +21,7 @@ public class ShardedKVServiceFactory {
 
     public KVService create(int port, Dao<byte[]> dao) throws IOException {
         EntityRequestProcessor shardedEntityRequestProcessor = new ShardedEntityRequestProcessor(
-                new ReplicaRequestExecutor(shardResolver, replicationFactor, getLocalEndpoint(port)),
-                dao,
+                new ReplicaRequestExecutor(shardResolver, replicationFactor, getLocalEndpoint(port), dao),
                 replicationFactor
         );
         return new KVServiceImpl(port, shardedEntityRequestProcessor);

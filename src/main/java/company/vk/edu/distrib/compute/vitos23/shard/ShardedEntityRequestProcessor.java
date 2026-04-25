@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute.vitos23.shard;
 
 import com.sun.net.httpserver.HttpExchange;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.vitos23.EntityRequestProcessor;
 import company.vk.edu.distrib.compute.vitos23.exception.AcknowledgementException;
 import company.vk.edu.distrib.compute.vitos23.util.ByteArrayKey;
@@ -29,16 +28,13 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
     private static final Duration TIMEOUT = Duration.ofSeconds(3);
 
     private final ReplicaRequestExecutor replicaRequestExecutor;
-    private final Dao<byte[]> localDao;
     private final int replicationFactor;
 
     public ShardedEntityRequestProcessor(
             ReplicaRequestExecutor replicaRequestExecutor,
-            Dao<byte[]> localDao,
             int replicationFactor
     ) {
         this.replicaRequestExecutor = replicaRequestExecutor;
-        this.localDao = localDao;
         this.replicationFactor = replicationFactor;
     }
 
@@ -50,18 +46,7 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
     ) throws IOException {
         int expectedAck = getExpectedAck(queryParams);
 
-        List<Mono<ByteArrayKey>> replicaResults = replicaRequestExecutor.executeOnReplicas(
-                id,
-                internalClient -> internalClient.get(id),
-                () -> {
-                    try {
-                        return Mono.just(new ByteArrayKey(localDao.get(id)));
-                    } catch (NoSuchElementException e) {
-                        return Mono.just(new ByteArrayKey(null));
-                    }
-                }
-        );
-
+        List<Mono<ByteArrayKey>> replicaResults = replicaRequestExecutor.getFromReplicas(id);
         byte[] aggregatedResult = aggregateGetResults(replicaResults, expectedAck);
         if (aggregatedResult == null) {
             throw new NoSuchElementException();
@@ -105,14 +90,7 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
     ) throws IOException {
         int expectedAck = getExpectedAck(queryParams);
         byte[] body = exchange.getRequestBody().readAllBytes();
-        List<Mono<Void>> replicaResults = replicaRequestExecutor.executeOnReplicas(
-                id,
-                internalClient -> internalClient.upsert(id, body),
-                () -> {
-                    localDao.upsert(id, body);
-                    return Mono.just(true).then();
-                }
-        );
+        List<Mono<Void>> replicaResults = replicaRequestExecutor.upsertToReplicas(id, body);
         processUpdateActionReplicaResults(replicaResults, expectedAck, exchange, HttpCodes.CREATED);
     }
 
@@ -123,14 +101,7 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
             Map<String, String> queryParams
     ) throws IOException {
         int expectedAck = getExpectedAck(queryParams);
-        List<Mono<Void>> replicaResults = replicaRequestExecutor.executeOnReplicas(
-                id,
-                internalClient -> internalClient.delete(id),
-                () -> {
-                    localDao.delete(id);
-                    return Mono.just(true).then();
-                }
-        );
+        List<Mono<Void>> replicaResults = replicaRequestExecutor.deleteOnReplicas(id);
         processUpdateActionReplicaResults(replicaResults, expectedAck, exchange, HttpCodes.ACCEPTED);
     }
 
