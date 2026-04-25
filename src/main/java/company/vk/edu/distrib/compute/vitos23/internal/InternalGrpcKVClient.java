@@ -29,6 +29,7 @@ public class InternalGrpcKVClient {
         channel.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
+    @SuppressWarnings("all") // PMD.NullAssignment for Codacy
     public Mono<ByteArrayKey> get(String key) {
         return internalKVServiceStub.get(getKeyRequest(key))
                 .map(response -> new ByteArrayKey(

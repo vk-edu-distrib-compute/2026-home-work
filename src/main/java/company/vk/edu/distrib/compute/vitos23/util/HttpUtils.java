@@ -44,6 +44,7 @@ public final class HttpUtils {
         List<ServerSocket> sockets = new ArrayList<>(count);
         try {
             for (int i = 0; i < count; i++) {
+                @SuppressWarnings("all") // PMD AvoidInstantiatingObjectsInLoops and CloseResource for Codacy
                 var socket = new ServerSocket(0);
                 socket.setReuseAddress(true);
                 sockets.add(socket);
@@ -52,7 +53,7 @@ public final class HttpUtils {
                     .map(ServerSocket::getLocalPort)
                     .toList();
         } finally {
-            for (ServerSocket socket : sockets) {
+            for (var socket : sockets) {
                 socket.close();
             }
         }
