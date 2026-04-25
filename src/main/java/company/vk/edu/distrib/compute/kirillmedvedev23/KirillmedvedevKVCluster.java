@@ -31,7 +31,7 @@ import com.sun.net.httpserver.HttpExchange;
 @SuppressFBWarnings(
         value = {"REC_CCC_EXCEPTION_NOT_THROWN", "DM_BOXED_PRIMITIVE_FOR_PARSING", "UMAC_UNCALLED_METHOD"},
         justification = "Required for hash computation and HTTP handling")
-@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity", "PMD.CyclomaticComplexity"})
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass", "PMD.CognitiveComplexity"})
 public class KirillmedvedevKVCluster implements KVCluster, ReplicatedService {
     private static final Logger log = LoggerFactory.getLogger(KirillmedvedevKVCluster.class);
     private static final int VIRTUAL_NODES = 150;
@@ -266,41 +266,54 @@ private final class EntityHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
             try {
-                String id = extractId(exchange.getRequestURI());
-                if (id == null || id.isEmpty()) {
+                RequestValidationResult validation = validateRequest(exchange);
+                if (!validation.isValid()) {
                     exchange.sendResponseHeaders(400, -1);
                     return;
                 }
 
-                int ack = extractAck(exchange.getRequestURI());
-                int maxAck = Math.min(replicaFactor, ports.size());
-                if (ack > maxAck) {
-                    exchange.sendResponseHeaders(400, -1);
-                    return;
-                }
-                if (ack <= 0) {
-                    ack = DEFAULT_ACK;
-                }
-
-                int targetPort = getTargetPort(id);
+                int targetPort = getTargetPort(validation.id());
                 if (targetPort == localPort) {
-                    handleLocal(exchange, id, ack);
+                    handleLocal(exchange, validation.id(), validation.ack());
                 } else {
-                    proxyRequest(exchange, "http://localhost:" + targetPort, id, ack);
+                    proxyRequest(exchange, "http://localhost:" + targetPort, validation.id(), validation.ack());
                 }
             } catch (NoSuchElementException e) {
-                try {
-                    exchange.sendResponseHeaders(404, -1);
-                } catch (IOException ex) {
-                    log.debug("Error sending 404", ex);
-                }
+                sendResponse(exchange, 404);
             } catch (Exception e) {
                 log.error("Error handling request", e);
-                try {
-                    exchange.sendResponseHeaders(500, -1);
-                } catch (IOException ex) {
-                    log.debug("Error sending error response", ex);
-                }
+                sendResponse(exchange, 500);
+            }
+        }
+
+        private record RequestValidationResult(String id, int ack) {
+            boolean isValid() {
+                return id != null && !id.isEmpty();
+            }
+        }
+
+        private RequestValidationResult validateRequest(HttpExchange exchange) {
+            String id = extractId(exchange.getRequestURI());
+            if (id == null || id.isEmpty()) {
+                return null;
+            }
+
+            int ack = extractAck(exchange.getRequestURI());
+            int maxAck = Math.min(replicaFactor, ports.size());
+            if (ack > maxAck) {
+                return null;
+            }
+            if (ack <= 0) {
+                ack = DEFAULT_ACK;
+            }
+            return new RequestValidationResult(id, ack);
+        }
+
+        private void sendResponse(HttpExchange exchange, int statusCode) {
+            try {
+                exchange.sendResponseHeaders(statusCode, -1);
+            } catch (IOException ex) {
+                log.debug("Error sending response", ex);
             }
         }
 
@@ -347,8 +360,29 @@ private final class EntityHandler implements HttpHandler {
             }
 
             List<Integer> replicaPorts = getReplicaPorts(id);
-            int successCount = 0;
+            int successCount = submitReplicationTasksForWrite(replicaPorts, id, data);
 
+            if (successCount < ack) {
+                log.warn("Replication failed: only {} of {} replicas acknowledged", successCount, ack);
+            }
+        }
+
+        private void replicateDelete(String id, int ack) throws IOException {
+            if (ack <= DEFAULT_ACK) {
+                localDao.delete(id);
+                return;
+            }
+
+            List<Integer> replicaPorts = getReplicaPorts(id);
+            int successCount = submitReplicationTasksForDelete(replicaPorts, id);
+
+            if (successCount < ack) {
+                log.warn("Replication delete failed: only {} of {} replicas acknowledged", successCount, ack);
+            }
+        }
+
+        private int submitReplicationTasksForWrite(List<Integer> replicaPorts, String id, byte[] data) {
+            int successCount = 0;
             ExecutorService executor = Executors.newFixedThreadPool(Math.min(replicaPorts.size(), 10));
             List<Future<Boolean>> futures = new ArrayList<>();
 
@@ -383,21 +417,11 @@ private final class EntityHandler implements HttpHandler {
                 }
             }
             executor.shutdown();
-
-            if (successCount < ack) {
-                log.warn("Replication failed: only {} of {} replicas acknowledged", successCount, ack);
-            }
+            return successCount;
         }
 
-        private void replicateDelete(String id, int ack) throws IOException {
-            if (ack <= DEFAULT_ACK) {
-                localDao.delete(id);
-                return;
-            }
-
-            List<Integer> replicaPorts = getReplicaPorts(id);
+        private int submitReplicationTasksForDelete(List<Integer> replicaPorts, String id) {
             int successCount = 0;
-
             ExecutorService executor = Executors.newFixedThreadPool(Math.min(replicaPorts.size(), 10));
             List<Future<Boolean>> futures = new ArrayList<>();
 
@@ -431,10 +455,7 @@ private final class EntityHandler implements HttpHandler {
                 }
             }
             executor.shutdown();
-
-            if (successCount < ack) {
-                log.warn("Replication delete failed: only {} of {} replicas acknowledged", successCount, ack);
-            }
+            return successCount;
         }
 
         private void proxyRequest(HttpExchange exchange, String targetEndpoint, String id, int ack) throws IOException {
