@@ -13,8 +13,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @SuppressWarnings("PMD.GodClass")
 public class MarinchankaReplicatedService implements ReplicatedService {
@@ -27,20 +25,6 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private static final String PARAM_ID = "id";
     private static final String PARAM_ACK = "ack";
     private static final String CONTENT_TYPE_VALUE = "application/octet-stream";
-    private static final String HEADER_CONTENT_TYPE = "Content-Type";
-    private static final String MEDIA_TYPE_JSON = "application/json";
-    private static final String STATS_ACCESS_PATH = "access";
-    private static final String MSG_INVALID_PATH = "Invalid path";
-    private static final String MSG_INVALID_REPLICA = "Invalid replica ID";
-    private static final String MSG_REPLICA_NOT_FOUND = "Replica not found";
-    private static final String MSG_MISSING_ID = "Missing id parameter";
-    private static final String MSG_ACK_TOO_HIGH = "ack > numberOfReplicas";
-    private static final String MSG_NOT_ENOUGH_AVAILABLE = "Not enough replicas available";
-    private static final String MSG_NOT_ENOUGH_CONFIRMED = "Not enough replicas confirmed";
-    private static final String MSG_KEY_NOT_FOUND = "Key not found";
-    private static final String MSG_INTERNAL_ERROR = "Internal server error";
-    private static final String MEDIA_TYPE_TEXT = "text/plain; charset=utf-8";
-    private static final int ACCESS_PATH_MIN_LENGTH = 5;
 
     private static final int METHOD_NOT_ALLOWED = 405;
     private static final int BAD_REQUEST = 400;
@@ -55,7 +39,6 @@ public class MarinchankaReplicatedService implements ReplicatedService {
     private final int replicationFactor;
     private final List<Dao<byte[]>> replicas;
     private final boolean[] replicaEnabled;
-    private final ExecutorService executor;
     private HttpServer server;
     private boolean running;
 
@@ -65,7 +48,6 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         this.replicas = replicas;
         this.replicaEnabled = new boolean[numberOfReplicas];
         Arrays.fill(replicaEnabled, true);
-        this.executor = Executors.newFixedThreadPool(numberOfReplicas);
     }
 
     @Override
@@ -104,7 +86,6 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             server = HttpServer.create(new InetSocketAddress(servicePort), 0);
             server.createContext("/v0/status", new StatusHandler());
             server.createContext("/v0/entity", new EntityHandler());
-            server.createContext("/v0/stats", new StatsHandler());
             server.setExecutor(null);
             server.start();
             running = true;
@@ -122,15 +103,6 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         running = false;
         server = closeServer(server);
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
         replicas.forEach(dao -> {
             try {
                 dao.close();
@@ -188,69 +160,6 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         }
     }
 
-    private final class StatsHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if (!METHOD_GET.equals(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, -1);
-                return;
-            }
-
-            String path = exchange.getRequestURI().getPath();
-            String[] parts = path.split("/");
-            if (parts.length < 4) {
-                sendError(exchange, BAD_REQUEST, MSG_INVALID_PATH);
-                return;
-            }
-
-            int replicaId;
-            try {
-                replicaId = Integer.parseInt(parts[3]);
-            } catch (NumberFormatException e) {
-                sendError(exchange, BAD_REQUEST, MSG_INVALID_REPLICA);
-                return;
-            }
-
-            if (replicaId < 0 || replicaId >= replicationFactor) {
-                sendError(exchange, NOT_FOUND, MSG_REPLICA_NOT_FOUND);
-                return;
-            }
-
-            boolean accessStats = parts.length >= ACCESS_PATH_MIN_LENGTH && isAccessPath(parts[4]);
-
-            VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-            StringBuilder json = new StringBuilder(64);
-            json.append('{');
-            if (accessStats) {
-                json.append("\"reads\":").append(dao.getReadCount())
-                        .append(",\"writes\":").append(dao.getWriteCount());
-            } else {
-                json.append("\"keys\":").append(dao.getKeyCount());
-            }
-            json.append('}');
-
-            byte[] response = json.toString().getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, MEDIA_TYPE_JSON);
-            exchange.sendResponseHeaders(STATUS_OK, response.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(response);
-            }
-        }
-
-        private boolean isAccessPath(String pathSegment) {
-            return STATS_ACCESS_PATH.equals(pathSegment);
-        }
-
-        private void sendError(HttpExchange exchange, int code, String message) throws IOException {
-            byte[] response = message.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, MEDIA_TYPE_TEXT);
-            exchange.sendResponseHeaders(code, response.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(response);
-            }
-        }
-    }
-
     private final class EntityHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -260,12 +169,12 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             int ack = extractAck(query);
 
             if (id == null || id.isEmpty()) {
-                sendError(exchange, BAD_REQUEST, MSG_MISSING_ID);
+                sendError(exchange, BAD_REQUEST, "Missing id parameter");
                 return;
             }
 
             if (ack > replicationFactor) {
-                sendError(exchange, BAD_REQUEST, MSG_ACK_TOO_HIGH);
+                sendError(exchange, BAD_REQUEST, "ack > numberOfReplicas");
                 return;
             }
 
@@ -286,24 +195,24 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             } catch (IllegalArgumentException e) {
                 sendError(exchange, BAD_REQUEST, e.getMessage());
             } catch (NoSuchElementException e) {
-                sendError(exchange, NOT_FOUND, MSG_KEY_NOT_FOUND);
+                sendError(exchange, NOT_FOUND, e.getMessage());
             } catch (IOException e) {
                 log.error("Internal server error", e);
-                sendError(exchange, INTERNAL_ERROR, MSG_INTERNAL_ERROR);
+                sendError(exchange, INTERNAL_ERROR, "Internal server error");
             }
         }
 
         private void handleGet(HttpExchange exchange, String id, int ack) throws IOException {
             int available = availableReplicas(id);
             if (available < ack) {
-                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_AVAILABLE);
+                sendError(exchange, INTERNAL_ERROR, "Not enough replicas available");
                 return;
             }
 
             ReadResult result = collectReadResults(id);
 
             if (result.totalResponses < ack) {
-                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_CONFIRMED);
+                sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
                 return;
             }
 
@@ -312,42 +221,36 @@ public class MarinchankaReplicatedService implements ReplicatedService {
             if (result.maxVersion >= 0 && !result.tombstone) {
                 sendOkWithData(exchange, result.data);
             } else if (result.maxVersion >= 0) {
-                sendError(exchange, NOT_FOUND, MSG_KEY_NOT_FOUND);
+                sendError(exchange, NOT_FOUND, "Key not found");
             } else {
-                sendError(exchange, NOT_FOUND, MSG_KEY_NOT_FOUND);
+                sendError(exchange, NOT_FOUND, "Key not found");
             }
         }
 
         private ReadResult collectReadResults(String id) {
-            List<VersionedInMemoryDao.VersionedEntry> entries = Collections.synchronizedList(new ArrayList<>());
-            AtomicInteger notFoundCount = new AtomicInteger(0);
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            List<VersionedInMemoryDao.VersionedEntry> entries = new ArrayList<>();
+            int notFoundCount = 0;
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                    try {
-                        VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                        VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
-                        if (entry != null) {
-                            entries.add(entry);
-                        } else {
-                            notFoundCount.incrementAndGet();
-                        }
-                    } catch (NoSuchElementException e) {
-                        notFoundCount.incrementAndGet();
-                    } catch (IOException e) {
-                        log.error("Failed to read from replica {}", replicaId, e);
+                try {
+                    VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+                    VersionedInMemoryDao.VersionedEntry entry = dao.getEntry(id);
+                    if (entry != null) {
+                        entries.add(entry);
+                    } else {
+                        notFoundCount++;
                     }
-                }, executor);
-                futures.add(future);
+                } catch (NoSuchElementException e) {
+                    notFoundCount++;
+                } catch (IOException e) {
+                    log.error("Failed to read from replica {}", replicaId, e);
+                }
             }
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            return aggregateReadResult(entries, notFoundCount.get());
+            return aggregateReadResult(entries, notFoundCount);
         }
 
         private ReadResult aggregateReadResult(List<VersionedInMemoryDao.VersionedEntry> entries, int notFoundCount) {
@@ -372,30 +275,25 @@ public class MarinchankaReplicatedService implements ReplicatedService {
                 return;
             }
 
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                    try {
-                        VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
-                        if (tombstone) {
-                            dao.deleteWithVersion(id, maxVersion);
-                        } else {
-                            dao.upsertWithVersion(id, data, maxVersion);
-                        }
-                    } catch (IOException e) {
-                        log.error("Failed to repair replica {}", replicaId, e);
+                try {
+                    VersionedInMemoryDao dao = (VersionedInMemoryDao) replicas.get(replicaId);
+                    if (tombstone) {
+                        dao.deleteWithVersion(id, maxVersion);
+                    } else {
+                        dao.upsertWithVersion(id, data, maxVersion);
                     }
-                }, executor);
-                futures.add(future);
+                } catch (IOException e) {
+                    log.error("Failed to repair replica {}", replicaId, e);
+                }
             }
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         }
 
         private void sendOkWithData(HttpExchange exchange, byte[] data) throws IOException {
-            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, CONTENT_TYPE_VALUE);
+            exchange.getResponseHeaders().set("Content-Type", CONTENT_TYPE_VALUE);
             exchange.sendResponseHeaders(STATUS_OK, data.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(data);
@@ -405,69 +303,59 @@ public class MarinchankaReplicatedService implements ReplicatedService {
         private void handlePut(HttpExchange exchange, String id, int ack) throws IOException {
             int available = availableReplicas(id);
             if (available < ack) {
-                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_AVAILABLE);
+                sendError(exchange, INTERNAL_ERROR, "Not enough replicas available");
                 return;
             }
 
             byte[] data = exchange.getRequestBody().readAllBytes();
-            AtomicInteger confirmed = new AtomicInteger(0);
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            int confirmed = 0;
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                    try {
-                        replicas.get(replicaId).upsert(id, data);
-                        confirmed.incrementAndGet();
-                    } catch (IOException e) {
-                        log.error("Failed to write to replica {}", replicaId, e);
-                    }
-                }, executor);
-                futures.add(future);
+
+                try {
+                    replicas.get(replicaId).upsert(id, data);
+                    confirmed++;
+                } catch (IOException e) {
+                    log.error("Failed to write to replica {}", replicaId, e);
+                }
             }
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            if (confirmed.get() >= ack) {
+            if (confirmed >= ack) {
                 exchange.sendResponseHeaders(STATUS_CREATED, -1);
             } else {
-                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_CONFIRMED);
+                sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
             }
         }
 
         private void handleDelete(HttpExchange exchange, String id, int ack) throws IOException {
             int available = availableReplicas(id);
             if (available < ack) {
-                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_AVAILABLE);
+                sendError(exchange, INTERNAL_ERROR, "Not enough replicas available");
                 return;
             }
 
-            AtomicInteger confirmed = new AtomicInteger(0);
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            int confirmed = 0;
 
             for (int replicaId : getReplicasForKey(id)) {
                 if (!replicaEnabled[replicaId]) {
                     continue;
                 }
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                    try {
-                        replicas.get(replicaId).delete(id);
-                        confirmed.incrementAndGet();
-                    } catch (IOException e) {
-                        log.error("Failed to delete from replica {}", replicaId, e);
-                    }
-                }, executor);
-                futures.add(future);
+
+                try {
+                    replicas.get(replicaId).delete(id);
+                    confirmed++;
+                } catch (IOException e) {
+                    log.error("Failed to delete from replica {}", replicaId, e);
+                }
             }
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            if (confirmed.get() >= ack) {
+            if (confirmed >= ack) {
                 exchange.sendResponseHeaders(STATUS_ACCEPTED, -1);
             } else {
-                sendError(exchange, INTERNAL_ERROR, MSG_NOT_ENOUGH_CONFIRMED);
+                sendError(exchange, INTERNAL_ERROR, "Not enough replicas confirmed");
             }
         }
 
@@ -503,7 +391,7 @@ public class MarinchankaReplicatedService implements ReplicatedService {
 
         private void sendError(HttpExchange exchange, int code, String message) throws IOException {
             byte[] response = message.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, MEDIA_TYPE_TEXT);
+            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
             exchange.sendResponseHeaders(code, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
