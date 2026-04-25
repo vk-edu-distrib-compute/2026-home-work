@@ -3,7 +3,10 @@ package company.vk.edu.distrib.compute.vitos23.util;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.IOException;
+import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -34,5 +37,24 @@ public final class HttpUtils {
     public static void sendArray(HttpExchange exchange, byte[] responseBody) throws IOException {
         exchange.sendResponseHeaders(HttpCodes.OK, responseBody.length);
         exchange.getResponseBody().write(responseBody);
+    }
+
+    @SuppressWarnings("PMD.UseTryWithResources")
+    public static List<Integer> findFreePorts(int count) throws IOException {
+        List<ServerSocket> sockets = new ArrayList<>(count);
+        try {
+            for (int i = 0; i < count; i++) {
+                var socket = new ServerSocket(0);
+                socket.setReuseAddress(true);
+                sockets.add(socket);
+            }
+            return sockets.stream()
+                    .map(ServerSocket::getLocalPort)
+                    .toList();
+        } finally {
+            for (ServerSocket socket : sockets) {
+                socket.close();
+            }
+        }
     }
 }

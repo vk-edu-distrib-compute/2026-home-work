@@ -48,9 +48,6 @@ public class KVServiceImpl implements KVService {
         } catch (AcknowledgementException e) {
             exchange.sendResponseHeaders(HttpCodes.SERVICE_UNAVAILABLE, NO_BODY_RESPONSE_LENGTH);
         } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
             if (log.isErrorEnabled()) {
                 log.error("Failed to handle request", e);
             }
@@ -60,7 +57,7 @@ public class KVServiceImpl implements KVService {
         }
     }
 
-    private void handleEntityRequest(HttpExchange exchange) throws IOException, InterruptedException {
+    private void handleEntityRequest(HttpExchange exchange) throws IOException {
         Map<String, String> queryParams = extractQueryParams(exchange.getRequestURI().getQuery());
         String id = queryParams.get("id");
         if (id == null) {
@@ -82,6 +79,11 @@ public class KVServiceImpl implements KVService {
 
     @Override
     public void stop() {
+        try {
+            entityRequestProcessor.close();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
         server.stop(0);
     }
 }

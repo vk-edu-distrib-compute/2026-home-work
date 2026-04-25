@@ -11,14 +11,14 @@ public class ConsistentHashingShardResolver implements ShardResolver {
     /// [Cassandra's recommendations](https://cassandra.apache.org/doc/latest/cassandra/getting-started/production.html#tokens)
     private static final int DEFAULT_VIRTUAL_NODES = 16;
 
-    private final SortedMap<Long, String> hashRing = new TreeMap<>();
+    private final SortedMap<Long, ShardInfo> hashRing = new TreeMap<>();
     private final int virtualNodes;
 
-    public ConsistentHashingShardResolver(List<String> shards) {
+    public ConsistentHashingShardResolver(List<ShardInfo> shards) {
         this(shards, DEFAULT_VIRTUAL_NODES);
     }
 
-    public ConsistentHashingShardResolver(List<String> shards, int virtualNodes) {
+    public ConsistentHashingShardResolver(List<ShardInfo> shards, int virtualNodes) {
         if (shards.isEmpty()) {
             throw new IllegalArgumentException("At least one shard expected");
         }
@@ -26,39 +26,39 @@ public class ConsistentHashingShardResolver implements ShardResolver {
             throw new IllegalArgumentException("Virtual nodes number must be positive");
         }
         this.virtualNodes = virtualNodes;
-        for (String shard : shards) {
+        for (ShardInfo shard : shards) {
             addShard(shard);
         }
     }
 
-    private void addShard(String shard) {
+    private void addShard(ShardInfo shard) {
         for (int i = 0; i < virtualNodes; i++) {
-            String virtualNodeName = shard + "#" + i;
+            String virtualNodeName = shard.httpEndpoint() + "#" + i;
             hashRing.put(md5Hash(virtualNodeName), shard);
         }
     }
 
     /// Take the first `count` nodes in the order of traversal of the ring, starting from the hash point
     @Override
-    public List<String> resolveNodes(String key, int count) {
+    public List<ShardInfo> resolveNodes(String key, int count) {
         int replicaCount = Math.min(count, hashRing.size());
 
-        List<String> result = new ArrayList<>(replicaCount);
+        List<ShardInfo> result = new ArrayList<>(replicaCount);
         Set<String> seenNodes = new HashSet<>();
 
         long hash = md5Hash(key);
-        SortedMap<Long, String> tailMap = hashRing.tailMap(hash);
+        SortedMap<Long, ShardInfo> tailMap = hashRing.tailMap(hash);
 
-        for (SortedMap.Entry<Long, String> entry : tailMap.entrySet()) {
-            if (seenNodes.add(entry.getValue())) {
+        for (Map.Entry<Long, ShardInfo> entry : tailMap.entrySet()) {
+            if (seenNodes.add(entry.getValue().httpEndpoint())) {
                 result.add(entry.getValue());
                 if (result.size() == replicaCount) {
                     return result;
                 }
             }
         }
-        for (SortedMap.Entry<Long, String> entry : hashRing.entrySet()) {
-            if (seenNodes.add(entry.getValue())) {
+        for (Map.Entry<Long, ShardInfo> entry : hashRing.entrySet()) {
+            if (seenNodes.add(entry.getValue().httpEndpoint())) {
                 result.add(entry.getValue());
                 if (result.size() == replicaCount) {
                     return result;

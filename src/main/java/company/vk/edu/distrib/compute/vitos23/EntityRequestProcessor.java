@@ -5,22 +5,27 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.util.Map;
 
-public interface EntityRequestProcessor {
+public interface EntityRequestProcessor extends AutoCloseable {
     void handleGet(
             HttpExchange exchange,
             String id,
             Map<String, String> queryParams
-    ) throws IOException, InterruptedException;
+    ) throws IOException;
 
     void handlePut(
             HttpExchange exchange,
             String id,
             Map<String, String> queryParams
-    ) throws IOException, InterruptedException;
+    ) throws IOException;
 
     void handleDelete(
             HttpExchange exchange,
             String id,
             Map<String, String> queryParams
-    ) throws IOException, InterruptedException;
+    ) throws IOException;
+
+    @Override
+    default void close() throws Exception {
+        // default
+    }
 }

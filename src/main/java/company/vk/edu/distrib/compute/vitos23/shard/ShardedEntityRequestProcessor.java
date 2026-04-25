@@ -6,20 +6,15 @@ import company.vk.edu.distrib.compute.vitos23.EntityRequestProcessor;
 import company.vk.edu.distrib.compute.vitos23.exception.AcknowledgementException;
 import company.vk.edu.distrib.compute.vitos23.util.ByteArrayKey;
 import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
 import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.sendArray;
@@ -31,28 +26,19 @@ import static company.vk.edu.distrib.compute.vitos23.util.ParseUtils.parseIntege
 public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
 
     private static final int DEFAULT_ACK = 1;
-    private static final int TIMEOUT_SECONDS = 3;
+    private static final Duration TIMEOUT = Duration.ofSeconds(3);
 
-    private final String currentEndpoint;
     private final ReplicaRequestExecutor replicaRequestExecutor;
-    private final EntityRequestProcessor directEntityRequestProcessor;
     private final Dao<byte[]> localDao;
-    private final HttpClient httpClient;
     private final int replicationFactor;
 
     public ShardedEntityRequestProcessor(
-            String currentEndpoint,
             ReplicaRequestExecutor replicaRequestExecutor,
-            EntityRequestProcessor directEntityRequestProcessor,
             Dao<byte[]> localDao,
-            HttpClient httpClient,
             int replicationFactor
     ) {
-        this.currentEndpoint = currentEndpoint;
         this.replicaRequestExecutor = replicaRequestExecutor;
-        this.directEntityRequestProcessor = directEntityRequestProcessor;
         this.localDao = localDao;
-        this.httpClient = httpClient;
         this.replicationFactor = replicationFactor;
     }
 
@@ -61,64 +47,49 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
             HttpExchange exchange,
             String id,
             Map<String, String> queryParams
-    ) throws IOException, InterruptedException {
-        if (isDirectRequest(queryParams)) {
-            directEntityRequestProcessor.handleGet(exchange, id, queryParams);
-            return;
-        }
-
+    ) throws IOException {
         int expectedAck = getExpectedAck(queryParams);
 
-        List<CompletableFuture<ReplicaResult<byte[]>>> futures =
-                replicaRequestExecutor.executeOnReplicas(id, endpoint -> getFromReplica(id, endpoint));
+        List<Mono<ByteArrayKey>> replicaResults = replicaRequestExecutor.executeOnReplicas(
+                id,
+                internalClient -> internalClient.get(id),
+                () -> {
+                    try {
+                        return Mono.just(new ByteArrayKey(localDao.get(id)));
+                    } catch (NoSuchElementException e) {
+                        return Mono.just(new ByteArrayKey(null));
+                    }
+                }
+        );
 
-        byte[] aggregatedResult = aggregateGetResults(futures, expectedAck);
+        byte[] aggregatedResult = aggregateGetResults(replicaResults, expectedAck);
         if (aggregatedResult == null) {
             throw new NoSuchElementException();
         }
         sendArray(exchange, aggregatedResult);
     }
 
-    private ReplicaResult<byte[]> getFromReplica(String id, String endpoint) throws IOException, InterruptedException {
-        if (endpoint.equals(currentEndpoint)) {
-            try {
-                return new ReplicaResult<>(true, localDao.get(id));
-            } catch (NoSuchElementException e) {
-                return ReplicaResult.empty();
-            }
-        }
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(getDirectUriForNode(id, endpoint))
-                .GET()
-                .build();
-        HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() == HttpCodes.NOT_FOUND) {
-            return ReplicaResult.empty();
-        }
-        return new ReplicaResult<>(response.statusCode() == HttpCodes.OK, response.body());
-    }
-
     /// Resolve aggregated GET result.
     /// Since no timestamp is associated with the key, we simply use the first value
     /// returned by at least `expectedAck` nodes.
-    private byte[] aggregateGetResults(
-            List<CompletableFuture<ReplicaResult<byte[]>>> futures,
-            int expectedAck
-    ) throws InterruptedException {
+    private byte[] aggregateGetResults(List<Mono<ByteArrayKey>> replicaResults, int expectedAck) {
         @SuppressWarnings("PMD.UseConcurrentHashMap") // false positive
         Map<ByteArrayKey, Integer> frequencyByData = new HashMap<>();
-        for (var future : futures) {
-            ReplicaResult<byte[]> result = awaitFuture(future);
-            if (!result.success()) {
+        for (Mono<ByteArrayKey> mono : replicaResults) {
+            ByteArrayKey result;
+            try {
+                result = mono.block(TIMEOUT);
+            } catch (RuntimeException e) {
+                continue;
+            }
+            if (result == null) {
                 continue;
             }
             // I had to disable all the warnings altogether because build's and Codacy's PMD have different settings.
             // So in Codacy the following statements produces AvoidInstantiatingObjectsInLoops warning.
             // If I suppress only it, I get UnnecessaryWarningSuppression warning in check task.
             @SuppressWarnings("all")
-            ByteArrayKey key = new ByteArrayKey(result.data());
-            int count = frequencyByData.merge(key, 1, Integer::sum);
+            int count = frequencyByData.merge(result, 1, Integer::sum);
             if (count >= expectedAck) {
                 return result.data();
             }
@@ -131,38 +102,18 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
             HttpExchange exchange,
             String id,
             Map<String, String> queryParams
-    ) throws IOException, InterruptedException {
-        if (isDirectRequest(queryParams)) {
-            directEntityRequestProcessor.handlePut(exchange, id, queryParams);
-            return;
-        }
-
+    ) throws IOException {
         int expectedAck = getExpectedAck(queryParams);
         byte[] body = exchange.getRequestBody().readAllBytes();
-        List<CompletableFuture<ReplicaResult<Boolean>>> futures =
-                replicaRequestExecutor.executeOnReplicas(id, endpoint -> putOnReplica(id, body, endpoint));
-        processUpdateActionReplicaResults(futures, expectedAck, exchange, HttpCodes.CREATED);
-    }
-
-    private ReplicaResult<Boolean> putOnReplica(
-            String id,
-            byte[] body,
-            String endpoint
-    ) throws IOException, InterruptedException {
-        if (endpoint.equals(currentEndpoint)) {
-            try {
-                localDao.upsert(id, body);
-                return ReplicaResult.empty();
-            } catch (Exception e) {
-                return ReplicaResult.failed();
-            }
-        }
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(getDirectUriForNode(id, endpoint))
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build();
-        HttpResponse<?> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-        return new ReplicaResult<>(response.statusCode() == HttpCodes.CREATED, null);
+        List<Mono<Void>> replicaResults = replicaRequestExecutor.executeOnReplicas(
+                id,
+                internalClient -> internalClient.upsert(id, body),
+                () -> {
+                    localDao.upsert(id, body);
+                    return Mono.just(true).then();
+                }
+        );
+        processUpdateActionReplicaResults(replicaResults, expectedAck, exchange, HttpCodes.CREATED);
     }
 
     @Override
@@ -170,56 +121,46 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
             HttpExchange exchange,
             String id,
             Map<String, String> queryParams
-    ) throws IOException, InterruptedException {
-        if (isDirectRequest(queryParams)) {
-            directEntityRequestProcessor.handleDelete(exchange, id, queryParams);
-            return;
-        }
-
+    ) throws IOException {
         int expectedAck = getExpectedAck(queryParams);
-        List<CompletableFuture<ReplicaResult<Boolean>>> futures =
-                replicaRequestExecutor.executeOnReplicas(id, endpoint -> deleteOnReplica(id, endpoint));
-        processUpdateActionReplicaResults(futures, expectedAck, exchange, HttpCodes.ACCEPTED);
-    }
-
-    private ReplicaResult<Boolean> deleteOnReplica(
-            String id,
-            String endpoint
-    ) throws IOException, InterruptedException {
-        if (endpoint.equals(currentEndpoint)) {
-            try {
-                localDao.delete(id);
-                return ReplicaResult.empty();
-            } catch (Exception e) {
-                return ReplicaResult.failed();
-            }
-        }
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(getDirectUriForNode(id, endpoint))
-                .DELETE()
-                .build();
-        HttpResponse<?> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-        return new ReplicaResult<>(response.statusCode() == HttpCodes.ACCEPTED, null);
+        List<Mono<Void>> replicaResults = replicaRequestExecutor.executeOnReplicas(
+                id,
+                internalClient -> internalClient.delete(id),
+                () -> {
+                    localDao.delete(id);
+                    return Mono.just(true).then();
+                }
+        );
+        processUpdateActionReplicaResults(replicaResults, expectedAck, exchange, HttpCodes.ACCEPTED);
     }
 
     /// This method awaits only first `expectedAck` successful requests.
     private void processUpdateActionReplicaResults(
-            List<CompletableFuture<ReplicaResult<Boolean>>> futures,
+            List<Mono<Void>> replicaResults,
             int expectedAck,
             HttpExchange exchange,
             int successfulStatusCode
-    ) throws IOException, InterruptedException {
-        int successCount = 0;
-        for (CompletableFuture<ReplicaResult<Boolean>> future : futures) {
-            if (awaitFuture(future).success()) {
-                successCount++;
-                if (successCount >= expectedAck) {
-                    exchange.sendResponseHeaders(successfulStatusCode, NO_BODY_RESPONSE_LENGTH);
-                    return;
-                }
-            }
+    ) throws IOException {
+        Long successCount;
+        try {
+            successCount = Flux.merge(
+                            replicaResults.stream()
+                                    .map(m -> m.thenReturn(true).onErrorReturn(false))
+                                    .toList()
+                    )
+                    .filter(Boolean::booleanValue)
+                    .take(expectedAck)
+                    .count()
+                    .block(TIMEOUT);
+        } catch (RuntimeException ignored) {
+            throw new AcknowledgementException();
         }
-        throw new AcknowledgementException();
+
+        if (successCount != null && successCount >= expectedAck) {
+            exchange.sendResponseHeaders(successfulStatusCode, NO_BODY_RESPONSE_LENGTH);
+        } else {
+            throw new AcknowledgementException();
+        }
     }
 
     private int getExpectedAck(Map<String, String> queryParams) {
@@ -235,22 +176,8 @@ public class ShardedEntityRequestProcessor implements EntityRequestProcessor {
         return expectedAck;
     }
 
-    private static boolean isDirectRequest(Map<String, String> queryParams) {
-        return "true".equals(queryParams.get("direct"));
+    @Override
+    public void close() throws Exception {
+        replicaRequestExecutor.close();
     }
-
-    private static URI getDirectUriForNode(String id, String newEndpoint) {
-        return URI.create(newEndpoint + "/v0/entity?direct=true&id=" + id);
-    }
-
-    private static <T> ReplicaResult<T> awaitFuture(
-            CompletableFuture<ReplicaResult<T>> future
-    ) throws InterruptedException {
-        try {
-            return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        } catch (ExecutionException | TimeoutException e) {
-            return ReplicaResult.failed();
-        }
-    }
-
 }

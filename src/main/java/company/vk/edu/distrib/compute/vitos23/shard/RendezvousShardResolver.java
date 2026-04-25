@@ -10,9 +10,9 @@ public class RendezvousShardResolver implements ShardResolver {
     // Kind of ugly, but Codacy...
     private static final int ONE = 1;
 
-    private final List<String> shards;
+    private final List<ShardInfo> shards;
 
-    public RendezvousShardResolver(List<String> shards) {
+    public RendezvousShardResolver(List<ShardInfo> shards) {
         if (shards.isEmpty()) {
             throw new IllegalArgumentException("At least one shard expected");
         }
@@ -20,7 +20,7 @@ public class RendezvousShardResolver implements ShardResolver {
     }
 
     @Override
-    public List<String> resolveNodes(String key, int count) {
+    public List<ShardInfo> resolveNodes(String key, int count) {
         if (count == ONE) {
             // Optimization to achieve linear performance
             return List.of(resolveNode(key));
@@ -31,7 +31,7 @@ public class RendezvousShardResolver implements ShardResolver {
                 .toList();
     }
 
-    private String resolveNode(String key) {
+    private ShardInfo resolveNode(String key) {
         return shards.stream().max(Comparator.comparing(shard -> md5Hash(shard + key))).orElseThrow();
     }
 }
