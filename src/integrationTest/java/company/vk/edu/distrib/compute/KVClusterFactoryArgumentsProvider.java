@@ -1,5 +1,7 @@
 package company.vk.edu.distrib.compute;
 
+import company.vk.edu.distrib.compute.denchika.factory.cluster.DenchikaConsistentKVClusterFactory;
+import company.vk.edu.distrib.compute.denchika.factory.cluster.DenchikaRendezvousKVClusterFactory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -13,6 +15,8 @@ import java.util.stream.Stream;
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
     //        DummyKVClusterFactory.class
+            DenchikaConsistentKVClusterFactory.class,
+            DenchikaRendezvousKVClusterFactory.class
     );
 
     @Override

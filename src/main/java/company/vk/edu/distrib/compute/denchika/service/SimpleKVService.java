@@ -16,7 +16,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class InMemoryKVService implements KVService {
+public class SimpleKVService implements KVService {
 
     private static final String METHOD_GET = "GET";
     private static final String METHOD_PUT = "PUT";
@@ -27,14 +27,14 @@ public class InMemoryKVService implements KVService {
     private static final String PATH_STATUS = "/v0/status";
     private static final String PATH_ENTITY = "/v0/entity";
 
-    private static final Logger log = LoggerFactory.getLogger(InMemoryKVService.class);
+    private static final Logger log = LoggerFactory.getLogger(SimpleKVService.class);
 
     private final int port;
     private final Dao<byte[]> dao;
     private HttpServer server;
     private ExecutorService executor;
 
-    public InMemoryKVService(int port, Dao<byte[]> dao) {
+    public SimpleKVService(int port, Dao<byte[]> dao) {
         this.port = port;
         this.dao = dao;
     }
