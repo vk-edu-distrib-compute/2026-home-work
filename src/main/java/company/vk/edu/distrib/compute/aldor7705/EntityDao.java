@@ -53,21 +53,7 @@ public class EntityDao implements Dao<byte[]> {
             throw new IllegalStateException("Недостаточно реплик ответило");
         }
 
-        byte[] winner = responses.get(0);
-        int maxCount = 1;
-
-        for (int i = 0; i < responses.size(); i++) {
-            int count = 1;
-            for (int j = i + 1; j < responses.size(); j++) {
-                if (Arrays.equals(responses.get(i), responses.get(j))) {
-                    count++;
-                }
-            }
-            if (count > maxCount) {
-                maxCount = count;
-                winner = responses.get(i);
-            }
-        }
+        byte[] winner = getWinner(responses);
 
         if (winner == null) {
             throw new NoSuchElementException("Элемент с ключом " + key + " не найден");
@@ -158,5 +144,23 @@ public class EntityDao implements Dao<byte[]> {
 
     public int getReplicaCount() {
         return storages.size();
+    }
+
+    private byte[] getWinner(List<byte[]> responses) {
+        byte[] winner = responses.get(0);
+        int maxCount = 1;
+        for (int i = 0; i < responses.size(); i++) {
+            int count = 1;
+            for (int j = i + 1; j < responses.size(); j++) {
+                if (Arrays.equals(responses.get(i), responses.get(j))) {
+                    count++;
+                }
+            }
+            if (count > maxCount) {
+                maxCount = count;
+                winner = responses.get(i);
+            }
+        }
+        return winner;
     }
 }

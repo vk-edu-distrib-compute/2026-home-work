@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 public class DorogovServerRunner {
-    private static int getReplicasFromArgs(String... args) {
+    private int getReplicasFromArgs(String... args) {
         for (String arg : args) {
             if (arg.startsWith("--replicas=")) {
                 return Integer.parseInt(arg.substring("--replicas=".length()));
@@ -36,7 +36,7 @@ public class DorogovServerRunner {
         return 1;
     }
 
-    static void main(String... args) throws IOException {
+    void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
         int replicas = getReplicasFromArgs();
         var port = 8080;

@@ -1,8 +1,6 @@
 package company.vk.edu.distrib.compute.aldor7705;
 
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.aldor7705.handler.EntityHandler;
 import company.vk.edu.distrib.compute.aldor7705.handler.StatusHandler;
