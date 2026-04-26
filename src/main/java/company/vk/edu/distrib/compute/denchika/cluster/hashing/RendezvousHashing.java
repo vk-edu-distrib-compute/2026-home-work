@@ -1,39 +1,34 @@
 package company.vk.edu.distrib.compute.denchika.cluster.hashing;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
+import java.util.Objects;
 
 public class RendezvousHashing implements DistributingAlgorithm {
+    private final List<String> nodes;
+
+    public RendezvousHashing(List<String> nodes) {
+        this.nodes = List.copyOf(nodes);
+    }
 
     @Override
-    public String selectNode(String key, List<String> nodes) {
-
-        if (nodes == null || nodes.isEmpty()) {
+    public String selectNode(String key) {
+        if (nodes.isEmpty()) {
             throw new IllegalStateException("No nodes available");
         }
-
-        long bestScore = Long.MIN_VALUE;
-        String bestNode = null;
-
-        for (String node : nodes) {
-            long score = hash(key + "|" + node);
-            if (score > bestScore) {
-                bestScore = score;
+        String bestNode = nodes.get(0);
+        int maxHash = hash(key, bestNode);
+        for (int i = 1; i < nodes.size(); i++) {
+            String node = nodes.get(i);
+            int h = hash(key, node);
+            if (h > maxHash) {
+                maxHash = h;
                 bestNode = node;
             }
         }
-
         return bestNode;
     }
 
-    private long hash(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] d = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            return java.nio.ByteBuffer.wrap(d).getLong();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+    private int hash(String key, String node) {
+        return Objects.hash(key, node);
     }
 }

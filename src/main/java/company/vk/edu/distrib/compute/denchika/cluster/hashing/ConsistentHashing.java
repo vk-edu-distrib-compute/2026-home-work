@@ -1,47 +1,29 @@
 package company.vk.edu.distrib.compute.denchika.cluster.hashing;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.*;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
 public class ConsistentHashing implements DistributingAlgorithm {
-
-    private static final int VIRTUAL_NODES = 128;
-
-    private final NavigableMap<Long, String> ring = new TreeMap<>();
+    private final NavigableMap<Integer, String> ring = new TreeMap<>();
 
     public ConsistentHashing(List<String> nodes) {
         for (String node : nodes) {
-            for (int i = 0; i < VIRTUAL_NODES; i++) {
-                ring.put(hash(node + "#" + i), node);
-            }
+            ring.put(hash(node), node);
         }
     }
 
     @Override
-    public String selectNode(String key, List<String> nodes) {
-        if (ring.isEmpty()) {
-            throw new IllegalStateException("Ring is empty");
-        }
-
-        long h = hash(key);
-
-        Map.Entry<Long, String> entry = ring.ceilingEntry(h);
-
+    public String selectNode(String key) {
+        int keyHash = hash(key);
+        var entry = ring.ceilingEntry(keyHash);
         if (entry == null) {
             entry = ring.firstEntry();
         }
-
         return entry.getValue();
     }
 
-    private long hash(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] d = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            return java.nio.ByteBuffer.wrap(d).getLong();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+    private int hash(String s) {
+        return s.hashCode();
     }
 }

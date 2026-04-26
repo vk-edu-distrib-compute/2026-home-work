@@ -1,47 +1,34 @@
 package company.vk.edu.distrib.compute.denchika.cluster;
 
+import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.denchika.cluster.hashing.DistributingAlgorithm;
 import company.vk.edu.distrib.compute.denchika.service.ClusterKVService;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 public class DenchikaKVCluster implements KVCluster {
-
-    private static final String PREFIX = "http://localhost:";
-
     private final Map<String, KVService> nodes = new ConcurrentHashMap<>();
-    private final List<String> endpoints = new ArrayList<>();
+    private final List<String> endpoints;
 
-    public DenchikaKVCluster(
-            List<Integer> ports,
-            DistributingAlgorithm algorithm,
-            Supplier<Dao<byte[]>> daoSupplier
-    ) {
-
+    public DenchikaKVCluster(List<Integer> ports, Dao<byte[]> dao, DistributingAlgorithm hasher) {
+        this.endpoints = new ArrayList<>();
         for (int port : ports) {
-            endpoints.add(PREFIX + port);
-        }
-
-        for (int port : ports) {
-            String endpoint = PREFIX + port;
-
-            nodes.put(endpoint, new ClusterKVService(
-                    port,
-                    daoSupplier.get(),
-                    algorithm,
-                    endpoints
-            ));
+            String endpoint = "http://localhost:" + port;
+            endpoints.add(endpoint);
+            nodes.put(endpoint, new ClusterKVService(port, dao, hasher, endpoint));
         }
     }
 
     @Override
     public void start() {
-        endpoints.forEach(this::start);
+        for (KVService node : nodes.values()) {
+            node.start();
+        }
     }
 
     @Override
@@ -55,7 +42,9 @@ public class DenchikaKVCluster implements KVCluster {
 
     @Override
     public void stop() {
-        endpoints.forEach(this::stop);
+        for (KVService node : nodes.values()) {
+            node.stop();
+        }
     }
 
     @Override
