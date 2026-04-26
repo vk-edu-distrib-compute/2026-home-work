@@ -3,11 +3,13 @@ package company.vk.edu.distrib.compute.aldor7705;
 import company.vk.edu.distrib.compute.KVService;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Properties;
 
-public class DorogovServer {
+public class DorogovServerRunner {
     private static int getReplicasFromArgs(String... args) {
         for (String arg : args) {
             if (arg.startsWith("--replicas=")) {
@@ -20,7 +22,7 @@ public class DorogovServer {
             return Integer.parseInt(env);
         }
 
-        try (FileInputStream in = new FileInputStream("src/main/java/company/vk/edu/distrib/compute/aldor7705/config.properties")) {
+        try (InputStream in = Files.newInputStream(Path.of("config.properties"))) {
             Properties properties = new Properties();
             properties.load(in);
             String value = properties.getProperty("replica");
@@ -36,7 +38,7 @@ public class DorogovServer {
 
     static void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
-        int replicas = 1;
+        int replicas = getReplicasFromArgs();
         var port = 8080;
         KVService storage = new KVServiceFactorySimple("storage", null, replicas).create(port);
         storage.start();

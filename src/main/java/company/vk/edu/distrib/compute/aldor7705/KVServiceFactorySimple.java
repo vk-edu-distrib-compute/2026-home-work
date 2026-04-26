@@ -10,7 +10,7 @@ import java.util.List;
 
 public class KVServiceFactorySimple extends KVServiceFactory {
     private final String baseStorageDir;
-    private List<Integer> clusterPorts;
+    private final List<Integer> clusterPorts;
     private final int replicas;
 
     public KVServiceFactorySimple() {
@@ -35,7 +35,6 @@ public class KVServiceFactorySimple extends KVServiceFactory {
         if (!Files.exists(pathOfStorage)) {
             Files.createDirectory(pathOfStorage);
         }
-//        Path filePath = pathOfStorage.resolve("storage_" + port + ".txt");
         return new KVServiceSimple(port, new EntityDao(pathOfStorage, replicas), clusterPorts, replicas);
     }
 }
