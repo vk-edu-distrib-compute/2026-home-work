@@ -1,6 +1,6 @@
 package company.vk.edu.distrib.compute.denchika.dao;
 
-public abstract class BaseDao {
+public abstract class DaoBase {
 
     protected static final int MAX_SIZE = 1024 * 1024;
 

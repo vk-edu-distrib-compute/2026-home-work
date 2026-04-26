@@ -12,12 +12,13 @@ import java.util.Base64;
 import java.util.NoSuchElementException;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class FileSystemDao extends BaseDao implements Dao<byte[]> {
+public class FileSystemDao extends DaoBase implements Dao<byte[]> {
 
     private final Path baseDir;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public FileSystemDao(Path baseDir) throws IOException {
+        super();
         this.baseDir = baseDir;
         Files.createDirectories(baseDir);
     }
@@ -32,7 +33,7 @@ public class FileSystemDao extends BaseDao implements Dao<byte[]> {
             try {
                 return Files.readAllBytes(file);
             } catch (NoSuchFileException e) {
-                throw new NoSuchElementException("Key not found: " + key);
+                throw new NoSuchElementException("Key not found", e);
             }
         } finally {
             lock.readLock().unlock();

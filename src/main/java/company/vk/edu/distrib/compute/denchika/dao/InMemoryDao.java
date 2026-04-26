@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class InMemoryDao extends BaseDao implements Dao<byte[]> {
+public class InMemoryDao extends DaoBase implements Dao<byte[]> {
 
     private final Map<String, byte[]> data = new ConcurrentHashMap<>();
 
