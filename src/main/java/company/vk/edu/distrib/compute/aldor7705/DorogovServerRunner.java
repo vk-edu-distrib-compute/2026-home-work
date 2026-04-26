@@ -22,12 +22,13 @@ public class DorogovServerRunner {
             return Integer.parseInt(env);
         }
 
-        try (InputStream in = Files.newInputStream(Path.of("config.properties"))) {
+        try (InputStream in = Files.newInputStream(
+                Path.of("src/main/java/company/vk/edu/distrib/compute/aldor7705/config.properties"))) {
             Properties properties = new Properties();
             properties.load(in);
             String value = properties.getProperty("replica");
             if (value != null && !value.isEmpty()) {
-                return Integer.parseInt(properties.getProperty("replica"));
+                return Integer.parseInt(value);
             }
         } catch (Exception e) {
             // дефолт
