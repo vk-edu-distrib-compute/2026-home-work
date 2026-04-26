@@ -3,46 +3,35 @@ package company.vk.edu.distrib.compute.maryarta.replication;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.maryarta.H2Dao;
+import company.vk.edu.distrib.compute.maryarta.sharding.ShardingStrategy;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ReplicatedServiceImpl implements ReplicatedService {
-    private final ReplicationService replicationService;
+    private static final String INTERNAL_REPLICATION_HEADER = "X-Internal-Replication";
     private HttpServer server;
-    private final HttpClient client = HttpClient.newHttpClient();
+    private final H2Dao dao;
     private final int port;
     private boolean started;
-    private final H2Dao dao;
+//    private final ShardingStrategy shardingStrategy;
     private ExecutorService executor;
-    private final int replicationFactor;
+    private final ReplicationCoordinator replicationCoordinator;
 
 
-    public ReplicatedServiceImpl(int port, int replicationFactor, List<String> replicas, H2Dao dao) throws IOException {
+    public ReplicatedServiceImpl(int port, ShardingStrategy shardingStrategy, int replicationFactor, List<String> endpoints) throws IOException {
         this.port = port;
-        this.replicationFactor = replicationFactor;
-        this.dao = dao;
-
-        List<ReplicaNode> replicaNodes = new ArrayList<>();
-
-        for (int i = 0; i < replicationFactor; i++) {
-            H2Dao replicaDao = new H2Dao("node-" + port + "-replica-" + i);
-            replicaNodes.add(new ReplicaNode(replicaDao));
-        }
-
-        this.replicationService = new ReplicationService(replicationFactor, replicaNodes);
+        this.dao = new H2Dao("node-" + port);
+        String selfEndpoint = "http://localhost:" + port;
+//        this.shardingStrategy = shardingStrategy;
+        HttpClient client = HttpClient.newHttpClient();
+        this.replicationCoordinator = new ReplicationCoordinator(endpoints, replicationFactor, shardingStrategy, client, selfEndpoint, (H2Dao) dao);
     }
 
     @Override
@@ -79,7 +68,6 @@ public class ReplicatedServiceImpl implements ReplicatedService {
         server.createContext("/v0/entity", handleEntityRequest());
     }
 
-
     private HttpHandler handleStatusRequest() {
         return exchange -> {
             String method = exchange.getRequestMethod();
@@ -92,7 +80,6 @@ public class ReplicatedServiceImpl implements ReplicatedService {
         };
     }
 
-    //GET /v0/entity?id=ID&ack=X
     private HttpHandler handleEntityRequest() {
         return exchange -> {
             try (exchange) {
@@ -100,82 +87,113 @@ public class ReplicatedServiceImpl implements ReplicatedService {
                     String method = exchange.getRequestMethod();
                     String query = exchange.getRequestURI().getQuery();
                     String id = parseId(query);
-//                    String target = replicationService;
-                    int ack = 1;
-                    if (query.contains("&")) {
-                        String[] parts = query.split("&");
-                        if (parts.length == 2) {
-                            ack = parseACK(parts[1]);
-                        }
+                    if ("true".equals(exchange.getRequestHeaders().getFirst(INTERNAL_REPLICATION_HEADER))) {
+                        handleInternalReplicaRequest(exchange, method, id);
+                        return;
                     }
-                    if (ack > replicationFactor) {
-                        throw new IllegalArgumentException();
-                    }
+                    int ack = parseAck(query);
                     switch (method) {
                         case "GET" -> {
-                            byte[] value = replicationService.get(ack, id);
-                            if(value == null){
-                                exchange.sendResponseHeaders(503, 0);
-                                return;
-                            }
+                            byte[] value = replicationCoordinator.get(ack, id);
                             exchange.sendResponseHeaders(200, value.length);
                             exchange.getResponseBody().write(value);
                         }
                         case "PUT" -> {
-                            byte[] newValue = exchange.getRequestBody().readAllBytes();
-                            if(replicationService.put(ack,id,newValue)) {
-                                exchange.sendResponseHeaders(201, 0);
-                            } else exchange.sendResponseHeaders(503, 0);
+                            byte[] value = exchange.getRequestBody().readAllBytes();
+                            replicationCoordinator.upsert(ack, id, value);
+                            exchange.sendResponseHeaders(201, -1);
                         }
                         case "DELETE" -> {
-                            if(replicationService.delete(ack, id)){
-                                exchange.sendResponseHeaders(202, 0);
-                            } else exchange.sendResponseHeaders(503, 0);
+                            replicationCoordinator.delete(ack, id);
+                            exchange.sendResponseHeaders(202, -1);
                         }
-                        default -> exchange.sendResponseHeaders(405, 0);
+                        default -> exchange.sendResponseHeaders(405, -1);
                     }
                 } catch (IllegalArgumentException e) {
-                    exchange.sendResponseHeaders(400, 0);
+                    exchange.sendResponseHeaders(400, -1);
                 } catch (NoSuchElementException e) {
-                    exchange.sendResponseHeaders(404, 0);
+                    exchange.sendResponseHeaders(404, -1);
+                } catch (IllegalStateException | IOException e) {
+                    exchange.sendResponseHeaders(500, -1);
                 }
             }
         };
     }
 
-    private void proxyRequest(HttpExchange exchange, String target) throws IOException {
-        try {
-            URI uri = URI.create(target + exchange.getRequestURI());
-            HttpRequest.Builder request = HttpRequest.newBuilder(uri);
-            switch (exchange.getRequestMethod()) {
-                case "GET" -> request.GET();
-                case "PUT" -> {
-                    byte[] requestBody = exchange.getRequestBody().readAllBytes();
-                    request.PUT(HttpRequest.BodyPublishers.ofByteArray(requestBody));
+    void handleInternalReplicaRequest(HttpExchange exchange, String method, String id) throws IOException {
+        switch (method) {
+            case "PUT" -> {
+                StoredRecord record = readStoredRecord(exchange);
+                if (record.isDeleted()) {
+                    throw new IllegalArgumentException("PUT request must not contain deleted record");
                 }
-                case "DELETE" -> request.DELETE();
-                default -> {
-                    exchange.sendResponseHeaders(405, 0);
+                dao.upsert(id, record.getData(), record.getVersion(), false);
+                exchange.sendResponseHeaders(201, -1);
+            }
+            case "DELETE" -> {
+                StoredRecord record = readStoredRecord(exchange);
+                if (!record.isDeleted()) {
+                    throw new IllegalArgumentException("DELETE request must contain tombstone");
+                }
+                dao.delete(id, record.getVersion());
+                exchange.sendResponseHeaders(202, -1);
+            }
+            case "GET" -> {
+                StoredRecord record = dao.getRecord(id);
+                if (record == null) {
+                    exchange.sendResponseHeaders(404, -1);
                     return;
                 }
+                byte[] body = writeStoredRecord(record);
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
             }
-            HttpResponse<byte[]> response = client.send(
-                    request.build(),
-                    HttpResponse.BodyHandlers.ofByteArray()
-            );
-            byte[] responseBody = response.body();
-            if (responseBody == null) {
-                responseBody = new byte[0];
-            }
-            exchange.sendResponseHeaders(response.statusCode(), responseBody.length);
-            exchange.getResponseBody().write(responseBody);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            exchange.sendResponseHeaders(500, 0);
-        } catch (IOException e) {
-            exchange.sendResponseHeaders(503, 0);
+            default -> exchange.sendResponseHeaders(405, -1);
         }
     }
+
+    private byte[] writeStoredRecord(StoredRecord record) throws IOException {
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+
+        try (DataOutputStream out = new DataOutputStream(byteStream)) {
+            out.writeLong(record.getVersion());
+            out.writeBoolean(record.isDeleted());
+
+            byte[] data = record.getData();
+
+            if (data == null) {
+                out.writeInt(-1);
+            } else {
+                out.writeInt(data.length);
+                out.write(data);
+            }
+        }
+
+        return byteStream.toByteArray();
+    }
+
+    private StoredRecord readStoredRecord(HttpExchange exchange) throws IOException {
+        byte[] requestBody = exchange.getRequestBody().readAllBytes();
+
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(requestBody))) {
+            long version = in.readLong();
+            boolean deleted = in.readBoolean();
+            int dataLength = in.readInt();
+
+            byte[] data = null;
+
+            if (dataLength >= 0) {
+                data = in.readNBytes(dataLength);
+
+                if (data.length != dataLength) {
+                    throw new IOException("Corrupted stored record body");
+                }
+            }
+
+            return new StoredRecord(data, version, deleted);
+        }
+    }
+
 
     private static String parseId(String query) {
         if (query != null && query.startsWith("id=")) {
@@ -185,11 +203,12 @@ public class ReplicatedServiceImpl implements ReplicatedService {
         }
     }
 
-    private static int parseACK(String query){
+    private static int parseAck(String query){
         if (query != null && query.startsWith("ack=")) {
             return Integer.parseInt(query.substring(4));
         } else {
-            throw new IllegalArgumentException("Bad query");
+             return 1;
+//            throw new IllegalArgumentException("Bad query");
         }
     }
 
@@ -200,18 +219,16 @@ public class ReplicatedServiceImpl implements ReplicatedService {
 
     @Override
     public int numberOfReplicas() {
-        return replicationFactor;
+        return replicationCoordinator.numberOfReplicas();
     }
 
     @Override
     public void disableReplica(int nodeId) {
-        replicationService.disableReplica(nodeId);
+        replicationCoordinator.disableReplica(nodeId);
     }
 
     @Override
     public void enableReplica(int nodeId) {
-        replicationService.enableReplica(nodeId);
+        replicationCoordinator.enableReplica(nodeId);
     }
-
-
 }
