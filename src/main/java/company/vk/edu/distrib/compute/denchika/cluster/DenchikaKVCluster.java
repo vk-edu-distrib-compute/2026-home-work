@@ -6,7 +6,6 @@ import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.denchika.cluster.hashing.DistributingAlgorithm;
 import company.vk.edu.distrib.compute.denchika.service.ClusterKVService;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,10 +15,12 @@ public class DenchikaKVCluster implements KVCluster {
     private final List<String> endpoints;
 
     public DenchikaKVCluster(List<Integer> ports, Dao<byte[]> dao, DistributingAlgorithm hasher) {
-        this.endpoints = new ArrayList<>();
+        this.endpoints = ports.stream()
+                .map(p -> "http://localhost:" + p)
+                .toList();
+
         for (int port : ports) {
             String endpoint = "http://localhost:" + port;
-            endpoints.add(endpoint);
             nodes.put(endpoint, new ClusterKVService(port, dao, hasher, endpoint));
         }
     }

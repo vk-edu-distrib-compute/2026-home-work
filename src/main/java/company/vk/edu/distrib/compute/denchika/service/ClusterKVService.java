@@ -47,7 +47,7 @@ public class ClusterKVService implements KVService {
                 log.info("KVService started on port {}", port);
             } catch (IOException e) {
                 running.set(false);
-                throw new RuntimeException("Failed to start server on port " + port, e);
+                throw new IllegalStateException("Failed to start server on port " + port, e);
             }
         }
     }
