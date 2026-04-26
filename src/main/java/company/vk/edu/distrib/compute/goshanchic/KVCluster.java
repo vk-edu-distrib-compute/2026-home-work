@@ -8,3 +8,4 @@ public interface KVCluster {
 
     void stop();
 }
+

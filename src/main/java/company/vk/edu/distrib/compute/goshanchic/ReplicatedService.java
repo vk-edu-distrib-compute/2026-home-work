@@ -10,3 +10,4 @@ public interface ReplicatedService extends KVService {
 
     void setAck(int ack);
 }
+
