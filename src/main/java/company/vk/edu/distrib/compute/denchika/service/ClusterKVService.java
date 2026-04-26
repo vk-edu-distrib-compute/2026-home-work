@@ -108,7 +108,9 @@ public class ClusterKVService implements KVService {
 
     private String extractId(URI uri) {
         String q = uri.getQuery();
-        if (q == null) return null;
+        if (q == null) {
+            return null;
+        }
 
         for (String p : q.split("&")) {
             String[] kv = p.split("=");
