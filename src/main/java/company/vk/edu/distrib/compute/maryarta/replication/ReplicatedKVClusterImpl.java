@@ -1,37 +1,41 @@
-package company.vk.edu.distrib.compute.maryarta;
+package company.vk.edu.distrib.compute.maryarta.replication;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.maryarta.sharding.ConsistentHashing;
 import company.vk.edu.distrib.compute.maryarta.sharding.RendezvousHashing;
 import company.vk.edu.distrib.compute.maryarta.sharding.ShardingStrategy;
-import company.vk.edu.distrib.compute.maryarta.sharding.ShardedKVServiceImpl;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class KVClusterImpl implements KVCluster {
+public class ReplicatedKVClusterImpl implements KVCluster {
     private final List<String> endpoints;
     private final Map<String, KVService> kvServices = new ConcurrentHashMap<>();
     ShardingStrategy shardingStrategy;
 
-    public KVClusterImpl(List<Integer> ports, ShardingStrategy.ShardingAlgorithm shardingAlgorithm) {
+    public ReplicatedKVClusterImpl(List<Integer> ports, ShardingStrategy.ShardingAlgorithm shardingAlgorithm, int replicationFactor) {
         this.endpoints = ports.stream().map(port -> "http://localhost:" + port).toList();
+
         shardingStrategy = switch (shardingAlgorithm) {
             case CONSISTENT -> new ConsistentHashing(endpoints);
             case RENDEZVOUS -> new RendezvousHashing(endpoints);
         };
+
+        List<String> endpoints = ports.stream().map(port ->"http://localhost:" + port).toList();
+
         for (Integer port: ports) {
             String endpoint = "http://localhost:" + port;
-            kvServices.put(endpoint, createService(port));
+            kvServices.put(endpoint, createService(port, replicationFactor, endpoints));
         }
     }
 
-    private ShardedKVServiceImpl createService(int port) {
+    private ReplicatedService createService(int port, int replicationFactor, List<String> endpoints) {
         try {
-            return new ShardedKVServiceImpl(port, shardingStrategy);
+            return new ReplicatedServiceImpl(port, shardingStrategy, replicationFactor, endpoints);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to create service for port " + port, e);
         }
