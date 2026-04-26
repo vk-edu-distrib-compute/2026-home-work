@@ -2,12 +2,15 @@ package company.vk.edu.distrib.compute.aldor7705;
 
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.aldor7705.storage.DaoFileStorage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.*;
 
 public class EntityDao implements Dao<byte[]> {
 
+    private static final Logger log = LoggerFactory.getLogger(EntityDao.class);
     private final List<DaoFileStorage> storages;
     private final boolean[] disabledReplicas;
 
@@ -35,8 +38,10 @@ public class EntityDao implements Dao<byte[]> {
             try {
                 byte[] value = storages.get(i).readFromFile(key);
                 responses.add(value);
+            } catch (NoSuchElementException e) {
+                responses.add(null);
             } catch (Exception e) {
-                continue;
+                log.warn("Реплика недоступна", e);
             }
         }
 
@@ -64,6 +69,10 @@ public class EntityDao implements Dao<byte[]> {
             }
         }
 
+        if (winner == null) {
+            throw new NoSuchElementException("Элемент с ключом " + key + " не найден");
+        }
+
         return winner;
     }
 
@@ -82,7 +91,7 @@ public class EntityDao implements Dao<byte[]> {
                 storages.get(i).save(key, value);
                 successCount++;
             } catch (Exception e) {
-                continue;
+                log.warn("Ошибка при обновлении реплики", e);
             }
         }
 
@@ -106,7 +115,7 @@ public class EntityDao implements Dao<byte[]> {
                 storages.get(i).deleteFromFile(key);
                 successCount++;
             } catch (Exception e) {
-                continue;
+                log.warn("Ошибка при удалении из реплики", e);
             }
         }
 
@@ -127,6 +136,23 @@ public class EntityDao implements Dao<byte[]> {
     }
 
     public void enableReplica(int nodeId) {
+        DaoFileStorage replicaToUpdate = storages.get(nodeId);
+        replicaToUpdate.dropStorage();
+        storages.set(nodeId, new DaoFileStorage(replicaToUpdate.getPath()));
+        for (int i = 0; i < storages.size(); i++) {
+            if (!disabledReplicas[i]) {
+                try {
+                    List<String> keys = storages.get(i).getAllKeys();
+                    for (String key : keys) {
+                        byte[] value = storages.get(i).readFromFile(key);
+                        replicaToUpdate.save(key, value);
+                    }
+                    break;
+                } catch (Exception e) {
+                    log.warn("Ошибка при синхронизации реплики", e);
+                }
+            }
+        }
         disabledReplicas[nodeId] = false;
     }
 

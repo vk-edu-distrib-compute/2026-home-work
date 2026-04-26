@@ -20,6 +20,8 @@ public abstract class BaseHttpHandler implements HttpHandler {
             sendError(exchange, 404, e.getMessage());
         } catch (IllegalArgumentException e) {
             sendError(exchange, 400, e.getMessage());
+        } catch (IllegalStateException e) {
+            sendError(exchange, 500, e.getMessage());
         } catch (Exception e) {
             sendError(exchange,500, "Непредвиденная ошибка на сервере: " + e.getMessage());
         }

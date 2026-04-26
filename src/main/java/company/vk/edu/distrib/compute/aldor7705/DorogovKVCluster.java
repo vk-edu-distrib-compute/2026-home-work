@@ -17,9 +17,9 @@ public class DorogovKVCluster implements KVCluster {
     private final Map<Integer, KVService> services = new ConcurrentHashMap<>();
     private final Map<Integer, String> endpoints = new ConcurrentHashMap<>();
 
-    public DorogovKVCluster(List<Integer> ports) {
+    public DorogovKVCluster(List<Integer> ports, int replicas) {
         try {
-            KVServiceFactory kvServiceFactory = new KVServiceFactorySimple("storage_for_node", ports, 3);
+            KVServiceFactory kvServiceFactory = new KVServiceFactorySimple("storage_for_node", ports, replicas);
             for (int port : ports) {
                 services.put(port, kvServiceFactory.create(port));
                 endpoints.put(port, "http://localhost:" + port);
@@ -27,6 +27,10 @@ public class DorogovKVCluster implements KVCluster {
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    public DorogovKVCluster(List<Integer> ports) {
+        this(ports, 3);
     }
 
     @Override

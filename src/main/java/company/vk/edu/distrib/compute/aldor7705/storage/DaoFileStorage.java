@@ -5,11 +5,17 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 public class DaoFileStorage {
 
     private final Path path;
+
+    public Path getPath() {
+        return path;
+    }
 
     public DaoFileStorage(Path path) {
         this.path = path;
@@ -24,7 +30,18 @@ public class DaoFileStorage {
 
     public void dropStorage() {
         try {
-            Files.deleteIfExists(path);
+            if (Files.exists(path)) {
+                try (var files = Files.walk(path)) {
+                    files.sorted(Comparator.reverseOrder())
+                            .forEach(f -> {
+                                try {
+                                    Files.deleteIfExists(f);
+                                } catch (IOException e) {
+                                    throw new UncheckedIOException("Ошибка при очистке хранилища", e);
+                                }
+                            });
+                }
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Ошибка при очистке хранилища", e);
         }
@@ -62,6 +79,13 @@ public class DaoFileStorage {
         } catch (IOException e) {
             throw new UncheckedIOException("Ошибка при удалении записи", e);
         }
+    }
+
+    public List<String> getAllKeys() throws IOException {
+        return Files.list(path)
+                .filter(Files::isRegularFile)
+                .map(p -> p.getFileName().toString())
+                .toList();
     }
 
     private void checkKey(String key) {
