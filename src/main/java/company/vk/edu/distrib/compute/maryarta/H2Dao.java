@@ -22,7 +22,7 @@ public class H2Dao implements Dao<byte []> {
                         CREATE TABLE IF NOT EXISTS storage (
                             id VARCHAR(255) PRIMARY KEY,
                             data BLOB,
-                            version BIGINT NOT NULL,
+                            version BIGINT NOT NULL DEFAULT 0,
                             deleted BOOLEAN NOT NULL DEFAULT FALSE
                         )
                         """);
@@ -45,9 +45,7 @@ public class H2Dao implements Dao<byte []> {
 
     @Override
     public byte[] get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
-        if (key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
+        validateKey(key);
         lock.readLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT data FROM storage WHERE id = ?")) {
@@ -66,9 +64,7 @@ public class H2Dao implements Dao<byte []> {
     }
 
     public StoredRecord getRecord(String key) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
+        validateKey(key);
         lock.readLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT data, version, deleted FROM storage WHERE id = ?")) {
@@ -91,9 +87,7 @@ public class H2Dao implements Dao<byte []> {
 
     @Override
     public void upsert(String key, byte [] value) throws IllegalArgumentException, IOException {
-        if (key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
+        validateKey(key);
         lock.writeLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "MERGE INTO storage (id, data) KEY(id) VALUES (?, ?)")) {
@@ -108,9 +102,7 @@ public class H2Dao implements Dao<byte []> {
     }
 
     public void upsert(String key, byte[] value, long version, boolean deleted) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
+        validateKey(key);
         lock.writeLock().lock();
         try {
             long existingVersion = Long.MIN_VALUE;
@@ -148,9 +140,7 @@ public class H2Dao implements Dao<byte []> {
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
-        if (key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
+        validateKey(key);
         lock.writeLock().lock();
         try (PreparedStatement ps = connection.prepareStatement(
                 "DELETE FROM storage WHERE id = ?")) {
@@ -164,9 +154,7 @@ public class H2Dao implements Dao<byte []> {
     }
 
     public void delete(String key, long version) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
+        validateKey(key);
         lock.writeLock().lock();
         try {
             long existingVersion = Long.MIN_VALUE;
@@ -210,6 +198,12 @@ public class H2Dao implements Dao<byte []> {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to close H2 connection", e);
+        }
+    }
+
+    private static void validateKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Key is blank");
         }
     }
 

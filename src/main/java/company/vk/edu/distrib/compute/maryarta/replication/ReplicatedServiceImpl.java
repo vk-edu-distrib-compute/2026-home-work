@@ -18,18 +18,18 @@ public class ReplicatedServiceImpl implements ReplicatedService {
     private static final String INTERNAL_REPLICATION_HEADER = "Internal-Replication";
     private HttpServer server;
     private final H2Dao dao;
-    private final int port;
+    private final int localPort;
     private boolean started;
     private ExecutorService executor;
     private final ReplicationCoordinator replicationCoordinator;
 
-    public ReplicatedServiceImpl(int port,
+    public ReplicatedServiceImpl(int localPort,
                                  ShardingStrategy shardingStrategy,
                                  int replicationFactor, List<String> endpoints)
             throws IOException {
-        this.port = port;
-        this.dao = new H2Dao("node-" + port);
-        String selfEndpoint = "http://localhost:" + port;
+        this.localPort = localPort;
+        this.dao = new H2Dao("node-" + localPort);
+        String selfEndpoint = "http://localhost:" + localPort;
         HttpClient client = HttpClient.newHttpClient();
         this.replicationCoordinator = new ReplicationCoordinator(endpoints,
                 replicationFactor, shardingStrategy, client, selfEndpoint, dao);
@@ -41,14 +41,14 @@ public class ReplicatedServiceImpl implements ReplicatedService {
             return;
         }
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
+            server = HttpServer.create(new InetSocketAddress(localPort), 0);
             executor = Executors.newVirtualThreadPerTaskExecutor();
             server.setExecutor(executor);
             createContext();
             server.start();
             started = true;
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to start server on port " + port, e);
+            throw new IllegalStateException("Failed to start server on port " + localPort, e);
         }
     }
 
@@ -197,7 +197,7 @@ public class ReplicatedServiceImpl implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return localPort;
     }
 
     @Override
