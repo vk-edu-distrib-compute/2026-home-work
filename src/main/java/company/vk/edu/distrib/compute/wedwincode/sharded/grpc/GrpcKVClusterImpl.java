@@ -59,6 +59,7 @@ public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
         return new ArrayList<>(endpointToMultiplePorts.keySet());
     }
 
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInsideLoops")
     private static Map<String, Ports> buildEndpointsMap(List<Integer> httpPorts, List<Integer> grpcPorts) {
         if (httpPorts.size() != grpcPorts.size()) {
             throw new IllegalArgumentException("HTTP and gRPC lists should be the same size");
@@ -69,8 +70,7 @@ public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
             int httpPort = httpPorts.get(i);
             int grpcPort = grpcPorts.get(i);
             String endpoint = LOCALHOST_PREFIX + httpPort + "?grpcPort=" + grpcPort;
-            Ports ports = new Ports(httpPort, grpcPort);
-            map.put(endpoint, ports);
+            map.put(endpoint, new Ports(httpPort, grpcPort));
         }
 
         return map;

@@ -24,35 +24,13 @@ public class ReplicationStatsService {
     }
 
     public void handleStats(HttpExchange exchange) throws IOException {
-        if (!GET_METHOD.equals(exchange.getRequestMethod())) {
-            sendEmptyResponse(HttpURLConnection.HTTP_BAD_METHOD, exchange);
+        String[] parts = getParts(exchange);
+        if (parts == null) {
             return;
         }
 
-        String path = exchange.getRequestURI().getPath();
-        if (!path.startsWith(statsPrefix)) {
-            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
-            return;
-        }
-
-        String suffix = path.substring(statsPrefix.length());
-        if (suffix.isEmpty() || suffix.startsWith("/") || suffix.endsWith("/")) {
-            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
-            return;
-        }
-
-        String[] parts = suffix.split("/");
-
-        int id;
-        try {
-            id = Integer.parseInt(parts[0]);
-        } catch (NumberFormatException e) {
-            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
-            return;
-        }
-
-        if (id < 0) {
-            sendEmptyResponse(HttpURLConnection.HTTP_NOT_FOUND, exchange);
+        Integer id = getId(exchange, parts);
+        if (id == null) {
             return;
         }
 
@@ -108,5 +86,42 @@ public class ReplicationStatsService {
                 os.write(accessRate.getBytes());
             }
         }
+    }
+
+    private String[] getParts(HttpExchange exchange) throws IOException {
+        if (!GET_METHOD.equals(exchange.getRequestMethod())) {
+            sendEmptyResponse(HttpURLConnection.HTTP_BAD_METHOD, exchange);
+            return null;
+        }
+
+        String path = exchange.getRequestURI().getPath();
+        if (!path.startsWith(statsPrefix)) {
+            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
+            return null;
+        }
+
+        String suffix = path.substring(statsPrefix.length());
+        if (suffix.isEmpty() || suffix.startsWith("/") || suffix.endsWith("/")) {
+            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
+            return null;
+        }
+
+        return suffix.split("/");
+    }
+
+    private static Integer getId(HttpExchange exchange, String[] parts) throws IOException {
+        int id;
+        try {
+            id = Integer.parseInt(parts[0]);
+        } catch (NumberFormatException e) {
+            sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
+            return null;
+        }
+
+        if (id < 0) {
+            sendEmptyResponse(HttpURLConnection.HTTP_NOT_FOUND, exchange);
+            return null;
+        }
+        return id;
     }
 }
