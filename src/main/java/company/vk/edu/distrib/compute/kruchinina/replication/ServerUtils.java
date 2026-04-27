@@ -86,7 +86,8 @@ public final class ServerUtils {
         KVCluster cluster = new KVClusterImpl(ports, algorithm, replication);
         cluster.start();
         if (LOG.isInfoEnabled()) {
-            LOG.info("Cluster started with algorithm {} on ports {} (replication={})", algorithm, ports, replication);
+            LOG.info("Cluster started with algorithm {} on ports {} (replication={})",
+                    algorithm, ports, replication);
             LOG.info("Press Enter to stop...");
         }
         try {
@@ -134,6 +135,7 @@ public final class ServerUtils {
         List<Integer> ports = Arrays.stream(portsArg.split(PORTS_SEPARATOR))
                 .map(Integer::parseInt)
                 .collect(Collectors.toList());
+
         return new ClusterConfig(ports, algorithmArg, replication);
     }
 

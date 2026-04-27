@@ -22,6 +22,8 @@ import java.util.stream.Collectors;
 public class KVClusterImpl implements KVCluster {
     private static final Logger LOG = LoggerFactory.getLogger(KVClusterImpl.class);
     private static final String ENDPOINT_SEPARATOR = ":";
+    private static final int DEFAULT_REPLICAS = 1;
+    private static final int CONFIG_PARTS = 2;
 
     public enum Algorithm {
         CONSISTENT_HASHING,
@@ -79,7 +81,7 @@ public class KVClusterImpl implements KVCluster {
             }
 
             Dao<byte[]> dao;
-            if (replication > 1) {
+            if (replication > DEFAULT_REPLICAS) {
                 dao = new ReplicatedFileSystemDao(storagePath.toString(), replication);
             } else {
                 dao = new FileSystemDao(storagePath.toString());
@@ -145,7 +147,7 @@ public class KVClusterImpl implements KVCluster {
 
     private int extractPort(String endpoint) {
         String[] parts = endpoint.split(ENDPOINT_SEPARATOR);
-        if (parts.length != 2) {
+        if (parts.length != CONFIG_PARTS) {
             throw new IllegalArgumentException("Invalid endpoint format: " + endpoint);
         }
         return Integer.parseInt(parts[1]);

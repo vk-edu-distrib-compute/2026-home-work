@@ -32,7 +32,12 @@ public class SimpleKVService implements KVService {
     private static final int STATUS_NOT_FOUND = 404;
     private static final int STATUS_METHOD_NOT_ALLOWED = 405;
     private static final int STATUS_INTERNAL_ERROR = 500;
+
     private static final String MISSING_ID_MSG = "Missing id";
+    private static final String INVALID_ACK_MSG = "Invalid ack parameter";
+    private static final String REPLICATION_NOT_SUPPORTED_MSG = "Replication not supported";
+    private static final String REPLICATION_NOT_ACTIVE_MSG = "Replication not active";
+
     private static final String ID_PARAM = "id";
     private static final String ACK_PARAM = "ack";
     private static final String CONTENT_TYPE = "Content-Type";
@@ -40,22 +45,27 @@ public class SimpleKVService implements KVService {
     private static final String AMPERSAND = "&";
     private static final String EQUALS = "=";
     private static final String EMPTY = "";
+    private static final String SLASH = "/";
+    private static final String STATS_REPLICA_PATH = "/stats/replica/";
+    private static final String STATS_REPLICA_ACCESS_PATH = "/stats/replica/access/";
 
     private final int port;
     private final Dao<byte[]> dao;
     private HttpServer server;
     private boolean started;
 
-    //Кластерная конфигурация
+    // Кластерная конфигурация
     private final List<String> clusterNodes;
     private final String selfAddress;
     private final ShardingStrategy shardingStrategy;
     private final ClusterHttpClient httpClient;
 
+    // Одиночный режим
     public SimpleKVService(int port, Dao<byte[]> dao) {
         this(port, dao, null, null, null);
     }
 
+    // Кластерный режим
     public SimpleKVService(int port, Dao<byte[]> dao,
                            List<String> clusterNodes,
                            String selfAddress,
@@ -77,8 +87,8 @@ public class SimpleKVService implements KVService {
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext("/v0/status", new StatusHandler());
             server.createContext("/v0/entity", new EntityHandler());
-            server.createContext("/stats/replica/", new ReplicaStatsHandler());
-            server.createContext("/stats/replica/access/", new ReplicaAccessHandler());
+            server.createContext(STATS_REPLICA_PATH, new ReplicaStatsHandler());
+            server.createContext(STATS_REPLICA_ACCESS_PATH, new ReplicaAccessHandler());
             server.setExecutor(null);
             server.start();
             started = true;
@@ -97,12 +107,16 @@ public class SimpleKVService implements KVService {
         }
         if (server != null) {
             server.stop(0);
-            LOG.info("KVService stopped on port {}", port);
+            if (LOG.isInfoEnabled()) {
+                LOG.info("KVService stopped on port {}", port);
+            }
         }
         try {
             dao.close();
         } catch (IOException e) {
-            LOG.error("Error closing DAO", e);
+            if (LOG.isErrorEnabled()) {
+                LOG.error("Error closing DAO", e);
+            }
         }
         started = false;
     }
@@ -110,6 +124,8 @@ public class SimpleKVService implements KVService {
     private boolean isClusterMode() {
         return clusterNodes != null && !clusterNodes.isEmpty() && shardingStrategy != null;
     }
+
+    // ---------- Обработчики ----------
 
     private static final class StatusHandler implements HttpHandler {
         @Override
@@ -133,7 +149,7 @@ public class SimpleKVService implements KVService {
 
             int ack = extractAck(exchange);
             if (ack <= 0) {
-                sendResponse(exchange, STATUS_BAD_REQUEST, "Invalid ack parameter".getBytes(StandardCharsets.UTF_8));
+                sendResponse(exchange, STATUS_BAD_REQUEST, INVALID_ACK_MSG.getBytes(StandardCharsets.UTF_8));
                 return;
             }
 
@@ -141,7 +157,7 @@ public class SimpleKVService implements KVService {
                 LOG.debug("Received {} request for id={} ack={}", exchange.getRequestMethod(), id, ack);
             }
 
-            // Ранний выход при необходимости проксирования (без глубокой вложенности)
+            // Раннее проксирование, если мы не отвечаем за этот ключ
             if (isClusterMode() && !isResponsibleForKey(id)) {
                 proxyToResponsibleNode(exchange, id);
                 return;
@@ -150,7 +166,9 @@ public class SimpleKVService implements KVService {
             try {
                 dispatchRequest(exchange, id, ack);
             } catch (Exception e) {
-                LOG.error("Error handling request for id={}", id, e);
+                if (LOG.isErrorEnabled()) {
+                    LOG.error("Error handling request for id={}", id, e);
+                }
                 handleException(exchange, e);
             }
         }
@@ -203,10 +221,14 @@ public class SimpleKVService implements KVService {
             } else if (e instanceof NoSuchElementException) {
                 sendResponse(exchange, STATUS_NOT_FOUND, new byte[0]);
             } else if (e instanceof IOException) {
-                LOG.error("IO error", e);
+                if (LOG.isErrorEnabled()) {
+                    LOG.error("IO error", e);
+                }
                 sendResponse(exchange, STATUS_INTERNAL_ERROR, new byte[0]);
             } else {
-                LOG.error("Unexpected error", e);
+                if (LOG.isErrorEnabled()) {
+                    LOG.error("Unexpected error", e);
+                }
                 sendResponse(exchange, STATUS_INTERNAL_ERROR, new byte[0]);
             }
         }
@@ -217,7 +239,7 @@ public class SimpleKVService implements KVService {
                 data = ((ReplicatedFileSystemDao) dao).get(id, ack);
             } else {
                 if (ack != 1) {
-                    throw new IllegalArgumentException("Replication not supported");
+                    throw new IllegalArgumentException(REPLICATION_NOT_SUPPORTED_MSG);
                 }
                 data = dao.get(id);
             }
@@ -231,7 +253,7 @@ public class SimpleKVService implements KVService {
                 ((ReplicatedFileSystemDao) dao).upsert(id, body, ack);
             } else {
                 if (ack != 1) {
-                    throw new IllegalArgumentException("Replication not supported");
+                    throw new IllegalArgumentException(REPLICATION_NOT_SUPPORTED_MSG);
                 }
                 dao.upsert(id, body);
             }
@@ -243,7 +265,7 @@ public class SimpleKVService implements KVService {
                 ((ReplicatedFileSystemDao) dao).delete(id, ack);
             } else {
                 if (ack != 1) {
-                    throw new IllegalArgumentException("Replication not supported");
+                    throw new IllegalArgumentException(REPLICATION_NOT_SUPPORTED_MSG);
                 }
                 dao.delete(id);
             }
@@ -284,7 +306,7 @@ public class SimpleKVService implements KVService {
                 return;
             }
             String path = exchange.getRequestURI().getPath();
-            String[] parts = path.split("/");
+            String[] parts = path.split(SLASH);
             if (parts.length < 4) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, "Invalid path".getBytes());
                 return;
@@ -296,7 +318,7 @@ public class SimpleKVService implements KVService {
                     int count = repDao.getKeyCount(idx);
                     sendResponse(exchange, STATUS_OK, Integer.toString(count).getBytes(StandardCharsets.UTF_8));
                 } else {
-                    sendResponse(exchange, STATUS_NOT_FOUND, "Replication not active".getBytes());
+                    sendResponse(exchange, STATUS_NOT_FOUND, REPLICATION_NOT_ACTIVE_MSG.getBytes());
                 }
             } catch (NumberFormatException e) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, "Bad replica index".getBytes());
@@ -314,7 +336,7 @@ public class SimpleKVService implements KVService {
                 return;
             }
             String path = exchange.getRequestURI().getPath();
-            String[] parts = path.split("/");
+            String[] parts = path.split(SLASH);
             if (parts.length < 5) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, "Invalid path".getBytes());
                 return;
@@ -328,7 +350,7 @@ public class SimpleKVService implements KVService {
                     String json = "{\"reads\":" + reads + ",\"writes\":" + writes + "}";
                     sendResponse(exchange, STATUS_OK, json.getBytes(StandardCharsets.UTF_8));
                 } else {
-                    sendResponse(exchange, STATUS_NOT_FOUND, "Replication not active".getBytes());
+                    sendResponse(exchange, STATUS_NOT_FOUND, REPLICATION_NOT_ACTIVE_MSG.getBytes());
                 }
             } catch (NumberFormatException e) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, "Bad replica index".getBytes());

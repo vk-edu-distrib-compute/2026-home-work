@@ -5,39 +5,41 @@ import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.kruchinina.sharding.ShardingStrategy;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 public class ReplicatedKVService implements ReplicatedService {
 
+    private static final int MIN_REPLICAS_FOR_DAO = 1;
+
     private final SimpleKVService service;
-    private final ReplicatedFileSystemDao replicatedDao;
+    private final Optional<ReplicatedFileSystemDao> replicatedDao;
     private final int port;
     private final int numberOfReplicas;
 
-    //Одиночный режим
     public ReplicatedKVService(int port, int replicas) throws IOException {
         this.port = port;
         this.numberOfReplicas = replicas;
         String storagePath = "./data-" + port;
-        if (replicas > 1) {
-            this.replicatedDao = new ReplicatedFileSystemDao(storagePath, replicas);
-            this.service = new SimpleKVService(port, replicatedDao);
+        if (replicas > MIN_REPLICAS_FOR_DAO) {
+            ReplicatedFileSystemDao dao = new ReplicatedFileSystemDao(storagePath, replicas);
+            this.replicatedDao = Optional.of(dao);
+            this.service = new SimpleKVService(port, dao);
         } else {
-            this.replicatedDao = null;
+            this.replicatedDao = Optional.empty();
             this.service = new SimpleKVService(port, new FileSystemDao(storagePath));
         }
     }
 
-    //Кластерный режим
     public ReplicatedKVService(int port, Dao<byte[]> dao,
-                               List<String> clusterNodes,
-                               String selfAddress,
+                               List<String> clusterNodes, String selfAddress,
                                ShardingStrategy shardingStrategy) {
         this.port = port;
         if (dao instanceof ReplicatedFileSystemDao) {
-            this.replicatedDao = (ReplicatedFileSystemDao) dao;
-            this.numberOfReplicas = replicatedDao.getReplicaCount();
+            ReplicatedFileSystemDao repDao = (ReplicatedFileSystemDao) dao;
+            this.replicatedDao = Optional.of(repDao);
+            this.numberOfReplicas = repDao.getReplicaCount();
         } else {
-            this.replicatedDao = null;
+            this.replicatedDao = Optional.empty();
             this.numberOfReplicas = 1;
         }
         this.service = new SimpleKVService(port, dao, clusterNodes, selfAddress, shardingStrategy);
@@ -65,15 +67,11 @@ public class ReplicatedKVService implements ReplicatedService {
 
     @Override
     public void disableReplica(int nodeId) {
-        if (replicatedDao != null) {
-            replicatedDao.disableReplica(nodeId);
-        }
+        replicatedDao.ifPresent(dao -> dao.disableReplica(nodeId));
     }
 
     @Override
     public void enableReplica(int nodeId) {
-        if (replicatedDao != null) {
-            replicatedDao.enableReplica(nodeId);
-        }
+        replicatedDao.ifPresent(dao -> dao.enableReplica(nodeId));
     }
 }

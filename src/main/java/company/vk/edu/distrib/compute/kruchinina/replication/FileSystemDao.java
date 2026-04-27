@@ -144,7 +144,7 @@ public class FileSystemDao implements Dao<byte[]> {
     /**
      * Возвращает текущее количество ключей в хранилище.
      */
-    public int keyCount() {
+    public int countKeys() {
         return keyCount.get();
     }
 

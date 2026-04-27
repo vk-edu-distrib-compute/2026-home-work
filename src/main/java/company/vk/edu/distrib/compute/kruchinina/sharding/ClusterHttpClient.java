@@ -1,9 +1,5 @@
 package company.vk.edu.distrib.compute.kruchinina.sharding;
 
-import com.sun.net.httpserver.HttpExchange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
@@ -13,12 +9,25 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.sun.net.httpserver.HttpExchange;
 
 public class ClusterHttpClient {
+
     private static final Logger LOG = LoggerFactory.getLogger(ClusterHttpClient.class);
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
+
+    private static final Set<String> RESTRICTED_HEADERS = Set.of(
+            "connection", "keep-alive", "proxy-authenticate",
+            "proxy-authorization", "te", "trailer",
+            "transfer-encoding", "upgrade", "host", "content-length"
+    );
 
     public void proxyRequest(String targetNode, HttpExchange originalExchange) {
         String method = originalExchange.getRequestMethod();
@@ -26,23 +35,29 @@ public class ClusterHttpClient {
         String query = originalExchange.getRequestURI().getQuery();
         String fullUrl = "http://" + targetNode + path + (query != null ? "?" + query : "");
 
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Proxying {} request to {}", method, fullUrl);
+        }
+
         try {
             byte[] body = originalExchange.getRequestBody().readAllBytes();
             HttpRequest request = buildHttpRequest(method, fullUrl, body, originalExchange);
             HttpResponse<byte[]> response = sendRequest(request);
             forwardResponse(response, originalExchange);
         } catch (Exception e) {
-            LOG.error("Failed to proxy {} request to {}", method, fullUrl, e);
+            if (LOG.isErrorEnabled()) {
+                LOG.error("Failed to proxy {} request to {}", method, fullUrl, e);
+            }
             sendErrorResponse(originalExchange, "Proxy error: " + e.getMessage());
         }
     }
 
-    private HttpRequest buildHttpRequest(String method, String fullUrl, byte[] body, HttpExchange originalExchange) {
+    private HttpRequest buildHttpRequest(String method, String fullUrl,
+                                         byte[] body, HttpExchange originalExchange) {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(fullUrl))
                 .timeout(Duration.ofSeconds(30));
 
-        //Копируем заголовки, кроме запрещённых
         for (Map.Entry<String, List<String>> header : originalExchange.getRequestHeaders().entrySet()) {
             String name = header.getKey();
             if (!isRestrictedHeader(name)) {
@@ -72,7 +87,8 @@ public class ClusterHttpClient {
         return CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
     }
 
-    private void forwardResponse(HttpResponse<byte[]> response, HttpExchange originalExchange) throws IOException {
+    private void forwardResponse(HttpResponse<byte[]> response, HttpExchange originalExchange)
+            throws IOException {
         originalExchange.getResponseHeaders().putAll(response.headers().map());
         originalExchange.sendResponseHeaders(response.statusCode(), response.body().length);
         try (OutputStream os = originalExchange.getResponseBody()) {
@@ -81,9 +97,6 @@ public class ClusterHttpClient {
         originalExchange.close();
     }
 
-    /**
-     * Отправляет ошибку клиенту, чтобы не обрывать соединение.
-     */
     private void sendErrorResponse(HttpExchange exchange, String message) {
         try (AutoCloseable ignored = exchange::close) {
             byte[] body = message.getBytes();
@@ -92,23 +105,13 @@ public class ClusterHttpClient {
                 os.write(body);
             }
         } catch (Exception ex) {
-            LOG.error("Failed to send error response", ex);
+            if (LOG.isErrorEnabled()) {
+                LOG.error("Failed to send error response", ex);
+            }
         }
     }
 
-    /**
-     * Заголовки, которые нельзя или не нужно проксировать.
-     */
     private boolean isRestrictedHeader(String name) {
-        return "Connection".equalsIgnoreCase(name)
-                || "Keep-Alive".equalsIgnoreCase(name)
-                || "Proxy-Authenticate".equalsIgnoreCase(name)
-                || "Proxy-Authorization".equalsIgnoreCase(name)
-                || "TE".equalsIgnoreCase(name)
-                || "Trailer".equalsIgnoreCase(name)
-                || "Transfer-Encoding".equalsIgnoreCase(name)
-                || "Upgrade".equalsIgnoreCase(name)
-                || "Host".equalsIgnoreCase(name)
-                || "Content-Length".equalsIgnoreCase(name);
+        return RESTRICTED_HEADERS.contains(name.toLowerCase());
     }
 }
