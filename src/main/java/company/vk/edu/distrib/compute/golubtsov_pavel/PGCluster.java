@@ -49,7 +49,7 @@ public class PGCluster implements KVCluster {
             for (int ignored : httpPorts) {
                 List<Integer> excludedPorts = new ArrayList<>(httpPorts);
                 excludedPorts.addAll(result);
-                result.add(PGPorts.availablePort(excludedPorts));
+                result.add(PGgrpcKVService.Ports.availablePort(excludedPorts));
             }
             return List.copyOf(result);
         } catch (IOException e) {
