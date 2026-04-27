@@ -8,42 +8,42 @@ import java.net.http.HttpClient;
 import java.util.*;
 
 public class ReplicationCoordinator {
-    Map<String, Boolean> replicaNodes;
-    ShardingStrategy shardingStrategy;
-    int replicationFactor;
-    ReplicaClient replicaClient;
+    private final ShardingStrategy shardingStrategy;
+    private final int replicationFactor;
+    private final ReplicaClient replicaClient;
+    private final List<String> endpoints;
+    private final boolean[] disabledReplicas;
 
-
-    ReplicationCoordinator(List<String> endpoints, int replicationFactor, ShardingStrategy shardingStrategy, HttpClient httpClient, String selfEndpoint, H2Dao localDao){
+    public ReplicationCoordinator(List<String> endpoints,
+                                   int replicationFactor,
+                                   ShardingStrategy shardingStrategy,
+                                   HttpClient httpClient,
+                                   String selfEndpoint,
+                                   H2Dao localDao) {
         this.replicationFactor = replicationFactor;
         this.shardingStrategy = shardingStrategy;
         this.replicaClient = new ReplicaClient(httpClient, selfEndpoint, localDao);
+        this.endpoints = endpoints;
+        this.disabledReplicas = new boolean[endpoints.size()];
+        Arrays.fill(this.disabledReplicas, false);
     }
 
     public void upsert(int ack, String key, byte[] value) throws IOException {
         if (ack <= 0 || ack > replicationFactor) {
             throw new IllegalArgumentException("Invalid ack: " + ack);
         }
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
         List<String> replicas = shardingStrategy.getReplicaEndpoints(key, replicationFactor);
         long version = System.currentTimeMillis();
         int successfulWrites = 0;
-        IOException lastException = null;
         for (String replica : replicas) {
-            try {
-                if (replicaClient.put(replica, key, value, version)) {
-                    successfulWrites++;
-                }
-            } catch (IOException e) {
-                lastException = e;
+            if (isReplicaDisabled(replica)) {
+                continue;
+            }
+            if (replicaClient.put(replica, key, value, version)) {
+                successfulWrites++;
             }
         }
         if (successfulWrites < ack) {
-            if (lastException != null) {
-                throw lastException;
-            }
             throw new IllegalStateException("Not enough replicas acknowledged write");
         }
     }
@@ -52,37 +52,29 @@ public class ReplicationCoordinator {
         if (ack <= 0 || ack > replicationFactor) {
             throw new IllegalArgumentException("Invalid ack: " + ack);
         }
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
         List<String> replicas = shardingStrategy.getReplicaEndpoints(key, replicationFactor);
         int successfulReads = 0;
-        IOException lastException = null;
         StoredRecord latest = null;
-        Map<String, StoredRecord> receivedRecords = new LinkedHashMap<>();
+        Map<String, StoredRecord> receivedRecords = new HashMap<>();
         for (String replica : replicas) {
-            try {
+            if (isReplicaDisabled(replica)) {
+                continue;
+            }
                 StoredRecord record = replicaClient.get(replica, key);
                 successfulReads++;
                 receivedRecords.put(replica, record);
-                if (record != null && (latest == null || record.getVersion() > latest.getVersion())) {
+                if (record != null && (latest == null || record.version() > latest.version())) {
                     latest = record;
                 }
-            } catch (IOException e) {
-                lastException = e;
-            }
         }
         if (successfulReads < ack) {
-            if (lastException != null) {
-                throw lastException;
-            }
             throw new IllegalStateException("Not enough replicas acknowledged read");
         }
         repairStaleReplicas(key, latest, receivedRecords);
-        if (latest == null || latest.isDeleted()) {
+        if (latest == null || latest.deleted()) {
             throw new NoSuchElementException("Key not found: " + key);
         }
-        return latest.getData();
+        return latest.data();
     }
 
     private void repairStaleReplicas(
@@ -97,16 +89,15 @@ public class ReplicationCoordinator {
             String endpoint = entry.getKey();
             StoredRecord current = entry.getValue();
 
-            if (current == null || current.getVersion() < latest.getVersion()) {
+            if (current == null || current.version() < latest.version()) {
                 try {
-                    if (latest.isDeleted()) {
-                        replicaClient.delete(endpoint, key, latest.getVersion());
+                    if (latest.deleted()) {
+                        replicaClient.delete(endpoint, key, latest.version());
                     } else {
-                        replicaClient.put(endpoint, key, latest.getData(), latest.getVersion());
+                        replicaClient.put(endpoint, key, latest.data(), latest.version());
                     }
-                } catch (IOException e) {
-                    // read repair best-effort: не ломаем успешный GET
-                    // можно залогировать
+                } catch (IOException ignored) {
+                    // failed repair
                 }
             }
         }
@@ -116,14 +107,14 @@ public class ReplicationCoordinator {
         if (ack <= 0 || ack > replicationFactor) {
             throw new IllegalArgumentException("Invalid ack: " + ack);
         }
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Key is blank");
-        }
         List<String> replicas = shardingStrategy.getReplicaEndpoints(key, replicationFactor);
         long version = System.currentTimeMillis();
         int successfulDeletes = 0;
         IOException lastException = null;
         for (String replica : replicas) {
+            if (isReplicaDisabled(replica)) {
+                continue;
+            }
             try {
                 if (replicaClient.delete(replica, key, version)) {
                     successfulDeletes++;
@@ -140,15 +131,20 @@ public class ReplicationCoordinator {
         }
     }
 
-
-
+    private boolean isReplicaDisabled(String endpoint) {
+        int nodeId = endpoints.indexOf(endpoint);
+        if (nodeId < 0) {
+            throw new IllegalStateException("Unknown endpoint: " + endpoint);
+        }
+        return disabledReplicas[nodeId];
+    }
 
     void disableReplica(int nodeId) {
-
+        disabledReplicas[nodeId] = true;
     }
 
     void enableReplica(int nodeId) {
-
+        disabledReplicas[nodeId] = false;
     }
 
     public int numberOfReplicas() {

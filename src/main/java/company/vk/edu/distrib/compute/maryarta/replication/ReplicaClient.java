@@ -1,6 +1,5 @@
 package company.vk.edu.distrib.compute.maryarta.replication;
 
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.maryarta.H2Dao;
 
 import java.io.*;
@@ -10,13 +9,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 public class ReplicaClient {
-    private static final String INTERNAL_REPLICATION_HEADER = "X-Internal-Replication";
-    HttpClient httpClient;
-    String selfEndpoint;
-    H2Dao localDao;
-//    String selfEndpoint;
+    private static final String INTERNAL_REPLICATION_HEADER = "Internal-Replication";
+    private final HttpClient httpClient;
+    private final String selfEndpoint;
+    private final H2Dao localDao;
 
-    public ReplicaClient(HttpClient httpClient, String selfEndpoint, H2Dao localDao){
+    public ReplicaClient(HttpClient httpClient, String selfEndpoint, H2Dao localDao) {
         this.httpClient = httpClient;
         this.selfEndpoint = selfEndpoint;
         this.localDao = localDao;
@@ -30,8 +28,8 @@ public class ReplicaClient {
         URI uri = URI.create(endpoint + "/v0/entity?id=" + key);
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(byteStream)) {
-            out.writeLong(version);      // версия записи
-            out.writeBoolean(false);     // deleted = false для PUT
+            out.writeLong(version);
+            out.writeBoolean(false);
             if (value == null) {
                 out.writeInt(-1);
             } else {
@@ -103,28 +101,35 @@ public class ReplicaClient {
             localDao.delete(key, version);
             return true;
         }
+
         URI uri = URI.create(endpoint + "/v0/entity?id=" + key);
+
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+
         try (DataOutputStream out = new DataOutputStream(byteStream)) {
             out.writeLong(version);
-            out.writeBoolean(true);      // deleted = true для DELETE
+            out.writeBoolean(true);
+            out.writeInt(-1);
         }
+
         byte[] requestBody = byteStream.toByteArray();
+
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .header(INTERNAL_REPLICATION_HEADER, "true")
                 .method("DELETE", HttpRequest.BodyPublishers.ofByteArray(requestBody))
                 .build();
+
         try {
             HttpResponse<byte[]> response = httpClient.send(
                     request,
                     HttpResponse.BodyHandlers.ofByteArray()
             );
-            return response.statusCode() == 200;
+
+            return response.statusCode() == 202;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Replica DELETE request was interrupted", e);
         }
     }
-
 
 }

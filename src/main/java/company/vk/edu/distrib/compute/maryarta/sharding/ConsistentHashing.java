@@ -34,7 +34,7 @@ public class ConsistentHashing implements ShardingStrategy {
             );
         }
         long keyHash = hash(key);
-        LinkedHashSet<String> replicas = new LinkedHashSet<>(replicationFactor);
+        Set<String> replicas = new LinkedHashSet<>(replicationFactor);
         Map.Entry<Long, String> start = endpointsHash.ceilingEntry(keyHash);
         Long currentKey = (start != null) ? start.getKey() : endpointsHash.firstKey();
 
