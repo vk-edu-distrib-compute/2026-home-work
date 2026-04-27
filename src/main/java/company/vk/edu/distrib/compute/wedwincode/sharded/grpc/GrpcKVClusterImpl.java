@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
 
@@ -59,20 +61,17 @@ public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
         return new ArrayList<>(endpointToMultiplePorts.keySet());
     }
 
-    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     private static Map<String, Ports> buildEndpointsMap(List<Integer> httpPorts, List<Integer> grpcPorts) {
         if (httpPorts.size() != grpcPorts.size()) {
             throw new IllegalArgumentException("HTTP and gRPC lists should be the same size");
         }
 
-        Map<String, Ports> map = new ConcurrentHashMap<>();
-        for (int i = 0; i < httpPorts.size(); i++) {
-            int httpPort = httpPorts.get(i);
-            int grpcPort = grpcPorts.get(i);
-            String endpoint = LOCALHOST_PREFIX + httpPort + "?grpcPort=" + grpcPort;
-            map.put(endpoint, new Ports(httpPort, grpcPort));
-        }
-
-        return map;
+        return IntStream.range(0, httpPorts.size())
+                .boxed()
+                .collect(Collectors.toMap(
+                        i -> LOCALHOST_PREFIX + httpPorts.get(i) + "?grpcPort=" + grpcPorts.get(i),
+                        i -> new Ports(httpPorts.get(i), grpcPorts.get(i)),
+                        (a, b) -> b,
+                        ConcurrentHashMap::new));
     }
 }
