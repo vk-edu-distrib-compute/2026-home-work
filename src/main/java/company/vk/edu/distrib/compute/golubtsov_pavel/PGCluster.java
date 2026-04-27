@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,26 +15,46 @@ import java.util.Map;
 public class PGCluster implements KVCluster {
     private static final Logger log = LoggerFactory.getLogger(PGCluster.class);
     private final List<Integer> ports;
+    private final List<Integer> grpcPorts;
     private final List<String> endpoints;
     private final Map<String, KVService> runningNodes;
     private final Map<String, Integer> endpointToPort;
+    private final Map<String, Integer> endpointToGrpcPort;
 
     public PGCluster(List<Integer> ports) {
         this.ports = List.copyOf(ports);
-        this.endpoints = this.ports.stream()
-                .map(port -> "http://localhost:" + port)
+        this.grpcPorts = grpcPorts(this.ports);
+        this.endpoints = java.util.stream.IntStream.range(0, this.ports.size())
+                .mapToObj(index -> "http://localhost:" + this.ports.get(index)
+                        + "?grpcPort=" + this.grpcPorts.get(index))
                 .toList();
         this.runningNodes = new HashMap<>();
         this.endpointToPort = new HashMap<>();
+        this.endpointToGrpcPort = new HashMap<>();
 
         for (int i = 0; i < this.ports.size(); i++) {
             endpointToPort.put(this.endpoints.get(i), this.ports.get(i));
+            endpointToGrpcPort.put(this.endpoints.get(i), this.grpcPorts.get(i));
         }
     }
 
     private KVService createNode(int port, String endpoint) throws IOException {
         PGFileDao dao = new PGFileDao(Path.of("PGData", String.valueOf(port)));
-        return new PGInMemoryKVService(port, dao, endpoint, endpoints);
+        return new PGInMemoryKVService(port, endpointToGrpcPort.get(endpoint), dao, endpoint, endpoints);
+    }
+
+    private static List<Integer> grpcPorts(List<Integer> httpPorts) {
+        try {
+            List<Integer> result = new ArrayList<>();
+            for (int ignored : httpPorts) {
+                List<Integer> excludedPorts = new ArrayList<>(httpPorts);
+                excludedPorts.addAll(result);
+                result.add(PGPorts.availablePort(excludedPorts));
+            }
+            return List.copyOf(result);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to reserve gRPC port", e);
+        }
     }
 
     @Override

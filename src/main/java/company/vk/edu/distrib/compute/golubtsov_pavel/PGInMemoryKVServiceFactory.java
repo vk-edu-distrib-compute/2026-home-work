@@ -10,9 +10,11 @@ import java.util.List;
 public class PGInMemoryKVServiceFactory extends KVServiceFactory {
     @Override
     protected KVService doCreate(int port) throws IOException {
-        String selfEndpoint = "http://localhost:" + port;
+        int grpcPort = PGPorts.availablePort(List.of(port));
+        String selfEndpoint = "http://localhost:" + port + "?grpcPort=" + grpcPort;
         List<String> endpoints = List.of(selfEndpoint);
         return new PGInMemoryKVService(port,
+                grpcPort,
                 new PGFileDao(Path.of("PGData", String.valueOf(port))),
                 selfEndpoint,
                 endpoints);
