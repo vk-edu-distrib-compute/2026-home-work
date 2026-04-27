@@ -32,20 +32,12 @@ public class H2Dao implements Dao<byte []> {
         }
     }
 
-    public void start(){
+    public void start() {
         try {
             if (connection != null && !connection.isClosed()) {
-                return; // уже запущено
+                return;
             }
             connection = DriverManager.getConnection("jdbc:h2:./data/" + dbName);
-//            try (Statement st = connection.createStatement()) {
-//                st.execute("""
-//                        CREATE TABLE IF NOT EXISTS storage (
-//                            id VARCHAR(255) PRIMARY KEY,
-//                            data BLOB
-//                        )
-//                        """);
-//            }
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to start H2Dao for db: " + dbName, e);
         }
@@ -212,7 +204,6 @@ public class H2Dao implements Dao<byte []> {
 
     @Override
     public void close() {
-        System.out.println("stop");
         try {
             if (connection != null && !connection.isClosed()) {
                 connection.close();

@@ -18,8 +18,8 @@ public class Server {
     void main(String... args) throws IOException {
         var log = LoggerFactory.getLogger("server");
         if (isClusterMode(args)) {
-            List<Integer> ports = Arrays.asList(8080, 8081);
-            KVCluster cluster = new KVClusterFactoryImpl().create(ports);
+            List<Integer> ports = Arrays.asList(8080, 8081, 8082, 8083, 8084);
+            KVCluster cluster = new KVClusterFactoryImpl().create(ports, replicationFactor(args));
             cluster.start();
             log.info("Cluster started on ports={}", ports);
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
@@ -37,11 +37,13 @@ public class Server {
     }
 
     private int replicationFactor(String... args) {
-        if (args.length > 1){
-            return Integer.parseInt(args[1]);
+        for (String arg : args) {
+            if (arg.startsWith("--replication-factor=")) {
+                int replicationFactor = Integer.parseInt(arg.substring("--replication-factor=".length()));
+                return replicationFactor > 0 ? replicationFactor : 1;
+            }
         }
-        return 0;
+        return 1;
     }
-
 
 }

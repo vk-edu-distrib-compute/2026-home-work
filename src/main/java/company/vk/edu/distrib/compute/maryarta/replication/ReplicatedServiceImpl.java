@@ -15,23 +15,24 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ReplicatedServiceImpl implements ReplicatedService {
-    private static final String INTERNAL_REPLICATION_HEADER = "X-Internal-Replication";
+    private static final String INTERNAL_REPLICATION_HEADER = "Internal-Replication";
     private HttpServer server;
     private final H2Dao dao;
     private final int port;
     private boolean started;
-//    private final ShardingStrategy shardingStrategy;
     private ExecutorService executor;
     private final ReplicationCoordinator replicationCoordinator;
 
-
-    public ReplicatedServiceImpl(int port, ShardingStrategy shardingStrategy, int replicationFactor, List<String> endpoints) throws IOException {
+    public ReplicatedServiceImpl(int port,
+                                 ShardingStrategy shardingStrategy,
+                                 int replicationFactor, List<String> endpoints)
+            throws IOException {
         this.port = port;
         this.dao = new H2Dao("node-" + port);
         String selfEndpoint = "http://localhost:" + port;
-//        this.shardingStrategy = shardingStrategy;
         HttpClient client = HttpClient.newHttpClient();
-        this.replicationCoordinator = new ReplicationCoordinator(endpoints, replicationFactor, shardingStrategy, client, selfEndpoint, (H2Dao) dao);
+        this.replicationCoordinator = new ReplicationCoordinator(endpoints,
+                replicationFactor, shardingStrategy, client, selfEndpoint, dao);
     }
 
     @Override
@@ -86,12 +87,12 @@ public class ReplicatedServiceImpl implements ReplicatedService {
                 try {
                     String method = exchange.getRequestMethod();
                     String query = exchange.getRequestURI().getQuery();
-                    String id = parseId(query);
+                    String id = QueryParams.parseId(query);
                     if ("true".equals(exchange.getRequestHeaders().getFirst(INTERNAL_REPLICATION_HEADER))) {
                         handleInternalReplicaRequest(exchange, method, id);
                         return;
                     }
-                    int ack = parseAck(query);
+                    int ack = QueryParams.parseAck(query);
                     switch (method) {
                         case "GET" -> {
                             byte[] value = replicationCoordinator.get(ack, id);
@@ -124,18 +125,18 @@ public class ReplicatedServiceImpl implements ReplicatedService {
         switch (method) {
             case "PUT" -> {
                 StoredRecord record = readStoredRecord(exchange);
-                if (record.isDeleted()) {
+                if (record.deleted()) {
                     throw new IllegalArgumentException("PUT request must not contain deleted record");
                 }
-                dao.upsert(id, record.getData(), record.getVersion(), false);
+                dao.upsert(id, record.data(), record.version(), false);
                 exchange.sendResponseHeaders(201, -1);
             }
             case "DELETE" -> {
                 StoredRecord record = readStoredRecord(exchange);
-                if (!record.isDeleted()) {
-                    throw new IllegalArgumentException("DELETE request must contain tombstone");
+                if (!record.deleted()) {
+                    throw new IllegalArgumentException();
                 }
-                dao.delete(id, record.getVersion());
+                dao.delete(id, record.version());
                 exchange.sendResponseHeaders(202, -1);
             }
             case "GET" -> {
@@ -156,10 +157,10 @@ public class ReplicatedServiceImpl implements ReplicatedService {
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
 
         try (DataOutputStream out = new DataOutputStream(byteStream)) {
-            out.writeLong(record.getVersion());
-            out.writeBoolean(record.isDeleted());
+            out.writeLong(record.version());
+            out.writeBoolean(record.deleted());
 
-            byte[] data = record.getData();
+            byte[] data = record.data();
 
             if (data == null) {
                 out.writeInt(-1);
@@ -191,24 +192,6 @@ public class ReplicatedServiceImpl implements ReplicatedService {
             }
 
             return new StoredRecord(data, version, deleted);
-        }
-    }
-
-
-    private static String parseId(String query) {
-        if (query != null && query.startsWith("id=")) {
-            return query.substring(3);
-        } else {
-            throw new IllegalArgumentException("Bad query");
-        }
-    }
-
-    private static int parseAck(String query){
-        if (query != null && query.startsWith("ack=")) {
-            return Integer.parseInt(query.substring(4));
-        } else {
-             return 1;
-//            throw new IllegalArgumentException("Bad query");
         }
     }
 

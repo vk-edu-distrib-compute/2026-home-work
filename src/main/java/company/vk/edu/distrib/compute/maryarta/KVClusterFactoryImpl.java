@@ -12,4 +12,13 @@ public class KVClusterFactoryImpl extends KVClusterFactory {
     protected KVCluster doCreate(List<Integer> ports) {
         return new ReplicatedKVClusterImpl(ports, ShardingStrategy.ShardingAlgorithm.CONSISTENT, 3);
     }
+
+    public KVCluster create(List<Integer> ports, int replicationFactor) {
+        return new ReplicatedKVClusterImpl(
+                ports,
+                ShardingStrategy.ShardingAlgorithm.CONSISTENT,
+                replicationFactor
+        );
+
+    }
 }

@@ -1,25 +1,16 @@
 package company.vk.edu.distrib.compute.maryarta.replication;
 
-public class StoredRecord {
-    private final byte[] data;
-    private final long version;
-    private final boolean deleted;
+import java.util.Arrays;
 
+public record StoredRecord(byte[] data, long version, boolean deleted) {
     public StoredRecord(byte[] data, long version, boolean deleted) {
-        this.data = data;
+        this.data = data == null ? null : Arrays.copyOf(data, data.length);
         this.version = version;
         this.deleted = deleted;
     }
 
-    public byte[] getData() {
-        return data;
-    }
-
-    public long getVersion() {
-        return version;
-    }
-
-    public boolean isDeleted() {
-        return deleted;
+    @Override
+    public byte[] data() {
+        return data == null ? null : Arrays.copyOf(data, data.length);
     }
 }
