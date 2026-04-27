@@ -19,8 +19,8 @@ public class MarinchankaKVCluster implements KVCluster {
 
     private final Map<String, MarinchankaKVService> nodes = new ConcurrentHashMap<>();
     private final Map<String, PersistentDao> daos = new ConcurrentHashMap<>();
+    private final Map<String, Integer> grpcPorts = new ConcurrentHashMap<>();
     private final ShardingRouter router;
-    private final HttpClient httpClient = new HttpClient();
     private final Algorithm algorithm;
 
     public MarinchankaKVCluster(List<Integer> ports, String baseDataDir) {
@@ -42,22 +42,29 @@ public class MarinchankaKVCluster implements KVCluster {
     }
 
     private ShardingRouter createRouter(Algorithm algorithm) {
-        return switch (algorithm) {
-            case CONSISTENT_HASHING -> new ConsistentHashingRouter(VIRTUAL_NODES);
-            case RENDEZVOUS_HASHING -> new RendezvousHashingRouter();
-        };
+        switch (algorithm) {
+            case CONSISTENT_HASHING:
+                return new ConsistentHashingRouter(VIRTUAL_NODES);
+            case RENDEZVOUS_HASHING:
+                return new RendezvousHashingRouter();
+        }
+        return new ConsistentHashingRouter(VIRTUAL_NODES);
     }
 
     private void addNode(int port, String dataDir) {
         ClusterNode node = new ClusterNode("localhost", port);
         router.addNode(node);
 
+        int grpcPort = port + 1000;
+        grpcPorts.put(node.getEndpoint(), grpcPort);
+
         try {
             String nodeDataDir = dataDir + "/node_" + port;
             PersistentDao dao = new PersistentDao(nodeDataDir);
             daos.put(node.getEndpoint(), dao);
 
-            MarinchankaKVService service = new MarinchankaKVService(port, dao, router);
+            MarinchankaKVService service = new MarinchankaKVService(port, grpcPort, dao, router);
+            service.setGrpcPorts(grpcPorts);
             nodes.put(node.getEndpoint(), service);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to create DAO for port " + port, e);
@@ -113,9 +120,11 @@ public class MarinchankaKVCluster implements KVCluster {
     private void recreateDao(String cleanEndpoint, IOException cause) {
         try {
             int port = Integer.parseInt(cleanEndpoint.split(":")[1]);
+            int grpcPort = grpcPorts.getOrDefault(cleanEndpoint, port + 1000);
             PersistentDao dao = new PersistentDao("./cluster_data/node_" + port);
             daos.put(cleanEndpoint, dao);
-            MarinchankaKVService service = new MarinchankaKVService(port, dao, router);
+            MarinchankaKVService service = new MarinchankaKVService(port, grpcPort, dao, router);
+            service.setGrpcPorts(grpcPorts);
             nodes.put(cleanEndpoint, service);
         } catch (Exception ex) {
             IllegalStateException re = new IllegalStateException(
@@ -157,51 +166,6 @@ public class MarinchankaKVCluster implements KVCluster {
         return nodes.keySet().stream()
                 .map(endpoint -> "http://" + endpoint)
                 .toList();
-    }
-
-    public byte[] get(String key) {
-        ClusterNode responsibleNode = router.getNode(key);
-        PersistentDao dao = daos.get(responsibleNode.getEndpoint());
-
-        if (dao != null) {
-            try {
-                return dao.get(key);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to get key: " + key, e);
-            }
-        } else {
-            return httpClient.get(responsibleNode, key);
-        }
-    }
-
-    public void put(String key, byte[] value) {
-        ClusterNode responsibleNode = router.getNode(key);
-        PersistentDao dao = daos.get(responsibleNode.getEndpoint());
-
-        if (dao != null) {
-            try {
-                dao.upsert(key, value);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to put key: " + key, e);
-            }
-        } else {
-            httpClient.put(responsibleNode, key, value);
-        }
-    }
-
-    public void delete(String key) {
-        ClusterNode responsibleNode = router.getNode(key);
-        PersistentDao dao = daos.get(responsibleNode.getEndpoint());
-
-        if (dao != null) {
-            try {
-                dao.delete(key);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to delete key: " + key, e);
-            }
-        } else {
-            httpClient.delete(responsibleNode, key);
-        }
     }
 
     public Algorithm getAlgorithm() {
