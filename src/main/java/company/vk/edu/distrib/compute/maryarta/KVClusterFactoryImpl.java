@@ -10,15 +10,19 @@ import java.util.List;
 public class KVClusterFactoryImpl extends KVClusterFactory {
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
-        return new ReplicatedKVClusterImpl(ports, ShardingStrategy.ShardingAlgorithm.CONSISTENT, 3);
+        return new KVClusterImpl(ports, ShardingStrategy.ShardingAlgorithm.CONSISTENT);
     }
 
     public KVCluster create(List<Integer> ports, int replicationFactor) {
-        return new ReplicatedKVClusterImpl(
-                ports,
-                ShardingStrategy.ShardingAlgorithm.CONSISTENT,
-                replicationFactor
-        );
+        if (ports == null || ports.isEmpty()) {
+            throw new IllegalArgumentException("Missing ports for the cluster");
+        }
 
+        return doCreate(ports, replicationFactor);
     }
+
+    protected KVCluster doCreate(List<Integer> ports, int replicationFactor) {
+        return new ReplicatedKVClusterImpl(ports, ShardingStrategy.ShardingAlgorithm.CONSISTENT, replicationFactor);
+    }
+
 }

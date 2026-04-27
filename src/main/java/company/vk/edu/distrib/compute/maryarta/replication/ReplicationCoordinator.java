@@ -48,6 +48,7 @@ public class ReplicationCoordinator {
         }
     }
 
+    @SuppressWarnings("PMD.UseConcurrentHashMap") // Local map, no concurrent access
     public byte[] get(int ack, String key) throws IOException {
         if (ack <= 0 || ack > replicationFactor) {
             throw new IllegalArgumentException("Invalid ack: " + ack);

@@ -1,6 +1,11 @@
 package company.vk.edu.distrib.compute.maryarta.replication;
 
 final class QueryParams {
+    private static final String ID = "id";
+    private static final String ACK = "ack";
+    private static final String QUERY_SEPARATOR = "&";
+    private static final String KEY_SEPARATOR = "=";
+
     private QueryParams() {
     }
 
@@ -8,9 +13,9 @@ final class QueryParams {
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("Bad query");
         }
-        for (String part : query.split("&")) {
-            String[] pair = part.split("=", 2);
-            if (pair.length == 2 && "id".equals(pair[0])) {
+        for (String part : query.split(QUERY_SEPARATOR)) {
+            String[] pair = part.split(KEY_SEPARATOR, 2);
+            if (pair.length == 2 && ID.equals(pair[0])) {
                 if (pair[1].isBlank()) {
                     throw new IllegalArgumentException("Blank id");
                 }
@@ -24,10 +29,10 @@ final class QueryParams {
         if (query == null || query.isBlank()) {
             return 1;
         }
-        for (String part : query.split("&")) {
-            String[] pair = part.split("=", 2);
+        for (String part : query.split(QUERY_SEPARATOR)) {
+            String[] pair = part.split(KEY_SEPARATOR, 2);
 
-            if (pair.length == 2 && "ack".equals(pair[0])) {
+            if (pair.length == 2 && ACK.equals(pair[0])) {
                 return Integer.parseInt(pair[1]);
             }
         }

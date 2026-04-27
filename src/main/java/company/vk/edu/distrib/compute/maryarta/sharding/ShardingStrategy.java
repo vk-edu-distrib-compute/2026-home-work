@@ -12,6 +12,6 @@ public interface ShardingStrategy {
     String getEndpoint(String key);
 
     default List<String> getReplicaEndpoints(String key, int replicationFactor) {
-        return null;
+        return List.of();
     }
 }

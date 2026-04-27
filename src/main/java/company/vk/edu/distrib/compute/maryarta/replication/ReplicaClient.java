@@ -101,11 +101,8 @@ public class ReplicaClient {
             localDao.delete(key, version);
             return true;
         }
-
         URI uri = URI.create(endpoint + "/v0/entity?id=" + key);
-
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-
         try (DataOutputStream out = new DataOutputStream(byteStream)) {
             out.writeLong(version);
             out.writeBoolean(true);
@@ -113,18 +110,15 @@ public class ReplicaClient {
         }
 
         byte[] requestBody = byteStream.toByteArray();
-
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .header(INTERNAL_REPLICATION_HEADER, "true")
                 .method("DELETE", HttpRequest.BodyPublishers.ofByteArray(requestBody))
                 .build();
-
         try {
             HttpResponse<byte[]> response = httpClient.send(
                     request,
                     HttpResponse.BodyHandlers.ofByteArray()
             );
-
             return response.statusCode() == 202;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
