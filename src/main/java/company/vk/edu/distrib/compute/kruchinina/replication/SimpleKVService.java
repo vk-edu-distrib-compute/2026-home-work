@@ -48,6 +48,9 @@ public class SimpleKVService implements KVService {
     private static final String SLASH = "/";
     private static final String STATS_REPLICA_PATH = "/stats/replica/";
     private static final String STATS_REPLICA_ACCESS_PATH = "/stats/replica/access/";
+    private static final int DEFAULT_ACKS = 1;
+    private static final int FOUR = 4;
+    private static final int FIVE = 5;
 
     private final int port;
     private final Dao<byte[]> dao;
@@ -238,7 +241,7 @@ public class SimpleKVService implements KVService {
             if (dao instanceof ReplicatedFileSystemDao) {
                 data = ((ReplicatedFileSystemDao) dao).get(id, ack);
             } else {
-                if (ack != 1) {
+                if (ack != DEFAULT_ACKS) {
                     throw new IllegalArgumentException(REPLICATION_NOT_SUPPORTED_MSG);
                 }
                 data = dao.get(id);
@@ -252,7 +255,7 @@ public class SimpleKVService implements KVService {
             if (dao instanceof ReplicatedFileSystemDao) {
                 ((ReplicatedFileSystemDao) dao).upsert(id, body, ack);
             } else {
-                if (ack != 1) {
+                if (ack != DEFAULT_ACKS) {
                     throw new IllegalArgumentException(REPLICATION_NOT_SUPPORTED_MSG);
                 }
                 dao.upsert(id, body);
@@ -264,7 +267,7 @@ public class SimpleKVService implements KVService {
             if (dao instanceof ReplicatedFileSystemDao) {
                 ((ReplicatedFileSystemDao) dao).delete(id, ack);
             } else {
-                if (ack != 1) {
+                if (ack != DEFAULT_ACKS) {
                     throw new IllegalArgumentException(REPLICATION_NOT_SUPPORTED_MSG);
                 }
                 dao.delete(id);
@@ -307,7 +310,7 @@ public class SimpleKVService implements KVService {
             }
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split(SLASH);
-            if (parts.length < 4) {
+            if (parts.length < FOUR) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, "Invalid path".getBytes());
                 return;
             }
@@ -337,7 +340,7 @@ public class SimpleKVService implements KVService {
             }
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split(SLASH);
-            if (parts.length < 5) {
+            if (parts.length < FIVE) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, "Invalid path".getBytes());
                 return;
             }

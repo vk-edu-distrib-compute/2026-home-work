@@ -199,7 +199,9 @@ public class SimpleKVService implements KVService {
         }
 
         private void handleException(HttpExchange exchange, Exception e) throws IOException {
-            LOG.info("handleException called for: {}", e.getClass().getSimpleName());
+            if (LOG.isInfoEnabled()) {
+                LOG.info("handleException called for: {}", e.getClass().getSimpleName());
+            }
             if (e instanceof IllegalArgumentException) {
                 sendResponse(exchange, STATUS_BAD_REQUEST, e.getMessage().getBytes(StandardCharsets.UTF_8));
             } else if (e instanceof NoSuchElementException) {

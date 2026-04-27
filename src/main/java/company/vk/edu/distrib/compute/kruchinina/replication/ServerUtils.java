@@ -103,6 +103,7 @@ public final class ServerUtils {
         }
     }
 
+    // Упрощённая версия для снижения цикломатической сложности (не более 8).
     private static ClusterConfig parseClusterArgs(String... args) {
         String algorithmArg = ALGORITHM_RENDEZVOUS;
         int replication = DEFAULT_REPLICATION_FACTOR;

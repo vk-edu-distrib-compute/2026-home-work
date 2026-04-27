@@ -6,9 +6,6 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Собирает и проверяет результаты асинхронного чтения с реплик.
- */
 public final class ReplicaResultCollector {
 
     private ReplicaResultCollector() {
@@ -16,40 +13,40 @@ public final class ReplicaResultCollector {
 
     private enum FutureResult { SUCCESS, NOT_FOUND, TIMEOUT_OR_ERROR }
 
-    /**
-     * Анализирует результаты выполнения CompletableFuture и возвращает количество успешных,
-     * а также первое полученное значение. Бросает исключение при невозможности набрать кворум.
-     */
     public static byte[] collectReadResults(List<CompletableFuture<byte[]>> futures, int ack)
             throws IOException {
-        int success = 0;
-        byte[] firstData = null;
-        int notFoundCount = 0;
+        ResultAccumulator acc = new ResultAccumulator();
         AtomicReference<byte[]> dataRef = new AtomicReference<>(null);
 
         for (CompletableFuture<byte[]> future : futures) {
             dataRef.set(null);
-            FutureResult result = evaluateFuture(future, dataRef);
-            if (result == FutureResult.SUCCESS) {
-                success++;
-                if (firstData == null) {
-                    firstData = dataRef.get();
-                }
-            } else if (result == FutureResult.NOT_FOUND) {
-                notFoundCount++;
-            }
-            if (success >= ack) {
+            processFutureResult(future, dataRef, acc);
+            if (acc.successCount >= ack) {
                 break;
             }
         }
 
-        if (success >= ack) {
-            return firstData;
+        if (acc.successCount >= ack) {
+            return acc.firstData;
         }
-        if (success == 0 && notFoundCount == futures.size()) {
+        if (acc.successCount == 0 && acc.notFoundCount == futures.size()) {
             throw new NoSuchElementException("No data for key");
         }
         throw new IOException("Not enough replicas available (need " + ack + ")");
+    }
+
+    private static void processFutureResult(CompletableFuture<byte[]> future,
+                                            AtomicReference<byte[]> dataRef,
+                                            ResultAccumulator acc) {
+        FutureResult result = evaluateFuture(future, dataRef);
+        if (result == FutureResult.SUCCESS) {
+            acc.successCount++;
+            if (acc.firstData == null) {
+                acc.firstData = dataRef.get();
+            }
+        } else if (result == FutureResult.NOT_FOUND) {
+            acc.notFoundCount++;
+        }
     }
 
     private static FutureResult evaluateFuture(CompletableFuture<byte[]> future,
@@ -68,5 +65,15 @@ public final class ReplicaResultCollector {
             Thread.currentThread().interrupt();
             return FutureResult.TIMEOUT_OR_ERROR;
         }
+    }
+
+    /**
+     * Аккумулирует результаты обработки отдельных future-задач.
+     * Конструктор по умолчанию инициализирует все поля значениями (0, null).
+     */
+    private static final class ResultAccumulator {
+        int successCount;
+        int notFoundCount;
+        byte[] firstData;
     }
 }

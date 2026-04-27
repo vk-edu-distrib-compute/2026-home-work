@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,6 +113,6 @@ public class ClusterHttpClient {
     }
 
     private boolean isRestrictedHeader(String name) {
-        return RESTRICTED_HEADERS.contains(name.toLowerCase());
+        return RESTRICTED_HEADERS.contains(name.toLowerCase(Locale.ROOT));
     }
 }

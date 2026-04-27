@@ -13,12 +13,13 @@ public class ReplicatedKVService implements ReplicatedService {
 
     private final SimpleKVService service;
     private final Optional<ReplicatedFileSystemDao> replicatedDao;
-    private final int port;
-    private final int numberOfReplicas;
+    private final int servicePort;
+    private final int numberOfReplicasValue;
 
+    //Одиночный режим
     public ReplicatedKVService(int port, int replicas) throws IOException {
-        this.port = port;
-        this.numberOfReplicas = replicas;
+        this.servicePort = port;
+        this.numberOfReplicasValue = replicas;
         String storagePath = "./data-" + port;
         if (replicas > MIN_REPLICAS_FOR_DAO) {
             ReplicatedFileSystemDao dao = new ReplicatedFileSystemDao(storagePath, replicas);
@@ -30,17 +31,18 @@ public class ReplicatedKVService implements ReplicatedService {
         }
     }
 
+    //Кластерный режим
     public ReplicatedKVService(int port, Dao<byte[]> dao,
                                List<String> clusterNodes, String selfAddress,
                                ShardingStrategy shardingStrategy) {
-        this.port = port;
+        this.servicePort = port;
         if (dao instanceof ReplicatedFileSystemDao) {
             ReplicatedFileSystemDao repDao = (ReplicatedFileSystemDao) dao;
             this.replicatedDao = Optional.of(repDao);
-            this.numberOfReplicas = repDao.getReplicaCount();
+            this.numberOfReplicasValue = repDao.getReplicaCount();
         } else {
             this.replicatedDao = Optional.empty();
-            this.numberOfReplicas = 1;
+            this.numberOfReplicasValue = 1;
         }
         this.service = new SimpleKVService(port, dao, clusterNodes, selfAddress, shardingStrategy);
     }
@@ -57,12 +59,12 @@ public class ReplicatedKVService implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return servicePort;
     }
 
     @Override
     public int numberOfReplicas() {
-        return numberOfReplicas;
+        return numberOfReplicasValue;
     }
 
     @Override
