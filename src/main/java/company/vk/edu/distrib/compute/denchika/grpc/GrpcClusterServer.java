@@ -82,7 +82,7 @@ public class GrpcClusterServer {
             try {
                 dao.delete(request.getId());
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException(e);
             }
             responseObserver.onNext(DeleteResponse.getDefaultInstance());
             responseObserver.onCompleted();
