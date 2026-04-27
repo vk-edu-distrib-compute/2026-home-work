@@ -59,7 +59,6 @@ public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
         return new ArrayList<>(endpointToMultiplePorts.keySet());
     }
 
-    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInsideLoops")
     private static Map<String, Ports> buildEndpointsMap(List<Integer> httpPorts, List<Integer> grpcPorts) {
         if (httpPorts.size() != grpcPorts.size()) {
             throw new IllegalArgumentException("HTTP and gRPC lists should be the same size");
@@ -70,6 +69,7 @@ public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
             int httpPort = httpPorts.get(i);
             int grpcPort = grpcPorts.get(i);
             String endpoint = LOCALHOST_PREFIX + httpPort + "?grpcPort=" + grpcPort;
+            // NOSONAR: creating objects in loop is intentional (building map)
             map.put(endpoint, new Ports(httpPort, grpcPort));
         }
 

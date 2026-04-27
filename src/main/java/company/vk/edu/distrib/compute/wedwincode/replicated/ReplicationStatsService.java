@@ -25,11 +25,8 @@ public class ReplicationStatsService {
 
     public void handleStats(HttpExchange exchange) throws IOException {
         String[] parts = getParts(exchange);
-        if (parts == null) {
-            return;
-        }
 
-        Integer id = getId(exchange, parts);
+        Integer id = getId(parts, exchange);
         if (id == null) {
             return;
         }
@@ -91,25 +88,25 @@ public class ReplicationStatsService {
     private String[] getParts(HttpExchange exchange) throws IOException {
         if (!GET_METHOD.equals(exchange.getRequestMethod())) {
             sendEmptyResponse(HttpURLConnection.HTTP_BAD_METHOD, exchange);
-            return null;
+            return new String[]{};
         }
 
         String path = exchange.getRequestURI().getPath();
         if (!path.startsWith(statsPrefix)) {
             sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
-            return null;
+            return new String[]{};
         }
 
         String suffix = path.substring(statsPrefix.length());
         if (suffix.isEmpty() || suffix.startsWith("/") || suffix.endsWith("/")) {
             sendEmptyResponse(HttpURLConnection.HTTP_BAD_REQUEST, exchange);
-            return null;
+            return new String[]{};
         }
 
         return suffix.split("/");
     }
 
-    private static Integer getId(HttpExchange exchange, String[] parts) throws IOException {
+    private static Integer getId(String[] parts, HttpExchange exchange) throws IOException {
         int id;
         try {
             id = Integer.parseInt(parts[0]);
