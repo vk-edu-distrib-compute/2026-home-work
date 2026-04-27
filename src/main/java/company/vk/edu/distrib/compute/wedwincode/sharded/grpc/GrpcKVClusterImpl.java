@@ -69,7 +69,8 @@ public class GrpcKVClusterImpl extends RendezvousKVClusterImpl {
             int httpPort = httpPorts.get(i);
             int grpcPort = grpcPorts.get(i);
             String endpoint = LOCALHOST_PREFIX + httpPort + "?grpcPort=" + grpcPort;
-            map.put(endpoint, new Ports(httpPort, grpcPort));
+            Ports ports = new Ports(httpPort, grpcPort);
+            map.put(endpoint, ports);
         }
 
         return map;

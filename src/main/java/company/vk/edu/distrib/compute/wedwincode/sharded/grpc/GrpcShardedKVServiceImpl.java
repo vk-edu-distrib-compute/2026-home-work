@@ -56,7 +56,9 @@ public class GrpcShardedKVServiceImpl extends ShardedKVServiceImpl {
     public void start() {
         try {
             grpcServer.start();
-            log.info("gRPC server started on port {}", grpcServer.getPort());
+            if (log.isInfoEnabled()) {
+                log.info("gRPC server started on port {}", grpcServer.getPort());
+            }
         } catch (IOException e) {
             log.error("couldn't start gRPC server");
         }
