@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -128,7 +129,7 @@ public class ReplicatedKVService extends AbstractKvByteService implements Replic
         VersionedValue latestValue = futures.stream()
                 .map(CompletableFuture::join)
                 .filter(Objects::nonNull)
-                .max((a, b) -> Long.compare(a.timestamp(), b.timestamp()))
+                .max(Comparator.comparingLong(VersionedValue::timestamp))
                 .orElse(null);
 
         if (latestValue == null || latestValue.tombstone()) {

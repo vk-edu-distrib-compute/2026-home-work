@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.mediocritas.service;
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.HttpProxyClient;
+import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.ProxyClient;
 import company.vk.edu.distrib.compute.mediocritas.cluster.routing.Router;
 
 import java.io.IOException;
@@ -10,15 +11,15 @@ import java.net.http.HttpResponse;
 
 public class ClusterKvByteService extends AbstractKvByteService {
 
-    private final String localEndpoint;
-    private final Router router;
-    private final HttpProxyClient proxyClient;
+    protected final String localEndpoint;
+    protected final Router router;
+    protected final ProxyClient proxyClient;
 
     public ClusterKvByteService(
             int port,
             Dao<byte[]> dao,
             Router router,
-            HttpProxyClient proxyClient
+            ProxyClient proxyClient
     ) {
         super(port, dao);
         this.localEndpoint = "http://localhost:" + port;

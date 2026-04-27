@@ -7,7 +7,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-public class HttpProxyClient {
+public class HttpProxyClient implements ProxyClient {
     private final HttpClient httpClient;
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
@@ -17,6 +17,7 @@ public class HttpProxyClient {
                 .build();
     }
 
+    @Override
     public HttpResponse<byte[]> proxyGet(String endpoint, String key) throws IOException, InterruptedException {
         String url = buildUrl(endpoint, key);
         HttpRequest request = HttpRequest.newBuilder()
@@ -28,6 +29,7 @@ public class HttpProxyClient {
         return httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
     }
 
+    @Override
     public HttpResponse<Void> proxyPut(String endpoint, String key, byte[] value)
             throws IOException, InterruptedException {
         String url = buildUrl(endpoint, key);
@@ -40,6 +42,7 @@ public class HttpProxyClient {
         return httpClient.send(request, HttpResponse.BodyHandlers.discarding());
     }
 
+    @Override
     public HttpResponse<Void> proxyDelete(String endpoint, String key)
             throws IOException, InterruptedException {
         String url = buildUrl(endpoint, key);
@@ -50,6 +53,11 @@ public class HttpProxyClient {
                 .build();
 
         return httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+    }
+
+    @Override
+    public void close() {
+        httpClient.close();
     }
 
     private String buildUrl(String endpoint, String key) {

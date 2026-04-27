@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.mediocritas.cluster;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.HttpProxyClient;
+import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.ProxyClient;
 import company.vk.edu.distrib.compute.mediocritas.cluster.routing.Router;
 import company.vk.edu.distrib.compute.mediocritas.service.ClusterKvByteService;
 import company.vk.edu.distrib.compute.mediocritas.storage.FileByteDao;
@@ -28,15 +29,14 @@ public class PushkinaKVCluster implements KVCluster {
 
         endpoints.forEach(router::addNode);
 
-        ports.stream()
+        nodes.putAll(ports.stream()
                 .collect(Collectors.toMap(
                         port -> "http://localhost:" + port,
                         port -> createClusterNode(port, router, proxyClient)
-                ))
-                .forEach(nodes::put);
+                )));
     }
 
-    private static KVService createClusterNode(int port, Router router, HttpProxyClient proxyClient) {
+    private static KVService createClusterNode(int port, Router router, ProxyClient proxyClient) {
         try {
             String dataPath = "./data-cluster-" + port;
             return new ClusterKvByteService(port, new FileByteDao(dataPath), router, proxyClient);
