@@ -10,6 +10,9 @@ import java.net.http.HttpResponse;
 
 public class ReplicaClient {
     private static final String INTERNAL_REPLICATION_HEADER = "Internal-Replication";
+    private static final int HTTP_CREATED = 201;
+    private static final int HTTP_DELETED = 202;
+    private static final int HTTP_NOT_FOUND = 404;
     private final HttpClient httpClient;
     private final String selfEndpoint;
     private final H2Dao localDao;
@@ -47,7 +50,7 @@ public class ReplicaClient {
                     request,
                     HttpResponse.BodyHandlers.ofByteArray()
             );
-            return response.statusCode() >= 200 && response.statusCode() < 300;
+            return response.statusCode() == HTTP_CREATED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Replica PUT request was interrupted", e);
@@ -69,7 +72,7 @@ public class ReplicaClient {
                     HttpResponse.BodyHandlers.ofByteArray()
             );
 
-            if (response.statusCode() == 404) {
+            if (response.statusCode() == HTTP_NOT_FOUND) {
                 return null;
             }
 
@@ -119,7 +122,7 @@ public class ReplicaClient {
                     request,
                     HttpResponse.BodyHandlers.ofByteArray()
             );
-            return response.statusCode() == 202;
+            return response.statusCode() == HTTP_DELETED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Replica DELETE request was interrupted", e);
