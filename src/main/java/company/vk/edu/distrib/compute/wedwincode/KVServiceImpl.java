@@ -30,7 +30,7 @@ public class KVServiceImpl implements KVService {
     private static final int EMPTY_RESPONSE = -1;
 
     private boolean isStarted;
-    private final Dao<DaoRecord> dao;
+    protected final Dao<DaoRecord> dao;
     protected final HttpServer server;
     private final ExecutorService executor;
 

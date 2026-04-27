@@ -16,18 +16,22 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class RendezvousKVClusterImpl implements KVCluster {
-    private static final String LOCALHOST_PREFIX = "http://localhost:";
-    private static final Path STORAGE_PATH = Path.of(".data", "wedwincode");
+    protected static final String LOCALHOST_PREFIX = "http://localhost:";
+    protected static final Path STORAGE_PATH = Path.of(".data", "wedwincode");
 
+    protected final Map<String, KVService> endpointToService = new ConcurrentHashMap<>();
+    protected final HashStrategy strategy;
     private final Map<String, Integer> endpointToPort;
-    private final Map<String, KVService> endpointToService;
-    private final HashStrategy strategy;
 
     public RendezvousKVClusterImpl(List<Integer> ports) {
         this.endpointToPort = buildEndpointsMap(ports);
-        this.endpointToService = new ConcurrentHashMap<>();
 
         List<String> endpoints = new ArrayList<>(endpointToPort.keySet());
+        this.strategy = new RendezvousHashStrategy(endpoints);
+    }
+
+    protected RendezvousKVClusterImpl(List<String> endpoints, Map<String, Integer> endpointToPort) {
+        this.endpointToPort = endpointToPort;
         this.strategy = new RendezvousHashStrategy(endpoints);
     }
 
@@ -83,13 +87,13 @@ public class RendezvousKVClusterImpl implements KVCluster {
         return new ArrayList<>(endpointToPort.keySet());
     }
 
-    private Map<String, Integer> buildEndpointsMap(List<Integer> ports) {
+    private static Map<String, Integer> buildEndpointsMap(List<Integer> ports) {
         Map<String, Integer> endpointToPort = new ConcurrentHashMap<>();
         ports.forEach(port -> endpointToPort.put(LOCALHOST_PREFIX + port, port));
         return endpointToPort;
     }
 
-    private Dao<DaoRecord> buildPersistentDao(int port) throws IOException {
+    protected static Dao<DaoRecord> buildPersistentDao(int port) throws IOException {
         Path nodePath = STORAGE_PATH.resolve("node" + port);
         return new PersistentDao(nodePath);
     }

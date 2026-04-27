@@ -24,7 +24,7 @@ public class ShardedKVServiceImpl extends KVServiceImpl {
 
     private final Logger log = LoggerFactory.getLogger(ShardedKVServiceImpl.class);
     private final HashStrategy strategy;
-    private final String selfEndpoint;
+    protected String selfEndpoint;
 
     public ShardedKVServiceImpl(int port, Dao<DaoRecord> dao, HashStrategy strategy) throws IOException {
         super(port, dao);
@@ -54,7 +54,7 @@ public class ShardedKVServiceImpl extends KVServiceImpl {
         handleEntityMethod(params, exchange);
     }
 
-    private void proxyRequest(HttpExchange exchange, URI uri) {
+    protected void proxyRequest(HttpExchange exchange, URI uri) throws IOException {
         try (HttpClient client = HttpClient.newHttpClient()) {
             HttpRequest.Builder builder = HttpRequest.newBuilder();
             switch (exchange.getRequestMethod()) {
@@ -84,7 +84,7 @@ public class ShardedKVServiceImpl extends KVServiceImpl {
         }
     }
 
-    private static URI buildEntityUri(String endpoint, String id) {
+    protected URI buildEntityUri(String endpoint, String id) {
         try {
             return new URI(endpoint + "/v0/entity?id=" + id);
         } catch (URISyntaxException e) {
