@@ -61,7 +61,7 @@ public class GrpcClusterServer {
             } catch (NoSuchElementException e) {
                 responseObserver.onNext(GetResponse.newBuilder().setFound(false).build());
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IllegalStateException(e);
             }
             responseObserver.onCompleted();
         }

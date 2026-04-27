@@ -30,7 +30,7 @@ public class DenchikaKVCluster implements KVCluster {
         for (int port : ports) {
             String endpoint = "http://localhost:" + port;
             int grpcPort = grpcPorts.get(endpoint);
-            nodes.put(endpoint, new ClusterKVService(port, grpcPort, dao, hasher, endpoint, grpcPorts));
+            nodes.put(endpoint, createNode(port, grpcPort, dao, hasher, endpoint, grpcPorts));
         }
     }
 
@@ -71,6 +71,16 @@ public class DenchikaKVCluster implements KVCluster {
         return endpoints;
     }
 
+    private KVService createNode(
+        int port,
+        int grpcPort,
+        Dao<byte[]> dao,
+        DistributingAlgorithm hasher,
+        String endpoint,
+        Map<String, Integer> grpcPorts
+    ) {
+        return new ClusterKVService(port, grpcPort, dao, hasher, endpoint, grpcPorts);
+    }
     private static int allocateFreePort() {
         try (ServerSocket socket = new ServerSocket(0)) {
             socket.setReuseAddress(true);
