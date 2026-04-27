@@ -14,8 +14,8 @@ public class DenchikaRendezvousKVClusterFactory extends KVClusterFactory {
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
         List<String> endpoints = ports.stream()
-                .map(p -> "http://localhost:" + p)
-                .toList();
+            .map(p -> "http://localhost:" + p)
+            .toList();
         DistributingAlgorithm hasher = new RendezvousHashing(endpoints);
         return new DenchikaKVCluster(ports, new InMemoryDao(), hasher);
     }

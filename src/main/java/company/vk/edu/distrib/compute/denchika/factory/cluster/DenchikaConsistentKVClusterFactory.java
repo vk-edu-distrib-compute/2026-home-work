@@ -14,8 +14,8 @@ public class DenchikaConsistentKVClusterFactory extends KVClusterFactory {
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
         List<String> endpoints = ports.stream()
-                .map(p -> "http://localhost:" + p)
-                .toList();
+            .map(p -> "http://localhost:" + p)
+            .toList();
         DistributingAlgorithm hasher = new ConsistentHashing(endpoints);
         return new DenchikaKVCluster(ports, new InMemoryDao(), hasher);
     }

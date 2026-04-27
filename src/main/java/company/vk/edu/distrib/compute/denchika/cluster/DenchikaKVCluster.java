@@ -6,6 +6,8 @@ import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.denchika.cluster.hashing.DistributingAlgorithm;
 import company.vk.edu.distrib.compute.denchika.service.ClusterKVService;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,10 +19,18 @@ public class DenchikaKVCluster implements KVCluster {
 
     public DenchikaKVCluster(List<Integer> ports, Dao<byte[]> dao, DistributingAlgorithm hasher) {
         this.endpoints = new ArrayList<>();
+        Map<String, Integer> grpcPorts = new ConcurrentHashMap<>();
+
         for (int port : ports) {
             String endpoint = "http://localhost:" + port;
             endpoints.add(endpoint);
-            nodes.put(endpoint, createNode(port, dao, hasher, endpoint));
+            grpcPorts.put(endpoint, allocateFreePort());
+        }
+
+        for (int port : ports) {
+            String endpoint = "http://localhost:" + port;
+            int grpcPort = grpcPorts.get(endpoint);
+            nodes.put(endpoint, new ClusterKVService(port, grpcPort, dao, hasher, endpoint, grpcPorts));
         }
     }
 
@@ -61,7 +71,12 @@ public class DenchikaKVCluster implements KVCluster {
         return endpoints;
     }
 
-    private KVService createNode(int port, Dao<byte[]> dao, DistributingAlgorithm hasher, String endpoint) {
-        return new ClusterKVService(port, dao, hasher, endpoint);
+    private static int allocateFreePort() {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot allocate free port for gRPC", e);
+        }
     }
 }
