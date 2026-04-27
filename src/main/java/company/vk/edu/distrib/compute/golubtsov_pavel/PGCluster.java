@@ -23,7 +23,7 @@ public class PGCluster implements KVCluster {
 
     public PGCluster(List<Integer> ports) {
         this.ports = List.copyOf(ports);
-        this.grpcPorts = grpcPorts(this.ports);
+        this.grpcPorts = getGrpcPorts(this.ports);
         this.endpoints = java.util.stream.IntStream.range(0, this.ports.size())
                 .mapToObj(index -> "http://localhost:" + this.ports.get(index)
                         + "?grpcPort=" + this.grpcPorts.get(index))
@@ -43,13 +43,14 @@ public class PGCluster implements KVCluster {
         return new PGInMemoryKVService(port, endpointToGrpcPort.get(endpoint), dao, endpoint, endpoints);
     }
 
-    private static List<Integer> grpcPorts(List<Integer> httpPorts) {
+    private static List<Integer> getGrpcPorts(List<Integer> httpPorts) {
         try {
             List<Integer> result = new ArrayList<>();
+            List<Integer> excludedPorts = new ArrayList<>(httpPorts);
             for (int ignored : httpPorts) {
-                List<Integer> excludedPorts = new ArrayList<>(httpPorts);
-                excludedPorts.addAll(result);
-                result.add(PGgrpcKVService.Ports.availablePort(excludedPorts));
+                int grpcPort = PGgrpcKVService.Ports.availablePort(excludedPorts);
+                result.add(grpcPort);
+                excludedPorts.add(grpcPort);
             }
             return List.copyOf(result);
         } catch (IOException e) {

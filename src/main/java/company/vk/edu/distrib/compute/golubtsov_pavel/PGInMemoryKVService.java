@@ -32,18 +32,24 @@ import java.util.concurrent.TimeUnit;
 
 public class PGInMemoryKVService implements KVService {
     public static final String ID_PARAM_PREFIX = "id=";
+    static final String METHOD_GET = "GET";
+    static final String METHOD_PUT = "PUT";
+    static final String METHOD_DELETE = "DELETE";
+
     private static final Logger log = LoggerFactory.getLogger(PGInMemoryKVService.class);
     private static final String GRPC_PORT_PARAM = "grpcPort";
     private static final int REQUEST_TIMEOUT_SECONDS = 2;
     private static final int TERMINATION_TIMEOUT_MILLIS = 500;
 
     private final Dao<byte[]> dao;
-    private final HttpServer httpServer;
-    private final io.grpc.Server grpcServer;
+    private final int httpPort;
+    private final int grpcPort;
     private final String selfEndpoint;
     private final ShardResolver shardResolver;
     private final Map<String, ManagedChannel> channels = new ConcurrentHashMap<>();
     private final Map<String, PGServiceGrpc.PGServiceBlockingStub> clients = new ConcurrentHashMap<>();
+    private HttpServer httpServer;
+    private io.grpc.Server grpcServer;
 
     public PGInMemoryKVService(int port,
                                int grpcPort,
@@ -51,20 +57,18 @@ public class PGInMemoryKVService implements KVService {
                                String selfEndpoint,
                                List<String> clusterEndpoints)
             throws IOException {
-        this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-        this.grpcServer = Grpc.newServerBuilderForPort(grpcPort, InsecureServerCredentials.create())
-                .addService(new GrpcEntityService())
-                .build();
+        this.httpPort = port;
+        this.grpcPort = grpcPort;
         this.dao = dao;
         this.selfEndpoint = selfEndpoint;
         this.shardResolver = new ShardResolver(clusterEndpoints);
-        initServer();
     }
 
-    private void initServer() {
+    private void initServer() throws IOException {
+        httpServer = HttpServer.create(new InetSocketAddress(httpPort), 0);
         httpServer.createContext("/v0/status", new ErrorHttpHandler(http -> {
             final var method = http.getRequestMethod();
-            if (Objects.equals("GET", method)) {
+            if (Objects.equals(METHOD_GET, method)) {
                 http.sendResponseHeaders(200, 0);
             } else {
                 http.sendResponseHeaders(405, 0);
@@ -78,6 +82,9 @@ public class PGInMemoryKVService implements KVService {
         }));
 
         httpServer.createContext("/", new ErrorHttpHandler(this::handleCompatibilityRequest));
+        grpcServer = Grpc.newServerBuilderForPort(grpcPort, InsecureServerCredentials.create())
+                .addService(new GrpcEntityService())
+                .build();
     }
 
     private void handleCompatibilityRequest(HttpExchange http) throws IOException {
@@ -119,13 +126,13 @@ public class PGInMemoryKVService implements KVService {
     }
 
     private Response handleLocalEntityRequest(String method, String id, byte[] body) throws IOException {
-        if (Objects.equals("GET", method)) {
+        if (Objects.equals(METHOD_GET, method)) {
             final var value = dao.get(id);
             return response(200, value);
-        } else if (Objects.equals("PUT", method)) {
+        } else if (Objects.equals(METHOD_PUT, method)) {
             dao.upsert(id, body);
             return response(201, new byte[0]);
-        } else if (Objects.equals("DELETE", method)) {
+        } else if (Objects.equals(METHOD_DELETE, method)) {
             dao.delete(id);
             return response(202, new byte[0]);
         }
@@ -135,14 +142,14 @@ public class PGInMemoryKVService implements KVService {
     private Response proxyRequest(String method, String owner, String id, byte[] body) {
         PGServiceGrpc.PGServiceBlockingStub client = client(owner)
                 .withDeadlineAfter(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        if (Objects.equals("GET", method)) {
+        if (Objects.equals(METHOD_GET, method)) {
             return client.get(KeyRequest.newBuilder().setKey(id).build());
-        } else if (Objects.equals("PUT", method)) {
+        } else if (Objects.equals(METHOD_PUT, method)) {
             return client.upsert(UpsertRequest.newBuilder()
                     .setKey(id)
                     .setValue(ByteString.copyFrom(body))
                     .build());
-        } else if (Objects.equals("DELETE", method)) {
+        } else if (Objects.equals(METHOD_DELETE, method)) {
             return client.delete(KeyRequest.newBuilder().setKey(id).build());
         }
         return response(405, new byte[0]);
@@ -177,6 +184,7 @@ public class PGInMemoryKVService implements KVService {
     public void start() {
         log.info("Starting...");
         try {
+            initServer();
             grpcServer.start();
             httpServer.start();
         } catch (IOException e) {
@@ -186,12 +194,16 @@ public class PGInMemoryKVService implements KVService {
 
     @Override
     public void stop() {
-        httpServer.stop(0);
-        grpcServer.shutdownNow();
-        try {
-            grpcServer.awaitTermination(TERMINATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        if (httpServer != null) {
+            httpServer.stop(0);
+        }
+        if (grpcServer != null) {
+            grpcServer.shutdownNow();
+            try {
+                grpcServer.awaitTermination(TERMINATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         clients.clear();
         for (ManagedChannel channel : channels.values()) {
@@ -209,13 +221,13 @@ public class PGInMemoryKVService implements KVService {
     private final class GrpcEntityService extends PGServiceGrpc.PGServiceImplBase {
         @Override
         public void get(KeyRequest request, StreamObserver<Response> responseObserver) {
-            complete(responseObserver, () -> handleLocalEntityRequest("GET", request.getKey(), new byte[0]));
+            complete(responseObserver, () -> handleLocalEntityRequest(METHOD_GET, request.getKey(), new byte[0]));
         }
 
         @Override
         public void upsert(UpsertRequest request, StreamObserver<Response> responseObserver) {
             complete(responseObserver, () -> handleLocalEntityRequest(
-                    "PUT",
+                    METHOD_PUT,
                     request.getKey(),
                     request.getValue().toByteArray()
             ));
@@ -223,7 +235,7 @@ public class PGInMemoryKVService implements KVService {
 
         @Override
         public void delete(KeyRequest request, StreamObserver<Response> responseObserver) {
-            complete(responseObserver, () -> handleLocalEntityRequest("DELETE", request.getKey(), new byte[0]));
+            complete(responseObserver, () -> handleLocalEntityRequest(METHOD_DELETE, request.getKey(), new byte[0]));
         }
 
         private void complete(StreamObserver<Response> responseObserver, LocalAction action) {
