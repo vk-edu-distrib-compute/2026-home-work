@@ -9,65 +9,65 @@ import company.vk.edu.distrib.compute.maryarta.sharding.ShardedKVServiceImpl;
 
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class KVClusterImpl implements KVCluster {
-    private final List<Integer> ports;
-    private final List<String> endpoints;// = getEndpoints();
-    private final Map<String, KVService> kvServicesS = new HashMap<>();
-//    private final Map<Integer, KVService> kvServices = new HashMap<>();
+    private final List<String> endpoints;
+    private final Map<String, KVService> kvServices = new ConcurrentHashMap<>();
+    ShardingStrategy shardingStrategy;
 
-    public KVClusterImpl(List<Integer> ports) {
-        this.ports = ports;
-        this.endpoints = getEndpoints();
+    public KVClusterImpl(List<Integer> ports, ShardingStrategy.ShardingAlgorithm shardingAlgorithm) {
+        this.endpoints = ports.stream().map(port -> "http://localhost:" + port).toList();
+        shardingStrategy = switch (shardingAlgorithm) {
+            case CONSISTENT -> new ConsistentHashing(endpoints);
+            case RENDEZVOUS -> new RendezvousHashing(endpoints);
+        };
         for (Integer port: ports) {
-            try {
-                kvServicesS.put("http://localhost:" + port, new ShardedKVServiceImpl(port,"http://localhost:" + port, this.endpoints));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            String endpoint = "http://localhost:" + port;
+            kvServices.put(endpoint, createService(port));
         }
     }
 
-    // стартует все ноды кластера
+    private ShardedKVServiceImpl createService(int port) {
+        try {
+            return new ShardedKVServiceImpl(port, shardingStrategy);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create service for port " + port, e);
+        }
+    }
+
     @Override
     public void start() {
-//        List<String> endpoints = getEndpoints();
-        for(String endpoint: endpoints){
+        for (String endpoint: endpoints) {
             start(endpoint);
         }
     }
 
-    // стартует одну определенную ноду кластера
     @Override
     public void start(String endpoint) {
-        //проверить
-//        URI uri = URI.create(endpoint);
-//        int port = uri.getPort();
         try {
-            kvServicesS.get(endpoint).start();
+            kvServices.get(endpoint).start();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("Failed to start node: " + endpoint, e);
         }
     }
 
     @Override
     public void stop() {
-        for(String endpoint: endpoints){
+        for (String endpoint: endpoints) {
             stop(endpoint);
         }
     }
 
     @Override
     public void stop(String endpoint) {
-        kvServicesS.get(endpoint).stop();
+        kvServices.get(endpoint).stop();
     }
 
     @Override
     public List<String> getEndpoints() {
-        return ports.stream()
-                .map(port -> "http://localhost:" + port).toList();
+        return endpoints;
     }
 }
