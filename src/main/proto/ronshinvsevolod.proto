@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package ronshinvsevolod;
+
+option java_package = "company.vk.edu.distrib.compute.ronshinvsevolod.grpc";
+option java_outer_classname = "RonshinProto";
+option java_multiple_files = true;
+
+service RonshinKVService {
+  rpc Get(RonshinGetRequest) returns (RonshinGetResponse);
+  rpc Put(RonshinPutRequest) returns (RonshinPutResponse);
+  rpc Delete(RonshinDeleteRequest) returns (RonshinDeleteResponse);
+}
+
+message RonshinGetRequest {
+  string key = 1;
+}
+
+message RonshinGetResponse {
+  bool found = 1;
+  bytes value = 2;
+  int64 timestamp = 3;
+  bool deleted = 4;
+}
+
+message RonshinPutRequest {
+  string key = 1;
+  bytes value = 2;
+  int64 timestamp = 3;
+}
+
+message RonshinPutResponse {
+  bool success = 1;
+}
+
+message RonshinDeleteRequest {
+  string key = 1;
+  int64 timestamp = 2;
+}
+
+message RonshinDeleteResponse {
+  bool success = 1;
+}
