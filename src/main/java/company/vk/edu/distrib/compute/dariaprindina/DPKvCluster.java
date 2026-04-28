@@ -30,7 +30,7 @@ public class DPKvCluster implements KVCluster {
 
     public DPKvCluster(List<Integer> ports, DPShardingAlgorithm algorithm, int replicationFactor) {
         this.endpoints = ports.stream()
-            .map(port -> "http://localhost:" + port)
+            .map(port -> "http://localhost:" + port + "?grpcPort=" + (port + 1000))
             .toList();
         if (replicationFactor < 1 || replicationFactor > endpoints.size()) {
             throw new IllegalArgumentException("replicationFactor must be in range [1, " + endpoints.size() + "]");

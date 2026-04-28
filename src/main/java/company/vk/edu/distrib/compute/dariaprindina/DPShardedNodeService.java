@@ -1,10 +1,20 @@
 package company.vk.edu.distrib.compute.dariaprindina;
 
+import com.google.protobuf.ByteString;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.dariaprindina.grpc.DPInternalKvServiceGrpc;
+import company.vk.edu.distrib.compute.dariaprindina.grpc.InternalRequest;
+import company.vk.edu.distrib.compute.dariaprindina.grpc.InternalResponse;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,10 +23,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -24,8 +30,13 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
-@SuppressWarnings("PMD.GodClass")
+@SuppressWarnings({
+    "PMD.GodClass",
+    "PMD.CouplingBetweenObjects",
+    "PMD.ExcessiveImports"
+})
 public class DPShardedNodeService implements KVService {
     private static final Logger log = LoggerFactory.getLogger(DPShardedNodeService.class);
     private static final String METHOD_GET = "GET";
@@ -33,6 +44,7 @@ public class DPShardedNodeService implements KVService {
     private static final String METHOD_DELETE = "DELETE";
     private static final String ID_PARAM = "id";
     private static final String ACK_PARAM = "ack";
+    private static final String GRPC_PORT_PARAM = "grpcPort";
     private static final int MIN_ACK = 1;
     private static final int DEFAULT_ACK = 1;
     private static final int STATUS_OK = 200;
@@ -43,15 +55,15 @@ public class DPShardedNodeService implements KVService {
     private static final int STATUS_METHOD_NOT_ALLOWED = 405;
     private static final int STATUS_INTERNAL_ERROR = 500;
     private static final int STATUS_GATEWAY_TIMEOUT = 504;
-    private static final String INTERNAL_REPLICA_HEADER = "X-DP-Internal-Replica";
     private static final Duration PROXY_TIMEOUT = Duration.ofSeconds(2);
 
     private final String localEndpoint;
-    private final HttpServer server;
-    private final HttpClient httpClient;
+    private final HttpServer httpServer;
+    private final Server grpcServer;
     private final Dao<byte[]> dao;
     private final DPShardSelector shardSelector;
     private final int replicationFactor;
+    private final Map<String, ManagedChannel> channelByEndpoint;
 
     public DPShardedNodeService(
         String localEndpoint,
@@ -63,9 +75,10 @@ public class DPShardedNodeService implements KVService {
         this.dao = Objects.requireNonNull(dao, "dao");
         this.shardSelector = Objects.requireNonNull(shardSelector, "shardSelector");
         this.replicationFactor = replicationFactor;
-        this.httpClient = HttpClient.newHttpClient();
-        this.server = createHttpServer(localEndpoint);
-        initServer();
+        this.channelByEndpoint = new ConcurrentHashMap<>();
+        this.httpServer = createHttpServer(localEndpoint);
+        this.grpcServer = createGrpcServer(localEndpoint);
+        initHttpServer();
     }
 
     private static HttpServer createHttpServer(String endpoint) throws IOException {
@@ -73,8 +86,15 @@ public class DPShardedNodeService implements KVService {
         return HttpServer.create(new InetSocketAddress(uri.getHost(), uri.getPort()), 0);
     }
 
-    private void initServer() {
-        server.createContext("/v0/status", new ErrorHttpHandler(exchange -> {
+    private Server createGrpcServer(String endpoint) {
+        final int grpcPort = parseGrpcPort(endpoint);
+        return ServerBuilder.forPort(grpcPort)
+            .addService(new InternalGrpcService())
+            .build();
+    }
+
+    private void initHttpServer() {
+        httpServer.createContext("/v0/status", new ErrorHttpHandler(exchange -> {
             if (Objects.equals(METHOD_GET, exchange.getRequestMethod())) {
                 sendResponse(exchange, STATUS_OK, null);
             } else {
@@ -82,13 +102,9 @@ public class DPShardedNodeService implements KVService {
             }
         }));
 
-        server.createContext("/v0/entity", new ErrorHttpHandler(exchange -> {
+        httpServer.createContext("/v0/entity", new ErrorHttpHandler(exchange -> {
             final Map<String, String> queryParams = parseQueryParams(exchange.getRequestURI().getQuery());
             final String id = parseId(queryParams);
-            if (isInternalReplicaRequest(exchange)) {
-                handleLocally(exchange, id);
-                return;
-            }
             final int ack = parseAck(queryParams);
             final List<String> replicas = shardSelector.replicasForKey(id, replicationFactor);
             if (ack > replicas.size()) {
@@ -175,28 +191,6 @@ public class DPShardedNodeService implements KVService {
         sendResponse(exchange, STATUS_GATEWAY_TIMEOUT, null);
     }
 
-    private void handleLocally(HttpExchange exchange, String id) throws IOException {
-        final String method = exchange.getRequestMethod();
-        if (METHOD_GET.equals(method)) {
-            final byte[] value = dao.get(id);
-            sendResponse(exchange, STATUS_OK, value);
-            return;
-        }
-        if (METHOD_PUT.equals(method)) {
-            try (var requestBody = exchange.getRequestBody()) {
-                dao.upsert(id, requestBody.readAllBytes());
-            }
-            sendResponse(exchange, STATUS_CREATED, null);
-            return;
-        }
-        if (METHOD_DELETE.equals(method)) {
-            dao.delete(id);
-            sendResponse(exchange, STATUS_ACCEPTED, null);
-            return;
-        }
-        sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, null);
-    }
-
     private OperationResult executeOnReplica(String replicaEndpoint, String method, String id, byte[] body) {
         if (localEndpoint.equals(replicaEndpoint)) {
             return executeLocally(method, id, body);
@@ -228,41 +222,37 @@ public class DPShardedNodeService implements KVService {
     }
 
     private OperationResult executeRemotely(String replicaEndpoint, String method, String id, byte[] body) {
-        final String targetUrl = replicaEndpoint + "/v0/entity?id=" + URLEncoder.encode(id, StandardCharsets.UTF_8);
-        final HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-            .uri(URI.create(targetUrl))
-            .timeout(PROXY_TIMEOUT)
-            .header(INTERNAL_REPLICA_HEADER, "true");
+        final URI uri = URI.create(replicaEndpoint);
+        final int grpcPort = parseGrpcPort(replicaEndpoint);
+        final ManagedChannel channel = channelByEndpoint.computeIfAbsent(replicaEndpoint, ignored ->
+            ManagedChannelBuilder.forAddress(uri.getHost(), grpcPort)
+                .usePlaintext()
+                .build()
+        );
 
-        if (METHOD_GET.equals(method)) {
-            requestBuilder.GET();
-        } else if (METHOD_DELETE.equals(method)) {
-            requestBuilder.DELETE();
-        } else if (METHOD_PUT.equals(method)) {
-            requestBuilder.PUT(HttpRequest.BodyPublishers.ofByteArray(body));
-        } else {
-            return new OperationResult(STATUS_METHOD_NOT_ALLOWED, null);
+        final InternalRequest.Builder requestBuilder = InternalRequest.newBuilder()
+            .setMethod(method)
+            .setId(id);
+        if (body != null) {
+            requestBuilder.setBody(ByteString.copyFrom(body));
         }
 
-        final HttpResponse<byte[]> response;
+        final DPInternalKvServiceGrpc.DPInternalKvServiceBlockingStub stub = DPInternalKvServiceGrpc
+            .newBlockingStub(channel)
+            .withDeadlineAfter(PROXY_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        final InternalResponse response;
         try {
-            response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofByteArray());
-        } catch (IOException e) {
-            return new OperationResult(STATUS_GATEWAY_TIMEOUT, null);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            response = stub.handle(requestBuilder.build());
+        } catch (StatusRuntimeException e) {
             return new OperationResult(STATUS_GATEWAY_TIMEOUT, null);
         }
-        return new OperationResult(response.statusCode(), response.body());
+        final byte[] responseBody = response.getBody().isEmpty() ? null : response.getBody().toByteArray();
+        return new OperationResult(response.getStatusCode(), responseBody);
     }
 
     private static boolean isSuccessfulWriteStatus(int statusCode, String method) {
         return (METHOD_PUT.equals(method) && statusCode == STATUS_CREATED)
             || (METHOD_DELETE.equals(method) && statusCode == STATUS_ACCEPTED);
-    }
-
-    private static boolean isInternalReplicaRequest(HttpExchange exchange) {
-        return "true".equalsIgnoreCase(exchange.getRequestHeaders().getFirst(INTERNAL_REPLICA_HEADER));
     }
 
     private static int parseAck(Map<String, String> queryParams) {
@@ -285,11 +275,21 @@ public class DPShardedNodeService implements KVService {
         return id;
     }
 
-    private static Map<String, String> parseQueryParams(String query) {
-        if (query == null || query.isBlank()) {
-            throw new IllegalArgumentException("bad query");
+    private static int parseGrpcPort(String endpoint) {
+        final URI uri = URI.create(endpoint);
+        final Map<String, String> queryParams = parseQueryParams(uri.getQuery());
+        final String grpcPort = queryParams.get(GRPC_PORT_PARAM);
+        if (grpcPort == null || grpcPort.isBlank()) {
+            throw new IllegalArgumentException("grpcPort is not configured: " + endpoint);
         }
+        return Integer.parseInt(grpcPort);
+    }
+
+    private static Map<String, String> parseQueryParams(String query) {
         final Map<String, String> params = new ConcurrentHashMap<>();
+        if (query == null || query.isBlank()) {
+            return params;
+        }
         for (String pair : query.split("&")) {
             if (pair.isEmpty()) {
                 continue;
@@ -304,13 +304,22 @@ public class DPShardedNodeService implements KVService {
 
     @Override
     public void start() {
-        server.start();
+        try {
+            grpcServer.start();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to start grpc server", e);
+        }
+        httpServer.start();
         log.info("Node started. endpoint={}", localEndpoint);
     }
 
     @Override
     public void stop() {
-        server.stop(0);
+        httpServer.stop(0);
+        grpcServer.shutdownNow();
+        for (ManagedChannel channel : channelByEndpoint.values()) {
+            channel.shutdownNow();
+        }
         log.info("Node stopped. endpoint={}", localEndpoint);
     }
 
@@ -327,6 +336,21 @@ public class DPShardedNodeService implements KVService {
     }
 
     private record OperationResult(int statusCode, byte[] body) {
+    }
+
+    private final class InternalGrpcService extends DPInternalKvServiceGrpc.DPInternalKvServiceImplBase {
+        @Override
+        public void handle(InternalRequest request, StreamObserver<InternalResponse> responseObserver) {
+            final byte[] body = request.getBody().isEmpty() ? null : request.getBody().toByteArray();
+            final OperationResult result = executeLocally(request.getMethod(), request.getId(), body);
+            final InternalResponse.Builder responseBuilder = InternalResponse.newBuilder()
+                .setStatusCode(result.statusCode);
+            if (result.body != null) {
+                responseBuilder.setBody(ByteString.copyFrom(result.body));
+            }
+            responseObserver.onNext(responseBuilder.build());
+            responseObserver.onCompleted();
+        }
     }
 
     private static final class ErrorHttpHandler implements HttpHandler {
