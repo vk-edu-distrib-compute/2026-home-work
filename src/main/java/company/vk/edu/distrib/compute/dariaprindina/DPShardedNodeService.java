@@ -307,7 +307,7 @@ public class DPShardedNodeService implements KVService {
         try {
             grpcServer.start();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start grpc server", e);
+            throw new IllegalStateException("Failed to start grpc server", e);
         }
         httpServer.start();
         log.info("Node started. endpoint={}", localEndpoint);
