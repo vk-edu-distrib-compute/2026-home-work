@@ -50,7 +50,8 @@ public class GrpcProxyClient implements ProxyClient {
                 .setValue(ByteString.copyFrom(value))
                 .build();
         return toCompletableFuture(stub(node).put(request))
-                .thenApply(response -> response.getSuccess() ? ProxyResponse.created() : ProxyResponse.<Void>serverError())
+                .thenApply(response -> response.getSuccess()
+                        ? ProxyResponse.created() : ProxyResponse.<Void>serverError())
                 .exceptionally(e -> ProxyResponse.error());
     }
 
@@ -58,7 +59,8 @@ public class GrpcProxyClient implements ProxyClient {
     public CompletableFuture<ProxyResponse<Void>> proxyDelete(Node node, String key) {
         DeleteRequest request = DeleteRequest.newBuilder().setKey(key).build();
         return toCompletableFuture(stub(node).delete(request))
-                .thenApply(response -> response.getSuccess() ? ProxyResponse.accepted() : ProxyResponse.<Void>serverError())
+                .thenApply(response -> response.getSuccess()
+                        ? ProxyResponse.accepted() : ProxyResponse.<Void>serverError())
                 .exceptionally(e -> ProxyResponse.error());
     }
 

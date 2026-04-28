@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.NoSuchElementException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -41,6 +42,7 @@ public abstract class AbstractKvByteService implements KVService {
             }
             httpServer = HttpServer.create(new InetSocketAddress(port), 0);
             registerHandlers();
+            httpServer.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
             httpServer.start();
             isStarted = true;
         } catch (IOException e) {
