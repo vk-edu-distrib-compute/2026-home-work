@@ -14,7 +14,9 @@ import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevKVServiceFa
 import company.vk.edu.distrib.compute.korjick.CakeKVServiceFactory;
 import company.vk.edu.distrib.compute.luckyslon2003.LuckySlon2003KVServiceFactory;
 import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
+import company.vk.edu.distrib.compute.mediocritas.service.factory.PushkinaReplicatedKVServiceFactory;
 import company.vk.edu.distrib.compute.nesterukia.file_system.NesterukiaFileSystemKVServiceFactory;
+import company.vk.edu.distrib.compute.nesterukia.in_memory.NesterukiaInMemoryKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
@@ -30,23 +32,25 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
 
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        KVServiceFactorySimple.class,
-        KVServiceFactoryImpl.class,
-        AndecoKVServiceFactory.class,
-        MyKVServiceFactory.class,
-        InMemoryKVServiceFactory.class,
-        Vitos23KVServiceFactory.class,
-        NihuawayKVServiceFactory.class,
-        ShuuuurikFileKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
-        VredakonKVServiceFactory.class,
-        PopovIgorKVServiceFactoryImpl.class,
-        NesterukiaFileSystemKVServiceFactory.class,
-        KirillmedvedevKVServiceFactory.class,
-        KirillmedvedevFileSystemKVServiceFactory.class,
-        LuckySlon2003KVServiceFactory.class,
-        Wolfram158KVServiceFactoryFileWithCacheImpl.class,
-        CakeKVServiceFactory.class
+            KVServiceFactorySimple.class,
+            KVServiceFactoryImpl.class,
+            AndecoKVServiceFactory.class,
+            MyKVServiceFactory.class,
+            InMemoryKVServiceFactory.class,
+            Vitos23KVServiceFactory.class,
+            NihuawayKVServiceFactory.class,
+            ShuuuurikFileKVServiceFactory.class,
+            B10nicleKVServiceFactory.class,
+            VredakonKVServiceFactory.class,
+            PopovIgorKVServiceFactoryImpl.class,
+            NesterukiaInMemoryKVServiceFactory.class,
+            NesterukiaFileSystemKVServiceFactory.class,
+            KirillmedvedevKVServiceFactory.class,
+            KirillmedvedevFileSystemKVServiceFactory.class,
+            LuckySlon2003KVServiceFactory.class,
+            Wolfram158KVServiceFactoryFileWithCacheImpl.class,
+            CakeKVServiceFactory.class,
+            PushkinaReplicatedKVServiceFactory.class
     );
 
     @Override
