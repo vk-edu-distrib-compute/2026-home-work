@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+import static company.vk.edu.distrib.compute.linempy.scharding.GrpcConfigUtils.GRPC_PORT_SHIFT;
 
 /**
  * Управление кластером: запуск и остановка всех нод.
@@ -46,16 +49,32 @@ public class LinempyKVClusterImpl implements KVCluster {
 
     @Override
     public void stop(String endpoint) {
-        nodes.get(endpoint).stop();
+        KVService node = nodes.get(endpoint);
+        if (node != null) {
+            node.stop();
+        }
     }
 
     @Override
     public List<String> getEndpoints() {
-        return endpoints;
+        return endpoints.stream()
+                .map(this::addGrpcPortToEndpoint)
+                .collect(Collectors.toList());
+    }
+
+    private String addGrpcPortToEndpoint(String httpEndpoint) {
+        int httpPort = extractPort(httpEndpoint);
+        int grpcPort = httpPort + GRPC_PORT_SHIFT;
+        return httpEndpoint + "?grpcPort=" + grpcPort;
+    }
+
+    private int extractPort(String endpoint) {
+        return Integer.parseInt(endpoint.split(":")[2]);
     }
 
     private KVService getNode(String endpoint) {
-        KVService node = nodes.get(endpoint);
+        String cleanEndpoint = endpoint.split("\\?")[0];
+        KVService node = nodes.get(cleanEndpoint);
         if (node == null) {
             throw new IllegalArgumentException("Unknown endpoint: " + endpoint);
         }

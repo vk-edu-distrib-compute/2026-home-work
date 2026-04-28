@@ -46,10 +46,13 @@ public class LinempyKVClusterFactory extends KVClusterFactory {
         return new LinempyKVClusterImpl(endpoints, nodes);
     }
 
-    private KVService createNode(int port, List<String> endpoints, ShardingStrategy router, boolean useGrpc) throws IOException {
+    private KVService createNode(int port,
+                                 List<String> endpoints,
+                                 ShardingStrategy router,
+                                 boolean useGrpc) throws IOException {
         ProxyClient proxyClient;
         if (useGrpc) {
-            int grpcPort = port + 100;
+            int grpcPort = port + GrpcConfigUtils.GRPC_PORT_SHIFT;
             proxyClient = new GrpcProxyClient("localhost", grpcPort);
         } else {
             proxyClient = new HttpProxyClient();
@@ -61,3 +64,4 @@ public class LinempyKVClusterFactory extends KVClusterFactory {
         return LOCAL_HOST + port;
     }
 }
+

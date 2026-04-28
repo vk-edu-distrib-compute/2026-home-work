@@ -1,16 +1,13 @@
 package company.vk.edu.distrib.compute.linempy.scharding;
 
-import com.google.protobuf.ByteString;
 import com.sun.net.httpserver.HttpExchange;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.stub.StreamObserver;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.linempy.KVServiceImpl;
 import company.vk.edu.distrib.compute.linempy.routing.ShardingStrategy;
 import company.vk.edu.distrib.compute.linempy.scharding.proxy.ProxyClient;
 import company.vk.edu.distrib.compute.linempy.scharding.proxy.ProxyResponse;
-import company.vk.edu.distrib.compute.linempy.*;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,17 +19,15 @@ public class KVServiceProxyImpl extends KVServiceImpl {
     private static final Logger log = LoggerFactory.getLogger(KVServiceProxyImpl.class);
 
     private final ProxyClient proxyClient;
-    private final String selfEndpoint;
-    private final List<String> allEndpoints;
     private final ShardingStrategy shardingStrategy;
+    private final List<String> allEndpoints;
+    private final String selfEndpoint;
     private final Server grpcServer;
 
-    public KVServiceProxyImpl(int port,
-                              Dao<byte[]> dao,
+    public KVServiceProxyImpl(int port, Dao<byte[]> dao,
                               List<String> allEndpoints,
                               ShardingStrategy shardingStrategy,
-                              ProxyClient proxyClient)
-            throws IOException {
+                              ProxyClient proxyClient) throws IOException {
         super(dao, port);
         this.selfEndpoint = "http://localhost:" + port;
         this.allEndpoints = allEndpoints;
@@ -41,7 +36,7 @@ public class KVServiceProxyImpl extends KVServiceImpl {
 
         int grpcPort = port + 100;
         this.grpcServer = ServerBuilder.forPort(grpcPort)
-                .addService(new GrpcServiceImpl())
+                .addService(new LinempyGrpcService(dao))
                 .build();
     }
 
@@ -54,8 +49,9 @@ public class KVServiceProxyImpl extends KVServiceImpl {
         }
 
         String targetNode = shardingStrategy.route(id, allEndpoints);
+        String targetBase = targetNode.split("\\?")[0];
 
-        if (selfEndpoint.equals(targetNode)) {
+        if (selfEndpoint.equals(targetBase)) {
             super.entityHandler(exchange);
         } else {
             proxyRequest(exchange, id, targetNode);
@@ -63,7 +59,7 @@ public class KVServiceProxyImpl extends KVServiceImpl {
     }
 
     private void proxyRequest(HttpExchange exchange, String id, String targetNode) throws IOException {
-        String targetUrl = extractBaseUrl(targetNode);
+        String targetUrl = targetNode.split("\\?")[0];
         String method = exchange.getRequestMethod();
         CompletableFuture<ProxyResponse> future;
 
@@ -92,10 +88,6 @@ public class KVServiceProxyImpl extends KVServiceImpl {
         }
     }
 
-    private String extractBaseUrl(String endpoint) {
-        return endpoint;
-    }
-
     @Override
     public void start() {
         super.start();
@@ -110,53 +102,9 @@ public class KVServiceProxyImpl extends KVServiceImpl {
     @Override
     public void stop() {
         grpcServer.shutdown();
-        proxyClient.close();
+        if (proxyClient != null) {
+            proxyClient.close();
+        }
         super.stop();
-    }
-
-    private class GrpcServiceImpl extends KVServiceGrpc.KVServiceImplBase {
-
-        @Override
-        public void get(GetRequest request, StreamObserver<GetResponse> responseObserver) {
-            try {
-                byte[] value = dao.get(request.getKey());
-                GetResponse response = GetResponse.newBuilder()
-                        .setFound(value != null)
-                        .setValue(value != null ? ByteString.copyFrom(value) : ByteString.EMPTY)
-                        .build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-            } catch (Exception e) {
-                responseObserver.onError(e);
-            }
-        }
-
-        @Override
-        public void put(PutRequest request, StreamObserver<PutResponse> responseObserver) {
-            try {
-                dao.upsert(request.getKey(), request.getValue().toByteArray());
-                PutResponse response = PutResponse.newBuilder().setSuccess(true).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-            } catch (Exception e) {
-                PutResponse response = PutResponse.newBuilder().setSuccess(false).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-            }
-        }
-
-        @Override
-        public void delete(DeleteRequest request, StreamObserver<DeleteResponse> responseObserver) {
-            try {
-                dao.delete(request.getKey());
-                DeleteResponse response = DeleteResponse.newBuilder().setSuccess(true).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-            } catch (Exception e) {
-                DeleteResponse response = DeleteResponse.newBuilder().setSuccess(false).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-            }
-        }
     }
 }
