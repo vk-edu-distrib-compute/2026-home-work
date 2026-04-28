@@ -14,12 +14,12 @@ import company.vk.edu.distrib.compute.arseniy90.routing.HashRouter;
 
 public class QuorumCoordinator {
     private final HashRouter hashRouter;
-    private final ReplicaClient replicaClient;
+    private final GrpcReplicaClient replicaClient;
     private final int replicationFactor;
 
     // private static final Logger log = LoggerFactory.getLogger(QuorumCoordinator.class);
 
-    public QuorumCoordinator(HashRouter hashRouter, ReplicaClient replicaClient, int replicationFactor) {
+    public QuorumCoordinator(HashRouter hashRouter, GrpcReplicaClient replicaClient, int replicationFactor) {
         this.hashRouter = hashRouter;
         this.replicaClient = replicaClient;
         this.replicationFactor = replicationFactor;

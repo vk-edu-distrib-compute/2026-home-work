@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.arseniy90.service;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -20,10 +21,11 @@ import org.slf4j.LoggerFactory;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.arseniy90.model.Response;
+import company.vk.edu.distrib.compute.arseniy90.replication.GrpcReplicaClient;
 import company.vk.edu.distrib.compute.arseniy90.replication.QuorumCoordinator;
-import company.vk.edu.distrib.compute.arseniy90.replication.ReplicaClient;
 import company.vk.edu.distrib.compute.arseniy90.routing.HashRouter;
 import company.vk.edu.distrib.compute.arseniy90.stats.StatisticsAggregator;
+import io.grpc.ServerBuilder;
 
 public class ReplicatedKVServiceImpl implements ReplicatedService {
     private static final String ENTITY_PATH = "/v0/entity";
@@ -38,12 +40,15 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     private final String currentEndpoint;
     private final int currentPort;
+    private final int grpcPort;
     private final int replicationFactor;
     private final HttpServer server;
-    private final ReplicaClient replicaClient;
+    private final GrpcReplicaClient replicaClient;
     private final QuorumCoordinator coordinator;
     private final Set<Integer> disabledNodes = ConcurrentHashMap.newKeySet();
     private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+    private io.grpc.Server grpcServer;
 
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
 
@@ -51,12 +56,14 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
         HashRouter hashRouter, Dao<byte[]> dao) throws IOException {
         this.currentEndpoint = currentEndpoint;
         this.currentPort = Integer.parseInt(currentEndpoint.substring(currentEndpoint.lastIndexOf(':') + 1));
+        this.grpcPort = currentPort + 1000;
         this.replicationFactor = replicationFactor;
         this.server = HttpServer.create(new InetSocketAddress(currentPort), 0);
         server.setExecutor(executor);
         HttpClient client = HttpClient.newBuilder().executor(executor).connectTimeout(Duration.ofMillis(500)).build();
         StatisticsAggregator statsAggregator = new StatisticsAggregator();
-        this.replicaClient = new ReplicaClient(client, executor, currentEndpoint, dao, statsAggregator, disabledNodes);
+        this.replicaClient = new GrpcReplicaClient(client, executor, currentEndpoint,
+            dao, statsAggregator, disabledNodes);
         this.coordinator = new QuorumCoordinator(hashRouter, this.replicaClient, replicationFactor);
         initRoutes();
     }
@@ -220,10 +227,21 @@ public class ReplicatedKVServiceImpl implements ReplicatedService {
 
     @Override public void start() {
         server.start();
+        this.grpcServer = ServerBuilder.forPort(this.grpcPort)
+                .addService(new GrpcKVServiceImpl(this.replicaClient))
+                .build();
+        try {
+            grpcServer.start();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Override public void stop() {
         server.stop(0);
+        if (grpcServer != null) {
+            grpcServer.shutdown();
+        }
         executor.shutdown();
     }
 }

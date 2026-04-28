@@ -1,0 +1,30 @@
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+package company.vk.edu.distrib.compute.proto.arseniy90;
+
+message GetRequest {
+  string key = 1;
+}
+
+message UpsertRequest {
+  string key = 1;
+  bytes value = 2;
+}
+
+message DeleteRequest {
+  string key = 1;
+}
+
+message InternalResponse {
+  uint32 status = 1;
+  bytes value = 2;
+}
+
+service GrpcKVService {
+  rpc get (GetRequest) returns (InternalResponse) {}
+  rpc upsert (UpsertRequest) returns (InternalResponse) {}
+  rpc delete (DeleteRequest) returns (InternalResponse) {}
+}
