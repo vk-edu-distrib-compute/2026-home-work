@@ -23,7 +23,7 @@ public class KVServiceImpl implements KVService {
     private static final int BACKLOG = 0;
 
     private final HttpServer server;
-    private final Dao<byte[]> dao;
+    protected final Dao<byte[]> dao;
 
     public KVServiceImpl(Dao<byte[]> dao, int port) throws IOException {
         this.dao = dao;

@@ -6,6 +6,9 @@ import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.linempy.DaoImpl;
 import company.vk.edu.distrib.compute.linempy.routing.RendezvousHashRouter;
 import company.vk.edu.distrib.compute.linempy.routing.ShardingStrategy;
+import company.vk.edu.distrib.compute.linempy.scharding.proxy.GrpcProxyClient;
+import company.vk.edu.distrib.compute.linempy.scharding.proxy.HttpProxyClient;
+import company.vk.edu.distrib.compute.linempy.scharding.proxy.ProxyClient;
 
 import java.io.IOException;
 import java.util.List;
@@ -34,7 +37,7 @@ public class LinempyKVClusterFactory extends KVClusterFactory {
         for (int port : ports) {
             String endpoint = parseToEndpoint(port);
             try {
-                nodes.put(endpoint, createNode(port, endpoints, router));
+                nodes.put(endpoint, createNode(port, endpoints, router, false));
             } catch (IOException e) {
                 throw new IllegalStateException("Failed to create cluster node on port " + port, e);
             }
@@ -43,8 +46,15 @@ public class LinempyKVClusterFactory extends KVClusterFactory {
         return new LinempyKVClusterImpl(endpoints, nodes);
     }
 
-    private KVService createNode(int port, List<String> endpoints, ShardingStrategy router) throws IOException {
-        return new KVServiceProxyImpl(port, new DaoImpl<>(), endpoints, router);
+    private KVService createNode(int port, List<String> endpoints, ShardingStrategy router, boolean useGrpc) throws IOException {
+        ProxyClient proxyClient;
+        if (useGrpc) {
+            int grpcPort = port + 100;
+            proxyClient = new GrpcProxyClient("localhost", grpcPort);
+        } else {
+            proxyClient = new HttpProxyClient();
+        }
+        return new KVServiceProxyImpl(port, new DaoImpl<>(), endpoints, router, proxyClient);
     }
 
     private String parseToEndpoint(Integer port) {
