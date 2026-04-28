@@ -146,3 +146,11 @@ tasks.named("pmdIntegrationTest") {
 tasks.named("pmdTest") {
     enabled = false
 }
+
+tasks.named<Pmd>("pmdMain") {
+    source = fileTree("src/main/java")
+}
+
+tasks.named<Checkstyle>("checkstyleMain") {
+    source = fileTree("src/main/java")
+}
