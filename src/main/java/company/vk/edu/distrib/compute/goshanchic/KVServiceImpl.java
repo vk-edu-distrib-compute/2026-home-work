@@ -7,21 +7,18 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import javax.net.ssl.SSLSession;
 
 public class KVServiceImpl implements ReplicatedService {
-    private static final String PROXIED_HEADER = "X-Proxied";
-    private static final String METHOD_GET = "GET";
-    private static final String METHOD_PUT = "PUT";
-    private static final String METHOD_DELETE = "DELETE";
-    private static final String PARAM_ID = "id";
-    private static final String PARAM_ACK = "ack";
+    @SuppressWarnings("HttpUrlsUsage")
+    private static final String PROXIED_HEADER = "X-Internal-Request";
 
     private static final int STATUS_OK = 200;
     private static final int STATUS_CREATED = 201;
@@ -37,30 +34,30 @@ public class KVServiceImpl implements ReplicatedService {
     private final List<String> clusterNodes;
     private final String selfAddress;
     private final HttpClient httpClient;
+    private final ExecutorService executor;
 
     private final int replicationFactor;
     private int defaultAck;
 
-    public KVServiceImpl(int port, List<Integer> allPorts, InMemoryDao dao) throws IOException {
-        this(port, allPorts, dao, 1, 1);
-    }
-
     public KVServiceImpl(int port, List<Integer> allPorts, InMemoryDao dao,
                          int replicationFactor, int defaultAck) throws IOException {
-        if (defaultAck > replicationFactor) {
-            throw new IllegalArgumentException(
-                    "ack (" + defaultAck + ") cannot exceed replicationFactor (" + replicationFactor + ")");
-        }
 
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.dao = dao;
         this.selfAddress = "http://localhost:" + port;
+
         this.clusterNodes = allPorts.stream()
                 .map(p -> "http://localhost:" + p)
-                .collect(Collectors.toList());
+                .toList();
+
         this.httpClient = HttpClient.newHttpClient();
+        this.executor = Executors.newFixedThreadPool(
+                Math.max(4, Runtime.getRuntime().availableProcessors())
+        );
+
         this.replicationFactor = Math.min(replicationFactor, clusterNodes.size());
         this.defaultAck = defaultAck;
+
         setupEndpoints();
     }
 
@@ -76,241 +73,226 @@ public class KVServiceImpl implements ReplicatedService {
 
     @Override
     public void setAck(int ack) {
-        if (ack > replicationFactor) {
-            throw new IllegalArgumentException("ack cannot exceed replicationFactor");
-        }
         this.defaultAck = ack;
     }
 
     private void setupEndpoints() {
-        server.createContext("/v0/status", exchange -> {
-            try {
-                sendResponse(exchange, STATUS_OK, "OK".getBytes());
-            } catch (IOException e) {
-                exchange.close();
-            }
-        });
-
         server.createContext("/v0/entity", exchange -> {
             try {
-                processEntityRequest(exchange);
+                handleRequest(exchange);
             } catch (Exception e) {
-                try {
-                    sendResponse(exchange, STATUS_INTERNAL_ERROR, "Internal Server Error".getBytes());
-                } catch (IOException ex) {
-                    exchange.close();
-                }
+                sendResponse(exchange, STATUS_INTERNAL_ERROR, null);
             }
         });
+
+        server.createContext("/v0/status", exchange ->
+                sendResponse(exchange, STATUS_OK, "OK".getBytes()));
     }
 
-    private void processEntityRequest(HttpExchange exchange) throws IOException {
-        String query = exchange.getRequestURI().getQuery();
-        String id = extractParam(query, PARAM_ID);
-        int ack = extractAck(query);
-
-        if (ack > replicationFactor) {
-            sendResponse(exchange, STATUS_BAD_REQUEST,
-                    ("Invalid ack: " + ack + " > " + replicationFactor).getBytes());
-            return;
-        }
+    private void handleRequest(HttpExchange exchange) throws Exception {
+        String id = extractId(exchange);
 
         if (id == null || id.isEmpty()) {
-            sendResponse(exchange, STATUS_BAD_REQUEST, "Bad Request".getBytes());
+            sendResponse(exchange, STATUS_BAD_REQUEST, null);
             return;
         }
 
-        List<String> replicas = getReplicas(id);
-        String method = exchange.getRequestMethod();
+        boolean isInternal = exchange.getRequestHeaders().containsKey(PROXIED_HEADER);
 
-        switch (method) {
-            case METHOD_GET:
-                handleReplicatedGet(exchange, id, replicas, ack);
-                break;
-            case METHOD_PUT:
-                handleReplicatedPut(exchange, id, replicas, ack);
-                break;
-            case METHOD_DELETE:
-                handleReplicatedDelete(exchange, id, replicas, ack);
-                break;
-            default:
-                sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed".getBytes());
-                break;
+        if (isInternal) {
+            handleLocal(exchange, id);
+        } else {
+            handleDistributed(exchange, id);
         }
     }
+
+    // ================= LOCAL =================
+
+    private void handleLocal(HttpExchange exchange, String id) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> {
+                try {
+                    byte[] value = dao.get(id);
+                    sendResponse(exchange, STATUS_OK, value);
+                } catch (NoSuchElementException e) {
+                    sendResponse(exchange, STATUS_NOT_FOUND, null);
+                }
+            }
+            case "PUT" -> {
+                byte[] body = exchange.getRequestBody().readAllBytes();
+                dao.upsert(id, body);
+                sendResponse(exchange, STATUS_CREATED, null);
+            }
+            case "DELETE" -> {
+                dao.delete(id);
+                sendResponse(exchange, STATUS_ACCEPTED, null);
+            }
+            default -> sendResponse(exchange, STATUS_METHOD_NOT_ALLOWED, null);
+        }
+    }
+
+    // ================= DISTRIBUTED =================
+
+    private void handleDistributed(HttpExchange exchange, String id) throws Exception {
+        int ack = extractAck(exchange);
+        List<String> replicas = getReplicas(id);
+        byte[] body = exchange.getRequestBody().readAllBytes();
+
+        List<CompletableFuture<HttpResponse<byte[]>>> futures = replicas.stream()
+                .map(node -> CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return send(node, exchange.getRequestMethod(), id, body);
+                    } catch (Exception e) {
+                        return fakeResponse(STATUS_SERVICE_UNAVAILABLE, null);
+                    }
+                }, executor))
+                .toList();
+
+        int success = 0;
+        byte[] result = null;
+
+        for (CompletableFuture<HttpResponse<byte[]>> future : futures) {
+            try {
+                HttpResponse<byte[]> response = future.get();
+                if (response.statusCode() < 500) {
+                    success++;
+                    if (exchange.getRequestMethod().equals("GET")
+                            && response.statusCode() == STATUS_OK) {
+                        result = response.body();
+                    }
+                }
+            } catch (Exception e) {
+                // Пропускаем ошибки
+            }
+        }
+
+        if (success < ack) {
+            sendResponse(exchange, STATUS_SERVICE_UNAVAILABLE, null);
+            return;
+        }
+
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> {
+                if (result == null) {
+                    sendResponse(exchange, STATUS_NOT_FOUND, null);
+                } else {
+                    sendResponse(exchange, STATUS_OK, result);
+                }
+            }
+            case "PUT" -> sendResponse(exchange, STATUS_CREATED, null);
+            case "DELETE" -> sendResponse(exchange, STATUS_ACCEPTED, null);
+        }
+    }
+
+    // ================= RENDEZVOUS HASHING =================
 
     private List<String> getReplicas(String key) {
         return clusterNodes.stream()
-                .sorted(Comparator.comparingLong((String node) -> {
-                    int h1 = key.hashCode();
-                    int h2 = node.hashCode();
-                    return ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
-                }).reversed())
+                .sorted((a, b) -> Long.compare(
+                        hash(key, b),
+                        hash(key, a)
+                ))
                 .limit(replicationFactor)
-                .collect(Collectors.toList());
+                .toList();
     }
 
-    private void handleReplicatedGet(HttpExchange exchange, String id,
-                                     List<String> replicas, int ack) throws IOException {
-        List<byte[]> responses = new ArrayList<>();
-        int successCount = 0;
+    private long hash(String key, String node) {
+        String combined = key + node;
+        return combined.hashCode() & 0xffffffffL;
+    }
 
-        for (String replica : replicas) {
-            try {
-                ReplicaResponse response = getFromReplica(replica, id);
-                if (response.found) {
-                    responses.add(response.value.clone());
+    // ================= NETWORK =================
+
+    private HttpResponse<byte[]> send(String node, String method, String id, byte[] body)
+            throws Exception {
+
+        if (node.equals(selfAddress)) {
+            return handleSelf(method, id, body);
+        }
+
+        URI uri = URI.create(node + "/v0/entity?id=" + id);
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(uri)
+                .header(PROXIED_HEADER, "true")
+                .timeout(java.time.Duration.ofSeconds(5));
+
+        switch (method) {
+            case "GET" -> builder.GET();
+            case "PUT" -> builder.PUT(HttpRequest.BodyPublishers.ofByteArray(body));
+            case "DELETE" -> builder.DELETE();
+        }
+
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private HttpResponse<byte[]> handleSelf(String method, String id, byte[] body) throws Exception {
+        switch (method) {
+            case "GET" -> {
+                try {
+                    return fakeResponse(STATUS_OK, dao.get(id));
+                } catch (NoSuchElementException e) {
+                    return fakeResponse(STATUS_NOT_FOUND, null);
                 }
-                successCount++;
-            } catch (Exception e) {
-                // Replica unavailable
+            }
+            case "PUT" -> {
+                dao.upsert(id, body);
+                return fakeResponse(STATUS_CREATED, null);
+            }
+            case "DELETE" -> {
+                dao.delete(id);
+                return fakeResponse(STATUS_ACCEPTED, null);
             }
         }
-
-        if (successCount < ack) {
-            sendResponse(exchange, STATUS_SERVICE_UNAVAILABLE,
-                    ("Only " + successCount + " replicas available, need " + ack).getBytes());
-            return;
-        }
-
-        if (responses.isEmpty()) {
-            sendResponse(exchange, STATUS_NOT_FOUND, "Not Found".getBytes());
-        } else {
-            sendResponse(exchange, STATUS_OK, responses.getFirst());
-        }
+        return fakeResponse(STATUS_INTERNAL_ERROR, null);
     }
 
-    private void handleReplicatedPut(HttpExchange exchange, String id,
-                                     List<String> replicas, int ack) throws IOException {
-        byte[] body = exchange.getRequestBody().readAllBytes();
-        int successCount = 0;
-
-        for (String replica : replicas) {
-            try {
-                putToReplica(replica, id, body);
-                successCount++;
-            } catch (Exception e) {
-                // Replica unavailable
+    private HttpResponse<byte[]> fakeResponse(int code, byte[] body) {
+        return new HttpResponse<>() {
+            @Override public int statusCode() { return code; }
+            @Override public byte[] body() { return body; }
+            @Override public HttpRequest request() { return null; }
+            @Override public Optional<HttpResponse<byte[]>> previousResponse() { return Optional.empty(); }
+            @Override public HttpHeaders headers() {
+                return HttpHeaders.of(Map.of(), (k, v) -> true);
             }
-        }
-
-        if (successCount < ack) {
-            sendResponse(exchange, STATUS_SERVICE_UNAVAILABLE,
-                    ("Only " + successCount + " replicas available, need " + ack).getBytes());
-            return;
-        }
-
-        sendResponse(exchange, STATUS_CREATED, "Created".getBytes());
+            @Override public URI uri() { return null; }
+            @Override public HttpClient.Version version() { return HttpClient.Version.HTTP_1_1; }
+            @Override public Optional<SSLSession> sslSession() { return Optional.empty(); }
+        };
     }
 
-    private void handleReplicatedDelete(HttpExchange exchange, String id,
-                                        List<String> replicas, int ack) throws IOException {
-        int successCount = 0;
+    // ================= UTILS =================
 
-        for (String replica : replicas) {
-            try {
-                deleteFromReplica(replica, id);
-                successCount++;
-            } catch (Exception e) {
-                // Replica unavailable
-            }
-        }
+    private int extractAck(HttpExchange exchange) {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null) return defaultAck;
 
-        if (successCount < ack) {
-            sendResponse(exchange, STATUS_SERVICE_UNAVAILABLE,
-                    ("Only " + successCount + " replicas available, need " + ack).getBytes());
-            return;
-        }
-
-        sendResponse(exchange, STATUS_ACCEPTED, "Accepted".getBytes());
-    }
-
-    private record ReplicaResponse(byte[] value, boolean found) {
-    }
-
-    private ReplicaResponse getFromReplica(String replica, String id) throws IOException, InterruptedException {
-        if (replica.equals(selfAddress)) {
-            try {
-                return new ReplicaResponse(dao.get(id), true);
-            } catch (NoSuchElementException e) {
-                return new ReplicaResponse(null, false);
-            }
-        }
-
-        URI uri = URI.create(replica + "/v0/entity?id=" + id);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .header(PROXIED_HEADER, "true")
-                .GET()
-                .build();
-
-        HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() == STATUS_OK) {
-            return new ReplicaResponse(response.body(), true);
-        }
-        return new ReplicaResponse(null, false);
-    }
-
-    private void putToReplica(String replica, String id, byte[] body) throws IOException, InterruptedException {
-        if (replica.equals(selfAddress)) {
-            dao.upsert(id, body);
-            return;
-        }
-
-        URI uri = URI.create(replica + "/v0/entity?id=" + id);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .header(PROXIED_HEADER, "true")
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build();
-
-        httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-    }
-
-    private void deleteFromReplica(String replica, String id) throws IOException, InterruptedException {
-        if (replica.equals(selfAddress)) {
-            dao.delete(id);
-            return;
-        }
-
-        URI uri = URI.create(replica + "/v0/entity?id=" + id);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .header(PROXIED_HEADER, "true")
-                .DELETE()
-                .build();
-
-        httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-    }
-
-    private int extractAck(String query) {
-        String ackStr = extractParam(query, PARAM_ACK);
-        if (ackStr != null) {
-            try {
-                return Integer.parseInt(ackStr);
-            } catch (NumberFormatException e) {
-                return defaultAck;
+        for (String p : query.split("&")) {
+            String[] kv = p.split("=");
+            if (kv.length == 2 && kv[0].equals("ack")) {
+                return Integer.parseInt(kv[1]);
             }
         }
         return defaultAck;
     }
 
-    private String extractParam(String query, String paramName) {
-        if (query == null) {
-            return null;
-        }
-        for (String param : query.split("&")) {
-            String[] pair = param.split("=", 2);
-            if (pair.length == 2 && paramName.equals(pair[0])) {
-                return pair[1];
+    private String extractId(HttpExchange exchange) {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null) return null;
+
+        for (String p : query.split("&")) {
+            String[] kv = p.split("=");
+            if (kv.length == 2 && kv[0].equals("id")) {
+                return kv[1];
             }
         }
         return null;
     }
 
     private void sendResponse(HttpExchange exchange, int code, byte[] body) throws IOException {
-        exchange.sendResponseHeaders(code, body != null ? body.length : -1);
-        if (body != null && body.length > 0) {
+        exchange.sendResponseHeaders(code, body == null ? -1 : body.length);
+        if (body != null) {
             exchange.getResponseBody().write(body);
         }
         exchange.close();
@@ -324,11 +306,7 @@ public class KVServiceImpl implements ReplicatedService {
     @Override
     public void stop() {
         server.stop(0);
-        try {
-            dao.close();
-        } catch (IOException ex) {
-            // Closing DAO resource, exception can be safely ignored during shutdown
-        }
+        executor.shutdown();
     }
 }
 

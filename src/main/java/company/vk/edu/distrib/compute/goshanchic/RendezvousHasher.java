@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.goshanchic;
+/*package company.vk.edu.distrib.compute.goshanchic;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -19,6 +19,8 @@ public final class RendezvousHasher {
                 .orElseThrow(() -> new IllegalStateException("No nodes available"));
     }
 }
+
+ */
 
 
 
