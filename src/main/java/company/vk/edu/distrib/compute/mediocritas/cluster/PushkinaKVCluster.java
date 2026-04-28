@@ -17,22 +17,21 @@ import java.util.stream.Collectors;
 
 public class PushkinaKVCluster implements KVCluster {
 
-    private final List<Node> clusterNodes;
     private final Map<String, KVService> services = new ConcurrentHashMap<>();
     private final List<String> endpoints;
 
     public PushkinaKVCluster(List<Node> clusterNodes, Router router) {
-        this.clusterNodes = List.copyOf(clusterNodes);
+        List<Node> clusterNodes1 = List.copyOf(clusterNodes);
 
         ProxyClient proxyClient = new GrpcProxyClient();
 
-        this.clusterNodes.forEach(router::addNode);
+        clusterNodes1.forEach(router::addNode);
 
-        this.endpoints = this.clusterNodes.stream()
+        this.endpoints = clusterNodes1.stream()
                 .map(Node::httpEndpoint)
                 .collect(Collectors.toList());
 
-        for (Node node : this.clusterNodes) {
+        for (Node node : clusterNodes1) {
             services.put(node.httpEndpoint(), createService(node, router, proxyClient));
         }
     }
