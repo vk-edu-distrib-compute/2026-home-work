@@ -14,7 +14,6 @@ message GetRequest { string key = 1; }
 message GetResponse {
   bytes value = 1;
   bool found = 2;
-  bool deleted = 3;
 }
 
 message PutRequest {

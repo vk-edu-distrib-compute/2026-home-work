@@ -1,14 +1,16 @@
 package company.vk.edu.distrib.compute.mediocritas.cluster.routing;
 
+import company.vk.edu.distrib.compute.mediocritas.cluster.Node;
+
 import java.util.List;
 
 public interface Router {
 
-    void addNode(String endpoint);
+    void addNode(Node node);
 
-    void removeNode(String endpoint);
+    void removeNode(Node node);
 
-    String getNodeForKey(String key);
+    Node getNodeForKey(String key);
 
-    List<String> getAllNodes();
+    List<Node> getAllNodes();
 }

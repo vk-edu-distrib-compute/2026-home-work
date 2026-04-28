@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.mediocritas.cluster;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
-import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.HttpProxyClient;
+import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.GrpcProxyClient;
 import company.vk.edu.distrib.compute.mediocritas.cluster.proxy.ProxyClient;
 import company.vk.edu.distrib.compute.mediocritas.cluster.routing.Router;
 import company.vk.edu.distrib.compute.mediocritas.service.ClusterKvByteService;
@@ -10,51 +10,50 @@ import company.vk.edu.distrib.compute.mediocritas.storage.FileByteDao;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class PushkinaKVCluster implements KVCluster {
 
-    private final Map<String, KVService> nodes = new ConcurrentHashMap<>();
+    private final List<Node> clusterNodes;
+    private final Map<String, KVService> services = new LinkedHashMap<>();
     private final List<String> endpoints;
 
-    public PushkinaKVCluster(List<Integer> ports, Router router) {
-        HttpProxyClient proxyClient = new HttpProxyClient();
+    public PushkinaKVCluster(List<Node> clusterNodes, Router router) {
+        this.clusterNodes = List.copyOf(clusterNodes);
 
-        this.endpoints = ports.stream()
-                .map(port -> "http://localhost:" + port)
+        ProxyClient proxyClient = new GrpcProxyClient();
+
+        this.clusterNodes.forEach(router::addNode);
+
+        this.endpoints = this.clusterNodes.stream()
+                .map(Node::httpEndpoint)
                 .collect(Collectors.toList());
 
-        endpoints.forEach(router::addNode);
-
-        nodes.putAll(ports.stream()
-                .collect(Collectors.toMap(
-                        port -> "http://localhost:" + port,
-                        port -> createClusterNode(port, router, proxyClient)
-                )));
+        for (Node node : this.clusterNodes) {
+            services.put(node.httpEndpoint(), createService(node, router, proxyClient));
+        }
     }
 
-    private static KVService createClusterNode(int port, Router router, ProxyClient proxyClient) {
+    private static KVService createService(Node node, Router router, ProxyClient proxyClient) {
         try {
-            String dataPath = "./data-cluster-" + port;
-            return new ClusterKvByteService(port, new FileByteDao(dataPath), router, proxyClient);
+            String dataPath = "./data-cluster-" + node.httpPort();
+            return new ClusterKvByteService(node, new FileByteDao(dataPath), router, proxyClient);
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to create cluster node on port " + port, e);
+            throw new UncheckedIOException("Failed to create cluster node on port " + node.httpPort(), e);
         }
     }
 
     @Override
     public void start() {
-        for (KVService service : nodes.values()) {
-            service.start();
-        }
+        services.values().forEach(KVService::start);
     }
 
     @Override
     public void start(String endpoint) {
-        KVService service = nodes.get(endpoint);
+        KVService service = services.get(endpoint);
         if (service != null) {
             service.start();
         }
@@ -62,14 +61,12 @@ public class PushkinaKVCluster implements KVCluster {
 
     @Override
     public void stop() {
-        for (KVService service : nodes.values()) {
-            service.stop();
-        }
+        services.values().forEach(KVService::stop);
     }
 
     @Override
     public void stop(String endpoint) {
-        KVService service = nodes.get(endpoint);
+        KVService service = services.get(endpoint);
         if (service != null) {
             service.stop();
         }

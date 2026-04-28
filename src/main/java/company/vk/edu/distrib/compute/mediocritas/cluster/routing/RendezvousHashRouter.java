@@ -1,46 +1,46 @@
 package company.vk.edu.distrib.compute.mediocritas.cluster.routing;
 
+import company.vk.edu.distrib.compute.mediocritas.cluster.Node;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class RendezvousHashRouter extends AbstractHashRouter {
-    private final List<String> nodes = new CopyOnWriteArrayList<>();
+
+    private final List<Node> nodes = new CopyOnWriteArrayList<>();
 
     @Override
-    public void addNode(String endpoint) {
-        if (!nodes.contains(endpoint)) {
-            nodes.add(endpoint);
+    public void addNode(Node node) {
+        if (!nodes.contains(node)) {
+            nodes.add(node);
         }
     }
 
     @Override
-    public void removeNode(String endpoint) {
-        nodes.remove(endpoint);
+    public void removeNode(Node node) {
+        nodes.remove(node);
     }
 
     @Override
-    public String getNodeForKey(String key) {
+    public Node getNodeForKey(String key) {
         if (nodes.isEmpty()) {
             throw new IllegalStateException("No nodes available");
         }
-
-        String selectedNode = null;
+        Node selectedNode = null;
         long maxHash = Long.MIN_VALUE;
-
-        for (String node : nodes) {
-            long hash = hash(key + node);
+        for (Node node : nodes) {
+            long hash = hash(key + node.httpEndpoint());
             if (hash > maxHash) {
                 maxHash = hash;
                 selectedNode = node;
             }
         }
-
         return selectedNode;
     }
 
     @Override
-    public List<String> getAllNodes() {
+    public List<Node> getAllNodes() {
         return new ArrayList<>(nodes);
     }
 }
