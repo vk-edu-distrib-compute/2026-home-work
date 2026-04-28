@@ -21,21 +21,28 @@ public class MyKVCluster implements KVCluster {
 
     public MyKVCluster(List<Integer> ports, ShardingStrategy shardingStrategy, int replicaCount) {
         this.endpoints = ports.stream()
-                .map(port -> "http://localhost:" + port)
+                .map(port -> MyReplicatedKVService.formatEndpoint(port, MyReplicatedKVService.defaultGrpcPort(port)))
                 .toList();
         this.servicesByEndpoint = new LinkedHashMap<>();
         this.replicaCount = replicaCount;
 
         for (int i = 0; i < ports.size(); i++) {
             int port = ports.get(i);
+            int grpcPort = MyReplicatedKVService.defaultGrpcPort(port);
             String endpoint = endpoints.get(i);
-            servicesByEndpoint.put(endpoint, createNodeService(port, shardingStrategy));
+            servicesByEndpoint.put(endpoint, createNodeService(port, grpcPort, shardingStrategy));
         }
     }
 
-    private KVService createNodeService(int port, ShardingStrategy shardingStrategy) {
+    private KVService createNodeService(int port, int grpcPort, ShardingStrategy shardingStrategy) {
         Path nodeStoragePath = CLUSTER_STORAGE_ROOT.resolve(String.valueOf(port));
-        return new MyReplicatedKVService(port, createReplicaDaos(nodeStoragePath), endpoints, shardingStrategy);
+        return new MyReplicatedKVService(
+                port,
+                grpcPort,
+                createReplicaDaos(nodeStoragePath),
+                endpoints,
+                shardingStrategy
+        );
     }
 
     private List<Dao<byte[]>> createReplicaDaos(Path nodeStoragePath) {

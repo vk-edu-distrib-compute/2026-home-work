@@ -62,12 +62,22 @@ abstract class TestBase {
     }
 
     static String url(String endpoint, String id) {
-        return endpoint + "/v0/entity?id=" + id;
+        return httpBase(endpoint) + "/v0/entity?id=" + id;
     }
 
     static String url(String endpoint, String id, Integer ack) {
         if (ack == null) return url(endpoint, id);
-        return endpoint + "/v0/entity?id=" + id + "&ack=" + ack;
+        return httpBase(endpoint) + "/v0/entity?id=" + id + "&ack=" + ack;
+    }
+
+    static String httpBase(String endpoint) {
+        try {
+            URI uri = new URI(endpoint);
+            int port = uri.getPort();
+            return uri.getScheme() + "://" + uri.getHost() + (port >= 0 ? ":" + port : "");
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("Malformed endpoint: " + endpoint, e);
+        }
     }
 
     protected abstract HttpClient getHttpClient();
