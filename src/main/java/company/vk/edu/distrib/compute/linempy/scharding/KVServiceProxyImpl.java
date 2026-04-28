@@ -83,7 +83,9 @@ public class KVServiceProxyImpl extends KVServiceImpl {
                 exchange.getResponseBody().write(response.body());
             }
         } catch (Exception e) {
-            log.error("Proxy request failed", e);
+            if (log.isErrorEnabled()) {
+                log.error("Proxy request failed", e);
+            }
             exchange.sendResponseHeaders(500, -1);
         }
     }
@@ -93,9 +95,13 @@ public class KVServiceProxyImpl extends KVServiceImpl {
         super.start();
         try {
             grpcServer.start();
-            log.info("gRPC server started on port {}", grpcServer.getPort());
+            if (log.isInfoEnabled()) {
+                log.info("gRPC server started on port {}", grpcServer.getPort());
+            }
         } catch (IOException e) {
-            log.error("Failed to start gRPC server", e);
+            if (log.isErrorEnabled()) {
+                log.error("Failed to start gRPC server", e);
+            }
         }
     }
 
