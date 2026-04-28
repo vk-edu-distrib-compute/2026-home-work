@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.Parameter;
 import org.junit.jupiter.params.ParameterizedClass;
@@ -9,11 +8,14 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@Disabled // todo remove the line to enable tests
 @ParameterizedClass
 @ArgumentsSource(KVClusterFactoryArgumentsProvider.class)
 public class ShardingTest extends TestBase {
