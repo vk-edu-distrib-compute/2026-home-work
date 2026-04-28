@@ -1,9 +1,12 @@
 package company.vk.edu.distrib.compute.wolfram158;
 
+import java.net.URI;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public final class Utils {
+    public static final int GRPC_DIFF = 2026;
+
     private Utils() {
 
     }
@@ -31,5 +34,21 @@ public final class Utils {
         if (Arrays.stream(objects).anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException();
         }
+    }
+
+    public static int extractPort(String endpoint) {
+        return URI.create(endpoint).getPort();
+    }
+
+    public static List<String> mapToLocalhostEndpoints(List<Integer> ports) {
+        return ports.stream().map(Utils::mapToLocalhostEndpoint).toList();
+    }
+
+    public static String mapToLocalhostEndpoint(int port) {
+        return "http://localhost:" + port;
+    }
+
+    public static String mapToLocalhostGrpcEndpoint(int port) {
+        return "localhost:" + (port + GRPC_DIFF);
     }
 }

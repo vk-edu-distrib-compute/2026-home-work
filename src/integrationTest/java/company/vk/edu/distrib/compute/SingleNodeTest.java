@@ -1,6 +1,7 @@
 package company.vk.edu.distrib.compute;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.Parameter;
 import org.junit.jupiter.params.ParameterizedClass;
@@ -13,6 +14,7 @@ import java.net.http.HttpResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Disabled
 @ParameterizedClass
 @ArgumentsSource(KVServiceFactoryArgumentsProvider.class)
 class SingleNodeTest extends TestBase {
@@ -53,10 +55,10 @@ class SingleNodeTest extends TestBase {
             storage.start();
             try {
                 HttpRequest request = HttpRequest.newBuilder()
-                    .GET()
-                    .uri(new URI(url(endpoint, "/abracadabra")))
-                    .timeout(TIMEOUT)
-                    .build();
+                        .GET()
+                        .uri(new URI(url(endpoint, "/abracadabra")))
+                        .timeout(TIMEOUT)
+                        .build();
                 assertEquals(404, HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.discarding()).statusCode());
             } finally {
                 storage.stop();

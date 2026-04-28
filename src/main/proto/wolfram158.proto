@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package company.vk.edu.distrib.compute.wolfram158;
+
+option java_multiple_files = true;
+
+service GrpcKVService {
+  rpc Get(KeyRequest) returns (GetResponse);
+  rpc Put(PutRequest) returns (EmptyResponse);
+  rpc Delete(KeyRequest) returns (EmptyResponse);
+}
+
+message KeyRequest {
+  string key = 1;
+  int32 status = 2;
+}
+
+message GetResponse {
+  bytes value = 1;
+  int32 status = 2;
+}
+
+message PutRequest {
+  string key = 1;
+  bytes value = 2;
+  int32 status = 3;
+}
+
+message EmptyResponse {
+  int32 status = 1;
+}
