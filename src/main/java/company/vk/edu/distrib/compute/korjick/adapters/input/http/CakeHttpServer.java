@@ -1,14 +1,15 @@
-package company.vk.edu.distrib.compute.korjick.http;
+package company.vk.edu.distrib.compute.korjick.adapters.input.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsServer;
+import company.vk.edu.distrib.compute.korjick.core.application.exception.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.NoSuchElementException;
 
 public class CakeHttpServer {
     private static final Logger log = LoggerFactory.getLogger(CakeHttpServer.class);
@@ -18,37 +19,34 @@ public class CakeHttpServer {
 
     private final HttpServer server;
 
-    public CakeHttpServer(String endpoint, int port) throws IOException {
-        var inetSocketAddress = new InetSocketAddress(endpoint, port);
+    public CakeHttpServer(String host, int port) throws IOException {
+        var inetSocketAddress = new InetSocketAddress(host, port);
         this.server = HttpServer.create(inetSocketAddress, BACKLOG_VALUE);
     }
 
-    public void addContext(String path, HttpHandler handler) {
+    public void register(String path, HttpHandler handler) {
         this.server.createContext(path, ErrorHandler.fromDelegate(handler));
     }
 
-    public void startServer() {
+    public void start() {
         this.server.start();
         log.info("HTTP server started");
     }
 
-    public void stopServer() {
-        log.info("Stopping HTTP server");
+    public void stop() {
         this.server.stop(STOP_SERVER_DELAY);
         log.info("HTTP server stopped");
     }
 
-    public InetSocketAddress getAddress() {
-        return this.server.getAddress();
+    public String getEndpoint() {
+        var address = this.server.getAddress();
+        return String.format("%s%s:%s",
+                this.server instanceof HttpsServer ? "https://" : "http://",
+                address.getHostString(),
+                address.getPort());
     }
 
-    public static final class ErrorHandler implements HttpHandler {
-
-        private final HttpHandler delegate;
-
-        private ErrorHandler(HttpHandler delegate) {
-            this.delegate = delegate;
-        }
+    private record ErrorHandler(HttpHandler delegate) implements HttpHandler {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -58,7 +56,7 @@ public class CakeHttpServer {
                 } catch (IllegalArgumentException e) {
                     exchange.sendResponseHeaders(Constants.HTTP_STATUS_BAD_REQUEST,
                             Constants.EMPTY_BODY_LENGTH);
-                } catch (NoSuchElementException e) {
+                } catch (EntityNotFoundException e) {
                     exchange.sendResponseHeaders(Constants.HTTP_STATUS_NOT_FOUND,
                             Constants.EMPTY_BODY_LENGTH);
                 } catch (Exception e) {

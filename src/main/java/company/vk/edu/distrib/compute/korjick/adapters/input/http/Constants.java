@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.korjick.http;
+package company.vk.edu.distrib.compute.korjick.adapters.input.http;
 
 public class Constants {
     public static final int EMPTY_BODY_LENGTH = -1;
@@ -9,8 +9,6 @@ public class Constants {
     public static final String HTTP_METHOD_GET = "GET";
     public static final String HTTP_METHOD_PUT = "PUT";
     public static final String HTTP_METHOD_DELETE = "DELETE";
-    public static final String INTERNAL_REQUEST_HEADER = "X-Internal-Request";
-    public static final String INTERNAL_REQUEST_HEADER_VALUE = "true";
 
     public static final int HTTP_STATUS_OK = 200;
     public static final int HTTP_STATUS_CREATED = 201;

@@ -1,8 +1,8 @@
-package company.vk.edu.distrib.compute.korjick.http.status;
+package company.vk.edu.distrib.compute.korjick.adapters.input.http.status;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import company.vk.edu.distrib.compute.korjick.http.Constants;
+import company.vk.edu.distrib.compute.korjick.adapters.input.http.Constants;
 
 import java.io.IOException;
 

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+package company.vk.edu.distrib.compute.proto.korjick;
+
+message KeyRequest {
+  string key = 1;
+}
+
+message UpsertRequest {
+  string key = 1;
+  bytes body = 2;
+  uint64 version = 3;
+  bool tombstone = 4;
+}
+
+message EntityResponse {
+  uint32 status = 1;
+  bytes body = 2;
+  uint64 version = 3;
+  bool tombstone = 4;
+}
+
+service GrpcKVService {
+  rpc get(KeyRequest) returns (EntityResponse) {}
+  rpc upsert(UpsertRequest) returns (EntityResponse) {}
+  rpc delete(KeyRequest) returns (EntityResponse) {}
+}
