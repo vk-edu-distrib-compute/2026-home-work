@@ -3,10 +3,12 @@ package company.vk.edu.distrib.compute.korjick.app.cluster;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-public class CakeKVCluster implements KVCluster {
+public class CakeKVCluster implements KVCluster, Closeable {
     private final Map<String, KVService> services;
 
     public CakeKVCluster(Map<String, KVService> services) {
@@ -36,6 +38,15 @@ public class CakeKVCluster implements KVCluster {
         KVService service = services.get(endpoint);
         if (service != null) {
             service.stop();
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        for (KVService service : services.values()) {
+            if (service instanceof Closeable closeable) {
+                closeable.close();
+            }
         }
     }
 

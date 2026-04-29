@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
 
 public class CakeGrpcServer extends ReactorGrpcKVServiceGrpc.GrpcKVServiceImplBase {
 
@@ -48,6 +49,14 @@ public class CakeGrpcServer extends ReactorGrpcKVServiceGrpc.GrpcKVServiceImplBa
 
     public void stop() {
         server.shutdown();
+        try {
+            if (!server.awaitTermination(1, TimeUnit.SECONDS)) {
+                server.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            server.shutdownNow();
+        }
     }
 
     public String getEndpoint() {

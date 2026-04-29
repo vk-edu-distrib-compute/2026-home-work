@@ -4,9 +4,6 @@ import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.korjick.adapters.input.grpc.CakeGrpcServer;
-import company.vk.edu.distrib.compute.korjick.adapters.input.http.CakeHttpServer;
-import company.vk.edu.distrib.compute.korjick.adapters.input.http.entity.EntityHandler;
-import company.vk.edu.distrib.compute.korjick.adapters.input.http.status.StatusHandler;
 import company.vk.edu.distrib.compute.korjick.adapters.output.GrpcEntityGateway;
 import company.vk.edu.distrib.compute.korjick.adapters.output.H2EntityRepository;
 import company.vk.edu.distrib.compute.korjick.core.application.ShardingKVCoordinator;
@@ -27,16 +24,11 @@ public class CakeKVClusterFactory extends KVClusterFactory {
 
         try {
             for (int port : ports) {
-                final var endpoint = CakeGrpcServer.resolveEndpoint(host, port);
+                final var grpcEndpoint = CakeGrpcServer.resolveEndpoint(host, port);
                 final var repository = new H2EntityRepository(String.format("node_%s", port));
-                final var coordinator = new ShardingKVCoordinator(repository, endpoint, endpoints, gateway);
-
-                final var httpServer = new CakeHttpServer(host, port);
-                httpServer.register("/v0/status", new StatusHandler());
-                httpServer.register("/v0/entity", new EntityHandler(coordinator));
-                final var grpcServer = new CakeGrpcServer(host, port, coordinator);
-                final var service = new CakeKVClusterNodeService(repository, httpServer, grpcServer);
-                nodes.put(endpoint, service);
+                final var coordinator = new ShardingKVCoordinator(repository, grpcEndpoint, endpoints, gateway);
+                final var service = new CakeKVClusterNodeService(repository, host, port, coordinator);
+                nodes.put(String.format("http://%s:%s", host, port), service);
             }
 
             return new CakeKVCluster(nodes);

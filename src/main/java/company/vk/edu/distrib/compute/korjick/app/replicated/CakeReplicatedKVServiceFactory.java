@@ -2,10 +2,6 @@ package company.vk.edu.distrib.compute.korjick.app.replicated;
 
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.KVServiceFactory;
-import company.vk.edu.distrib.compute.korjick.adapters.input.grpc.CakeGrpcServer;
-import company.vk.edu.distrib.compute.korjick.adapters.input.http.CakeHttpServer;
-import company.vk.edu.distrib.compute.korjick.adapters.input.http.entity.DistributedEntityHandler;
-import company.vk.edu.distrib.compute.korjick.adapters.input.http.status.StatusHandler;
 import company.vk.edu.distrib.compute.korjick.adapters.output.GrpcEntityGateway;
 import company.vk.edu.distrib.compute.korjick.adapters.output.H2EntityRepository;
 import company.vk.edu.distrib.compute.korjick.core.application.ReplicatedKVCoordinator;
@@ -29,22 +25,22 @@ public class CakeReplicatedKVServiceFactory extends KVServiceFactory {
 
             var localCoordinator = new SingleNodeCoordinator(repository);
             int replicaPort = replicaPort(port, replicaNumber);
-            var grpcServer = new CakeGrpcServer(HOST, replicaPort, localCoordinator);
-            nodes.add(new ReplicatedCakeKVService.Node(repository, grpcServer));
+            nodes.add(new ReplicatedCakeKVService.Node(repository, HOST, replicaPort, localCoordinator));
         }
 
-        CakeHttpServer httpServer = new CakeHttpServer(HOST, port);
-        var service = new ReplicatedCakeKVService(port, nodes, httpServer);
         var replicatedCoordinator = new ReplicatedKVCoordinator(
-                service.replicaEndpoints(),
+                nodes.stream()
+                        .map(ReplicatedCakeKVService.Node::endpoint)
+                        .toList(),
                 new GrpcEntityGateway(),
-                service::endpointAvailable,
-                service.numberOfReplicas()
+                endpoint -> nodes.stream()
+                        .filter(node -> node.endpoint().equals(endpoint))
+                        .findFirst()
+                        .map(ReplicatedCakeKVService.Node::isStarted)
+                        .orElse(false),
+                nodes.size()
         );
-        httpServer.register("/v0/status", new StatusHandler());
-        httpServer.register("/v0/entity", new DistributedEntityHandler(replicatedCoordinator));
-
-        return service;
+        return new ReplicatedCakeKVService(HOST, port, nodes, replicatedCoordinator);
     }
 
     private int replicaPort(int servicePort, int replicaNumber) {

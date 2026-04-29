@@ -3,32 +3,40 @@ package company.vk.edu.distrib.compute.korjick.app.replicated;
 import company.vk.edu.distrib.compute.ReplicatedService;
 import company.vk.edu.distrib.compute.korjick.adapters.input.grpc.CakeGrpcServer;
 import company.vk.edu.distrib.compute.korjick.adapters.input.http.CakeHttpServer;
+import company.vk.edu.distrib.compute.korjick.adapters.input.http.entity.DistributedEntityHandler;
+import company.vk.edu.distrib.compute.korjick.adapters.input.http.status.StatusHandler;
+import company.vk.edu.distrib.compute.korjick.core.application.ReplicatedKVCoordinator;
+import company.vk.edu.distrib.compute.korjick.core.application.SingleNodeCoordinator;
 import company.vk.edu.distrib.compute.korjick.ports.output.EntityRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ReplicatedCakeKVService implements ReplicatedService {
+public class ReplicatedCakeKVService implements ReplicatedService, Closeable {
     private static final Logger log = LoggerFactory.getLogger(ReplicatedCakeKVService.class);
 
+    private final String host;
     private final int port;
     private final List<Node> nodes;
-    private final CakeHttpServer httpServer;
+    private final ReplicatedKVCoordinator coordinator;
+    private CakeHttpServer httpServer;
 
-    public ReplicatedCakeKVService(int port,
+    public ReplicatedCakeKVService(String host,
+                                   int port,
                                    List<Node> nodes,
-                                   CakeHttpServer httpServer) {
+                                   ReplicatedKVCoordinator coordinator) {
         if (nodes.isEmpty()) {
             throw new IllegalArgumentException("Replication factor should be positive");
         }
 
+        this.host = Objects.requireNonNull(host, "host");
         this.port = port;
-        this.nodes = List.copyOf(nodes);
-        this.httpServer = httpServer;
+        this.nodes = List.copyOf(Objects.requireNonNull(nodes, "nodes"));
+        this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
     }
 
     @Override
@@ -43,25 +51,41 @@ public class ReplicatedCakeKVService implements ReplicatedService {
 
     @Override
     public void disableReplica(int nodeId) {
-        node(nodeId).disable();
+        node(nodeId).stop();
     }
 
     @Override
     public void enableReplica(int nodeId) {
-        node(nodeId).enable();
+        node(nodeId).start();
     }
 
     @Override
     public void start() {
         nodes.forEach(Node::start);
+        try {
+            httpServer = new CakeHttpServer(host, port);
+            httpServer.register("/v0/status", new StatusHandler());
+            httpServer.register("/v0/entity", new DistributedEntityHandler(coordinator));
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create replicated HTTP server", e);
+        }
         httpServer.start();
         log.info("ReplicatedCakeKVService started on port={} with replicationFactor={}", port, nodes.size());
     }
 
     @Override
     public void stop() {
-        httpServer.stop();
+        if (httpServer != null) {
+            httpServer.stop();
+            httpServer = null;
+        }
         nodes.forEach(Node::stop);
+        log.info("ReplicatedCakeKVService stopped");
+    }
+
+    @Override
+    public void close() {
+        stop();
         for (int nodeId = 0; nodeId < nodes.size(); nodeId++) {
             try {
                 nodes.get(nodeId).close();
@@ -69,21 +93,6 @@ public class ReplicatedCakeKVService implements ReplicatedService {
                 log.error("Failed to close replica repository id={}", nodeId, e);
             }
         }
-        log.info("ReplicatedCakeKVService stopped");
-    }
-
-    public List<String> replicaEndpoints() {
-        return nodes.stream()
-                .map(Node::endpoint)
-                .toList();
-    }
-
-    public boolean endpointAvailable(String endpoint) {
-        return nodes.stream()
-                .filter(node -> Objects.equals(node.endpoint(), endpoint))
-                .findFirst()
-                .map(Node::isEnabled)
-                .orElse(false);
     }
 
     private Node node(int nodeId) {
@@ -95,39 +104,48 @@ public class ReplicatedCakeKVService implements ReplicatedService {
 
     public static final class Node {
         private final EntityRepository repository;
-        private final CakeGrpcServer grpcServer;
-        private final AtomicBoolean enabled = new AtomicBoolean(true);
+        private final String host;
+        private final int port;
+        private final SingleNodeCoordinator coordinator;
+        private final String endpoint;
+        private CakeGrpcServer grpcServer;
 
-        Node(EntityRepository repository, CakeGrpcServer grpcServer) {
+        public Node(EntityRepository repository,
+             String host,
+             int port,
+             SingleNodeCoordinator coordinator) {
             this.repository = Objects.requireNonNull(repository, "repository");
-            this.grpcServer = Objects.requireNonNull(grpcServer, "grpcServer");
+            this.host = Objects.requireNonNull(host, "host");
+            this.port = port;
+            this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
+            this.endpoint = CakeGrpcServer.resolveEndpoint(host, port);
         }
 
-        String endpoint() {
-            return grpcServer.getEndpoint();
+        public String endpoint() {
+            return endpoint;
         }
 
-        boolean isEnabled() {
-            return enabled.get();
+        public boolean isStarted() {
+            return grpcServer != null;
         }
 
-        void disable() {
-            enabled.set(false);
-        }
-
-        void enable() {
-            enabled.set(true);
-        }
-
-        void start() {
+        public void start() {
+            if (grpcServer != null) {
+                return;
+            }
+            grpcServer = new CakeGrpcServer(host, port, coordinator);
             grpcServer.start();
         }
 
-        void stop() {
-            grpcServer.stop();
+        public void stop() {
+            if (grpcServer != null) {
+                grpcServer.stop();
+                grpcServer = null;
+            }
         }
 
-        void close() throws IOException {
+        public void close() throws IOException {
+            stop();
             repository.close();
         }
     }
