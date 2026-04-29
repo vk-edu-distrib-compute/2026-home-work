@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -33,7 +34,7 @@ public interface KVService {
      * <p>
      * May be called only once.
      */
-    void start();
+    void start() throws IOException;
 
     /**
      * Stop listening and free all the resources.
