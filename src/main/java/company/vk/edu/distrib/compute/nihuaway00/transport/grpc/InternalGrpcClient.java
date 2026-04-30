@@ -9,15 +9,14 @@ import company.vk.edu.distrib.compute.nihuaway00.proto.Response;
 import io.grpc.StatusRuntimeException;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.NoSuchElementException;
 
 public class InternalGrpcClient implements InternalNodeClient {
     private static final Duration RPC_TIMEOUT = Duration.ofSeconds(1);
-    private final Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs;
+    private final GrpcChannelRegistry channelRegistry;
 
-    public InternalGrpcClient(Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs) {
-        this.stubs = stubs;
+    public InternalGrpcClient(GrpcChannelRegistry channelRegistry) {
+        this.channelRegistry = channelRegistry;
     }
 
     @Override
@@ -74,11 +73,7 @@ public class InternalGrpcClient implements InternalNodeClient {
     }
 
     private ReactorKVServiceGrpc.ReactorKVServiceStub requireStub(String grpcEndpoint) {
-        ReactorKVServiceGrpc.ReactorKVServiceStub stub = stubs.get(grpcEndpoint);
-        if (stub == null) {
-            throw new IllegalArgumentException("Unknown gRPC endpoint: " + grpcEndpoint);
-        }
-        return stub;
+        return channelRegistry.getStub(grpcEndpoint);
     }
 
     private RuntimeException mapGrpcException(StatusRuntimeException exception) {

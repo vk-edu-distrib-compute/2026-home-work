@@ -14,10 +14,12 @@ public class Cluster implements KVCluster {
     private final ShardingStrategy shardingStrategy;
     private final Map<String, KVService> services = new ConcurrentHashMap<>();
     private final KVServiceFactory serviceFactory;
+    private final AutoCloseable channelRegistry;
 
-    public Cluster(ShardingStrategy shardingStrategy, KVServiceFactory serviceFactory) {
+    public Cluster(ShardingStrategy shardingStrategy, KVServiceFactory serviceFactory, AutoCloseable channelRegistry) {
         this.shardingStrategy = shardingStrategy;
         this.serviceFactory = serviceFactory;
+        this.channelRegistry = channelRegistry;
     }
 
     @Override
@@ -46,6 +48,11 @@ public class Cluster implements KVCluster {
     public void stop() {
         List<String> endpoints = getEndpoints();
         endpoints.forEach(this::stop);
+        try {
+            channelRegistry.close();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to close gRPC channels", e);
+        }
     }
 
     @Override

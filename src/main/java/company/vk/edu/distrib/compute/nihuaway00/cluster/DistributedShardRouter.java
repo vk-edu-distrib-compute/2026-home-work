@@ -1,21 +1,25 @@
 package company.vk.edu.distrib.compute.nihuaway00.cluster;
 
 import company.vk.edu.distrib.compute.nihuaway00.proto.ReactorKVServiceGrpc;
+import company.vk.edu.distrib.compute.nihuaway00.transport.grpc.GrpcChannelRegistry;
 
 import java.net.URI;
-import java.util.Map;
 
 public class DistributedShardRouter implements ShardRouter {
     private final String currentNodeEndpoint;
     private final String currentNodeGrpcEndpoint;
     private final ShardingStrategy shardingStrategy;
-    private final Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs;
+    private final GrpcChannelRegistry channelRegistry;
 
-    public DistributedShardRouter(String currentNodeEndpoint, ShardingStrategy strategy, Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs) {
+    public DistributedShardRouter(
+            String currentNodeEndpoint,
+            ShardingStrategy strategy,
+            GrpcChannelRegistry channelRegistry
+    ) {
         this.currentNodeEndpoint = currentNodeEndpoint;
         this.currentNodeGrpcEndpoint = toGrpcEndpoint(currentNodeEndpoint);
         this.shardingStrategy = strategy;
-        this.stubs = stubs;
+        this.channelRegistry = channelRegistry;
     }
 
     @Override
@@ -25,7 +29,8 @@ public class DistributedShardRouter implements ShardRouter {
 
     @Override
     public <T> T proxyRequest(String shardId, ShardOperation<T> operation) {
-        return operation.execute(stubs.get(shardId));
+        ReactorKVServiceGrpc.ReactorKVServiceStub stub = channelRegistry.getStub(shardId);
+        return operation.execute(stub);
     }
 
     @Override
