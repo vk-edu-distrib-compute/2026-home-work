@@ -10,12 +10,12 @@ import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NihuawayKVCluster implements KVCluster {
+public class Cluster implements KVCluster {
     private final ShardingStrategy shardingStrategy;
     private final Map<String, KVService> services = new ConcurrentHashMap<>();
     private final KVServiceFactory serviceFactory;
 
-    public NihuawayKVCluster(ShardingStrategy shardingStrategy, KVServiceFactory serviceFactory) {
+    public Cluster(ShardingStrategy shardingStrategy, KVServiceFactory serviceFactory) {
         this.shardingStrategy = shardingStrategy;
         this.serviceFactory = serviceFactory;
     }

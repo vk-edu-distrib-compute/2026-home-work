@@ -3,7 +3,7 @@ package company.vk.edu.distrib.compute.nihuaway00.bootstrap;
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVClusterFactory;
 import company.vk.edu.distrib.compute.nihuaway00.Config;
-import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVCluster;
+import company.vk.edu.distrib.compute.nihuaway00.Cluster;
 import company.vk.edu.distrib.compute.nihuaway00.proto.ReactorKVServiceGrpc;
 import company.vk.edu.distrib.compute.nihuaway00.cluster.*;
 import io.grpc.Grpc;
@@ -45,6 +45,6 @@ public class ClusterFactory extends KVClusterFactory {
 
         ServiceFactory serviceFactory = new ServiceFactory(strategy, replicaCountProps, stubs);
 
-        return new NihuawayKVCluster(strategy, serviceFactory);
+        return new Cluster(strategy, serviceFactory);
     }
 }
