@@ -2,29 +2,22 @@ package company.vk.edu.distrib.compute.nihuaway00.transport.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import company.vk.edu.distrib.compute.nihuaway00.replication.ReplicaManager;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
 public class StatusHttpHandler implements HttpHandler {
 
-    private final ReplicaManager replicaManager;
+    public StatusHttpHandler() {
 
-    public StatusHttpHandler(ReplicaManager replicaManager) {
-        this.replicaManager = replicaManager;
     }
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        boolean available = replicaManager.available();
-        byte[] body = available
-                ? "{\"status\": \"ok\"}".getBytes()
-                : "{\"status\": \"not available\", \"desc\":\"entity dao not available\"}".getBytes();
-        int status = available ? 200 : 503;
+        byte[] body = "{\"status\": \"ok\"}".getBytes();
 
         try (exchange) {
-            exchange.sendResponseHeaders(status, body.length);
+            exchange.sendResponseHeaders(200, body.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }

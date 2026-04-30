@@ -4,10 +4,10 @@ import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.nihuaway00.app.KVCommandService;
 import company.vk.edu.distrib.compute.nihuaway00.transport.http.EntityHttpHandler;
 import company.vk.edu.distrib.compute.nihuaway00.transport.grpc.InternalGrpcService;
+import company.vk.edu.distrib.compute.nihuaway00.transport.http.StatusHttpHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
@@ -22,7 +22,7 @@ public class NodeServer implements company.vk.edu.distrib.compute.ReplicatedServ
     public NodeServer(int port, KVCommandService commandService) {
         this.port = port;
         this.commandService = commandService;
-
+        this.grpcServer = new InternalGrpcService(commandService);
     }
 
     @Override
@@ -33,9 +33,8 @@ public class NodeServer implements company.vk.edu.distrib.compute.ReplicatedServ
             server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
             registerContexts();
             server.start();
-            if (grpcServer.isShutdown() || grpcServer.isTerminated()) {
-                grpcServer.newGrpcServer(port + 1);
-            }
+
+            grpcServer.newGrpcServer(port + 1);
             grpcServer.start();
         } catch (Exception e) {
             if (log.isErrorEnabled()) {
@@ -61,10 +60,9 @@ public class NodeServer implements company.vk.edu.distrib.compute.ReplicatedServ
         }
     }
 
-    private void registerContexts() throws IOException {
-        grpcServer = new InternalGrpcService(port, commandService);
+    private void registerContexts() {
         server.createContext("/v0/entity", new EntityHttpHandler(commandService));
-//        server.createContext("/v0/status", new PingHandler(replicaManager));
+        server.createContext("/v0/status", new StatusHttpHandler());
     }
 
     @Override

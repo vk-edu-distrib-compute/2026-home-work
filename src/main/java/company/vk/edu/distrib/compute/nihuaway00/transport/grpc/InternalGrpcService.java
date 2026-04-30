@@ -22,18 +22,15 @@ public class InternalGrpcService extends ReactorKVServiceGrpc.KVServiceImplBase 
     private final KVCommandService commandService;
     private Server server;
 
-    public InternalGrpcService(int port, KVCommandService commandService) {
+    public InternalGrpcService(KVCommandService commandService) {
         this.commandService = commandService;
-
-        this.server = Grpc.newServerBuilderForPort(port, InsecureServerCredentials.create())
-                .addService(this)
-                .addService(ProtoReflectionService.newInstance())
-                .build();
     }
 
     public void newGrpcServer(int port) throws InterruptedException {
-        server.shutdown();
-        server.awaitTermination(1, TimeUnit.SECONDS);
+        if (server != null) {
+            server.shutdown();
+            server.awaitTermination(1, TimeUnit.SECONDS);
+        }
 
         this.server = Grpc.newServerBuilderForPort(port, InsecureServerCredentials.create())
                 .addService(this)
