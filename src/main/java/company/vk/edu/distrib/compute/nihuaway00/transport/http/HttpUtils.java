@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.nihuaway00;
+package company.vk.edu.distrib.compute.nihuaway00.transport.http;
 
 import com.sun.net.httpserver.HttpExchange;
 

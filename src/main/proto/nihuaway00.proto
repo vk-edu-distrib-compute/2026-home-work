@@ -1,0 +1,27 @@
+syntax = 'proto3';
+
+option java_multiple_files = true;
+
+package company.vk.edu.distrib.compute.nihuaway00.proto;
+
+message Key {
+  string key = 1;
+  int32 ack = 2;
+}
+
+message KeyValue {
+  string key = 1;
+  bytes value = 2;
+  int32 ack = 3;
+}
+
+message Response {
+  int32 status = 1;
+  bytes value = 2;
+}
+
+service KVService {
+  rpc get(Key) returns (Response) {}
+  rpc upsert(KeyValue) returns (Response) {}
+  rpc delete(Key) returns (Response) {}
+}

@@ -1,0 +1,73 @@
+package company.vk.edu.distrib.compute.nihuaway00;
+
+import company.vk.edu.distrib.compute.KVCluster;
+import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.KVServiceFactory;
+import company.vk.edu.distrib.compute.nihuaway00.cluster.ShardingStrategy;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class Cluster implements KVCluster {
+    private final ShardingStrategy shardingStrategy;
+    private final Map<String, KVService> services = new ConcurrentHashMap<>();
+    private final KVServiceFactory serviceFactory;
+    private final AutoCloseable channelRegistry;
+
+    public Cluster(ShardingStrategy shardingStrategy, KVServiceFactory serviceFactory, AutoCloseable channelRegistry) {
+        this.shardingStrategy = shardingStrategy;
+        this.serviceFactory = serviceFactory;
+        this.channelRegistry = channelRegistry;
+    }
+
+    @Override
+    public void start() {
+        List<String> endpoints = getEndpoints();
+        endpoints.forEach(this::start);
+    }
+
+    @Override
+    public void start(String endpoint) {
+        int port = extractPort(endpoint);
+
+        KVService service = services.computeIfAbsent(endpoint, (k) -> {
+            try {
+                return serviceFactory.create(port);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+
+        service.start();
+        shardingStrategy.enableNode(endpoint);
+    }
+
+    @Override
+    public void stop() {
+        List<String> endpoints = getEndpoints();
+        endpoints.forEach(this::stop);
+        try {
+            channelRegistry.close();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to close gRPC channels", e);
+        }
+    }
+
+    @Override
+    public void stop(String endpoint) {
+        services.get(endpoint).stop();
+        shardingStrategy.disableNode(endpoint);
+    }
+
+    @Override
+    public List<String> getEndpoints() {
+        return shardingStrategy.getEndpoints();
+    }
+
+    private int extractPort(String endpoint) {
+        String[] parts = endpoint.split(":");
+        return Integer.parseInt(parts[parts.length - 1]);
+    }
+}
