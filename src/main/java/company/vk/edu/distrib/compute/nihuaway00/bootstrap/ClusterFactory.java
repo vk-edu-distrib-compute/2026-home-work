@@ -16,12 +16,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NihuawayKVClusterFactory extends KVClusterFactory {
-    private static final Logger log = LoggerFactory.getLogger(NihuawayKVClusterFactory.class);
+public class ClusterFactory extends KVClusterFactory {
+    private static final Logger log = LoggerFactory.getLogger(ClusterFactory.class);
 
     @Override
     protected KVCluster doCreate(List<Integer> ports) {
-        Map<String, NodeInfo> nodes = new ConcurrentHashMap<>();
+        Map<String, ClusterNode> nodes = new ConcurrentHashMap<>();
         Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs = new ConcurrentHashMap<>();
 
         ports.forEach(port -> {
@@ -30,7 +30,7 @@ public class NihuawayKVClusterFactory extends KVClusterFactory {
             ManagedChannel channel = Grpc.newChannelBuilder(grpcEndpoint, InsecureChannelCredentials.create()).build();
             ReactorKVServiceGrpc.ReactorKVServiceStub stub = ReactorKVServiceGrpc.newReactorStub(channel);
             stubs.put(grpcEndpoint, stub);
-            nodes.put(endpoint, new NodeInfo(endpoint, grpcEndpoint));
+            nodes.put(endpoint, new ClusterNode(endpoint, grpcEndpoint));
         });
 
         String shardingStrategyProp = Config.strategy();
@@ -43,7 +43,7 @@ public class NihuawayKVClusterFactory extends KVClusterFactory {
 
         int replicaCountProps = Config.replicas();
 
-        NihuawayKVServiceFactory serviceFactory = new NihuawayKVServiceFactory(strategy, replicaCountProps, stubs);
+        ServiceFactory serviceFactory = new ServiceFactory(strategy, replicaCountProps, stubs);
 
         return new NihuawayKVCluster(strategy, serviceFactory);
     }

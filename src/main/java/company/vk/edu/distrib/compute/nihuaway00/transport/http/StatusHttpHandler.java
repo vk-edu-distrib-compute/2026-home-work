@@ -7,11 +7,11 @@ import company.vk.edu.distrib.compute.nihuaway00.replication.ReplicaManager;
 import java.io.IOException;
 import java.io.OutputStream;
 
-public class PingHandler implements HttpHandler {
+public class StatusHttpHandler implements HttpHandler {
 
     private final ReplicaManager replicaManager;
 
-    public PingHandler(ReplicaManager replicaManager) {
+    public StatusHttpHandler(ReplicaManager replicaManager) {
         this.replicaManager = replicaManager;
     }
 

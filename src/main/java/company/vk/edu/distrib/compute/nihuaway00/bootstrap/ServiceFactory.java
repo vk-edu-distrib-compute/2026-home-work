@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.nihuaway00.bootstrap;
 
 import company.vk.edu.distrib.compute.KVService;
 import company.vk.edu.distrib.compute.nihuaway00.Config;
-import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVService;
+import company.vk.edu.distrib.compute.nihuaway00.NodeServer;
 import company.vk.edu.distrib.compute.nihuaway00.app.InternalNodeClient;
 import company.vk.edu.distrib.compute.nihuaway00.app.KVCommandService;
 import company.vk.edu.distrib.compute.nihuaway00.proto.ReactorKVServiceGrpc;
@@ -21,12 +21,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVServiceFactory {
+public class ServiceFactory extends company.vk.edu.distrib.compute.KVServiceFactory {
     private final ShardingStrategy shardingStrategy;
     private final int replicaCount;
     private final Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs;
 
-    public NihuawayKVServiceFactory(ShardingStrategy shardingStrategy, int replicaCount, Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs) {
+    public ServiceFactory(ShardingStrategy shardingStrategy, int replicaCount, Map<String, ReactorKVServiceGrpc.ReactorKVServiceStub> stubs) {
         super();
         this.shardingStrategy = shardingStrategy;
         this.replicaCount = replicaCount;
@@ -34,7 +34,7 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
 
     }
 
-    public NihuawayKVServiceFactory() {
+    public ServiceFactory() {
         this(null, Config.replicas(), Map.of());
     }
 
@@ -61,6 +61,6 @@ public class NihuawayKVServiceFactory extends company.vk.edu.distrib.compute.KVS
         ReplicaManager replicaManager = buildReplicaManager(port, replicaCount);
         InternalNodeClient internalNodeClient = new InternalGrpcClient(stubs);
         KVCommandService commandService = new KVCommandService(replicaManager, shardRouter, internalNodeClient);
-        return new NihuawayKVService(port, commandService);
+        return new NodeServer(port, commandService);
     }
 }

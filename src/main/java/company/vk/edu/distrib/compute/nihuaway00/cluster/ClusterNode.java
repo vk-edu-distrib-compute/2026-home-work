@@ -2,12 +2,12 @@ package company.vk.edu.distrib.compute.nihuaway00.cluster;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class NodeInfo {
+public class ClusterNode {
     private final String endpoint;
     private final String grpcEndpoint;
     private final AtomicBoolean alive = new AtomicBoolean(false);
 
-    public NodeInfo(String endpoint, String grpcEndpoint) {
+    public ClusterNode(String endpoint, String grpcEndpoint) {
         this.endpoint = endpoint;
         this.grpcEndpoint = grpcEndpoint;
     }

@@ -1,6 +1,6 @@
 package company.vk.edu.distrib.compute;
 
-import company.vk.edu.distrib.compute.nihuaway00.bootstrap.NihuawayKVClusterFactory;
+import company.vk.edu.distrib.compute.nihuaway00.bootstrap.ClusterFactory;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 public class KVClusterFactoryArgumentsProvider implements ArgumentsProvider {
     private final Set<Class<? extends KVClusterFactory>> factories = Set.of(
         //DummyKVClusterFactory.class
-        NihuawayKVClusterFactory.class
+        ClusterFactory.class
     );
 
     @Override

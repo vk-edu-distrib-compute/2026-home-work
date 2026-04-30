@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.nihuaway00;
 
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.nihuaway00.app.KVCommandService;
-import company.vk.edu.distrib.compute.nihuaway00.transport.http.EntityHandler;
+import company.vk.edu.distrib.compute.nihuaway00.transport.http.EntityHttpHandler;
 import company.vk.edu.distrib.compute.nihuaway00.transport.grpc.InternalGrpcService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,15 +11,15 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
-public class NihuawayKVService implements company.vk.edu.distrib.compute.ReplicatedService {
-    private static final Logger log = LoggerFactory.getLogger(NihuawayKVService.class);
+public class NodeServer implements company.vk.edu.distrib.compute.ReplicatedService {
+    private static final Logger log = LoggerFactory.getLogger(NodeServer.class);
 
     private final KVCommandService commandService;
     private HttpServer server;
     private InternalGrpcService grpcServer;
     int port;
 
-    public NihuawayKVService(int port, KVCommandService commandService) {
+    public NodeServer(int port, KVCommandService commandService) {
         this.port = port;
         this.commandService = commandService;
 
@@ -63,7 +63,7 @@ public class NihuawayKVService implements company.vk.edu.distrib.compute.Replica
 
     private void registerContexts() throws IOException {
         grpcServer = new InternalGrpcService(port, commandService);
-        server.createContext("/v0/entity", new EntityHandler(commandService));
+        server.createContext("/v0/entity", new EntityHttpHandler(commandService));
 //        server.createContext("/v0/status", new PingHandler(replicaManager));
     }
 

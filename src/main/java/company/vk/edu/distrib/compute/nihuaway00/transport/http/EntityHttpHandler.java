@@ -14,12 +14,12 @@ import java.net.URI;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-public class EntityHandler implements HttpHandler {
-    private static final Logger log = LoggerFactory.getLogger(EntityHandler.class);
+public class EntityHttpHandler implements HttpHandler {
+    private static final Logger log = LoggerFactory.getLogger(EntityHttpHandler.class);
     private final KVCommandService KVCommandService;
 
 
-    public EntityHandler(KVCommandService kvCommandService) {
+    public EntityHttpHandler(KVCommandService kvCommandService) {
         KVCommandService = kvCommandService;
     }
 

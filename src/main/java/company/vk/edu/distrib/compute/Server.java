@@ -1,8 +1,8 @@
 package company.vk.edu.distrib.compute;
 
 import module java.base;
-import company.vk.edu.distrib.compute.nihuaway00.bootstrap.NihuawayKVClusterFactory;
-import company.vk.edu.distrib.compute.nihuaway00.bootstrap.NihuawayKVServiceFactory;
+import company.vk.edu.distrib.compute.nihuaway00.bootstrap.ClusterFactory;
+import company.vk.edu.distrib.compute.nihuaway00.bootstrap.ServiceFactory;
 import org.slf4j.LoggerFactory;
 
 public class Server {
@@ -11,13 +11,13 @@ public class Server {
         var log = LoggerFactory.getLogger("server");
         if (isClusterMode(args)) {
             List<Integer> ports = Arrays.asList(8080, 8085);
-            KVCluster cluster = new NihuawayKVClusterFactory().create(ports);
+            KVCluster cluster = new ClusterFactory().create(ports);
             cluster.start();
             log.info("Cluster started on ports={}", ports);
             Runtime.getRuntime().addShutdownHook(new Thread(cluster::stop));
         } else {
             var port = 8080;
-            KVService storage = new NihuawayKVServiceFactory().create(port);
+            KVService storage = new ServiceFactory().create(port);
             storage.start();
             log.info("Server started on port {}", port);
             Runtime.getRuntime().addShutdownHook(new Thread(storage::stop));

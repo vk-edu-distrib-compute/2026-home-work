@@ -7,18 +7,18 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class RendezvousHashingStrategy implements ShardingStrategy {
-    private final Map<String, NodeInfo> nodes;
+    private final Map<String, ClusterNode> nodes;
     private static final ThreadLocal<MessageDigest> MD =
             ThreadLocal.withInitial(RendezvousHashingStrategy::createMD5);
 
-    public RendezvousHashingStrategy(Map<String, NodeInfo> nodes) {
+    public RendezvousHashingStrategy(Map<String, ClusterNode> nodes) {
         this.nodes = nodes;
     }
 
     @Override
-    public NodeInfo getResponsibleNode(String key) {
-        Optional<NodeInfo> targetNode = nodes.values().stream()
-                .filter(NodeInfo::isEnabled)
+    public ClusterNode getResponsibleNode(String key) {
+        Optional<ClusterNode> targetNode = nodes.values().stream()
+                .filter(ClusterNode::isEnabled)
                 .map(n -> Map.entry(n, computeHash(key, n.getEndpoint())))
                 .max(Comparator.comparingLong(Map.Entry::getValue))
                 .map(Map.Entry::getKey);
@@ -42,7 +42,7 @@ public class RendezvousHashingStrategy implements ShardingStrategy {
 
     @Override
     public List<String> getEndpoints() {
-        return nodes.values().stream().map(NodeInfo::getEndpoint).toList();
+        return nodes.values().stream().map(ClusterNode::getEndpoint).toList();
     }
 
     private long computeHash(String key, String endpoint) {
