@@ -1,6 +1,6 @@
 package company.vk.edu.distrib.compute.nihuaway00.cluster;
 
-import company.vk.edu.distrib.compute.nihuaway00.proto.ReactorKVServiceGrpc;
+import company.vk.edu.distrib.compute.nihuaway00.proto.KVServiceGrpc;
 import company.vk.edu.distrib.compute.nihuaway00.transport.grpc.GrpcChannelRegistry;
 
 public class DistributedShardRouter implements ShardRouter {
@@ -28,7 +28,7 @@ public class DistributedShardRouter implements ShardRouter {
 
     @Override
     public <T> T proxyRequest(String shardId, ShardOperation<T> operation) {
-        ReactorKVServiceGrpc.ReactorKVServiceStub stub = channelRegistry.getStub(shardId);
+        KVServiceGrpc.KVServiceBlockingStub stub = channelRegistry.getStub(shardId);
         return operation.execute(stub);
     }
 

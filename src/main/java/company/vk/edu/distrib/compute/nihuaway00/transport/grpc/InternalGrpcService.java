@@ -4,14 +4,14 @@ import com.google.protobuf.ByteString;
 import company.vk.edu.distrib.compute.nihuaway00.app.KVCommandService;
 import company.vk.edu.distrib.compute.nihuaway00.proto.Key;
 import company.vk.edu.distrib.compute.nihuaway00.proto.KeyValue;
-import company.vk.edu.distrib.compute.nihuaway00.proto.ReactorKVServiceGrpc;
+import company.vk.edu.distrib.compute.nihuaway00.proto.KVServiceGrpc;
 import company.vk.edu.distrib.compute.nihuaway00.proto.Response;
 import io.grpc.Status;
-import reactor.core.publisher.Mono;
+import io.grpc.stub.StreamObserver;
 
 import java.util.NoSuchElementException;
 
-public class InternalGrpcService extends ReactorKVServiceGrpc.KVServiceImplBase {
+public class InternalGrpcService extends KVServiceGrpc.KVServiceImplBase {
     private final KVCommandService commandService;
 
     public InternalGrpcService(KVCommandService commandService) {
@@ -20,49 +20,51 @@ public class InternalGrpcService extends ReactorKVServiceGrpc.KVServiceImplBase 
     }
 
     @Override
-    public Mono<Response> get(Key request) {
+    public void get(Key request, StreamObserver<Response> responseObserver) {
         try {
             byte[] data = commandService.handleGetEntity(request.getKey(),
                     request.getAck());
-            return Mono.just(Response.newBuilder()
+            responseObserver.onNext(Response.newBuilder()
                     .setStatus(200)
                     .setValue(ByteString.copyFrom(data))
                     .build());
+            responseObserver.onCompleted();
         } catch (NoSuchElementException e) {
-            return Mono.error(Status.NOT_FOUND.asRuntimeException());
+            responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
         } catch (IllegalArgumentException e) {
-            return Mono.error(Status.INVALID_ARGUMENT.asRuntimeException());
+            responseObserver.onError(Status.INVALID_ARGUMENT.asRuntimeException());
         } catch (Exception e) {
-            return Mono.error(Status.INTERNAL.asRuntimeException());
+            responseObserver.onError(Status.INTERNAL.asRuntimeException());
         }
     }
 
     @Override
-    public Mono<Response> upsert(KeyValue request) {
+    public void upsert(KeyValue request, StreamObserver<Response> responseObserver) {
         try {
             commandService.handlePutEntity(request.getKey(), request.getValue().toByteArray(), request.getAck());
-            return Mono.just(Response.newBuilder().setStatus(201).build());
+            responseObserver.onNext(Response.newBuilder().setStatus(201).build());
+            responseObserver.onCompleted();
         } catch (NoSuchElementException e) {
-            return Mono.error(Status.NOT_FOUND.asRuntimeException());
+            responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
         } catch (IllegalArgumentException e) {
-            return Mono.error(Status.INVALID_ARGUMENT.asRuntimeException());
+            responseObserver.onError(Status.INVALID_ARGUMENT.asRuntimeException());
         } catch (Exception e) {
-            return Mono.error(Status.INTERNAL.asRuntimeException());
+            responseObserver.onError(Status.INTERNAL.asRuntimeException());
         }
     }
 
     @Override
-    public Mono<Response> delete(Key request) {
+    public void delete(Key request, StreamObserver<Response> responseObserver) {
         try {
             commandService.handleDeleteEntity(request.getKey(), request.getAck());
-            return Mono.just(Response.newBuilder().setStatus(202).build());
+            responseObserver.onNext(Response.newBuilder().setStatus(202).build());
+            responseObserver.onCompleted();
         } catch (NoSuchElementException e) {
-            return Mono.error(Status.NOT_FOUND.asRuntimeException());
+            responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
         } catch (IllegalArgumentException e) {
-            return Mono.error(Status.INVALID_ARGUMENT.asRuntimeException());
+            responseObserver.onError(Status.INVALID_ARGUMENT.asRuntimeException());
         } catch (Exception e) {
-            return Mono.error(Status.INTERNAL.asRuntimeException());
+            responseObserver.onError(Status.INTERNAL.asRuntimeException());
         }
     }
-
 }

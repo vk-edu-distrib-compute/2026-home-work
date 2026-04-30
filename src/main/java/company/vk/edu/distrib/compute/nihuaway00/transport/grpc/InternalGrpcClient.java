@@ -4,15 +4,15 @@ import com.google.protobuf.ByteString;
 import company.vk.edu.distrib.compute.nihuaway00.app.InternalNodeClient;
 import company.vk.edu.distrib.compute.nihuaway00.proto.Key;
 import company.vk.edu.distrib.compute.nihuaway00.proto.KeyValue;
-import company.vk.edu.distrib.compute.nihuaway00.proto.ReactorKVServiceGrpc;
+import company.vk.edu.distrib.compute.nihuaway00.proto.KVServiceGrpc;
 import company.vk.edu.distrib.compute.nihuaway00.proto.Response;
 import io.grpc.StatusRuntimeException;
 
-import java.time.Duration;
 import java.util.NoSuchElementException;
+import java.util.concurrent.TimeUnit;
 
 public class InternalGrpcClient implements InternalNodeClient {
-    private static final Duration RPC_TIMEOUT = Duration.ofSeconds(1);
+    private static final long RPC_TIMEOUT_SECONDS = 1L;
     private final GrpcChannelRegistry channelRegistry;
 
     public InternalGrpcClient(GrpcChannelRegistry channelRegistry) {
@@ -23,14 +23,11 @@ public class InternalGrpcClient implements InternalNodeClient {
     public byte[] get(String grpcEndpoint, String key, int ack) {
         try {
             Response response = requireStub(grpcEndpoint)
+                    .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .get(Key.newBuilder()
                             .setKey(key)
                             .setAck(ack)
-                            .build())
-                    .block(RPC_TIMEOUT);
-            if (response == null) {
-                throw new IllegalStateException("Remote response is null");
-            }
+                            .build());
             return response.getValue().toByteArray();
         } catch (StatusRuntimeException e) {
             throw mapGrpcException(e);
@@ -40,16 +37,13 @@ public class InternalGrpcClient implements InternalNodeClient {
     @Override
     public void put(String grpcEndpoint, String key, byte[] value, int ack) {
         try {
-            Response response = requireStub(grpcEndpoint)
+            requireStub(grpcEndpoint)
+                    .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .upsert(KeyValue.newBuilder()
                             .setKey(key)
                             .setValue(ByteString.copyFrom(value))
                             .setAck(ack)
-                            .build())
-                    .block(RPC_TIMEOUT);
-            if (response == null) {
-                throw new IllegalStateException("Remote response is null");
-            }
+                            .build());
         } catch (StatusRuntimeException e) {
             throw mapGrpcException(e);
         }
@@ -58,21 +52,18 @@ public class InternalGrpcClient implements InternalNodeClient {
     @Override
     public void delete(String grpcEndpoint, String key, int ack) {
         try {
-            Response response = requireStub(grpcEndpoint)
+            requireStub(grpcEndpoint)
+                    .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .delete(Key.newBuilder()
                             .setKey(key)
                             .setAck(ack)
-                            .build())
-                    .block(RPC_TIMEOUT);
-            if (response == null) {
-                throw new IllegalStateException("Remote response is null");
-            }
+                            .build());
         } catch (StatusRuntimeException e) {
             throw mapGrpcException(e);
         }
     }
 
-    private ReactorKVServiceGrpc.ReactorKVServiceStub requireStub(String grpcEndpoint) {
+    private KVServiceGrpc.KVServiceBlockingStub requireStub(String grpcEndpoint) {
         return channelRegistry.getStub(grpcEndpoint);
     }
 
