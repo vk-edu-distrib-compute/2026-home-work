@@ -51,7 +51,8 @@ public class EntityHttpHandler implements HttpHandler {
     private int parseAck(Map<String, String> params) {
         String ackParam = params.get("ack");
         if (ackParam == null) {
-            return commandService.replicaManager.numberOfReplicas();
+            int replicas = commandService.replicaManager.numberOfReplicas();
+            return replicas / 2 + 1;
         }
         return Integer.parseInt(ackParam);
     }
