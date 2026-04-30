@@ -49,11 +49,11 @@ public class EntityHttpHandler implements HttpHandler {
     }
 
     private int parseAck(Map<String, String> params) {
-        try {
-            return Integer.parseInt(params.get("ack"));
-        } catch (NumberFormatException e) {
-            return 1;
+        String ackParam = params.get("ack");
+        if (ackParam == null) {
+            return commandService.replicaManager.numberOfReplicas();
         }
+        return Integer.parseInt(ackParam);
     }
 
     private void dispatchByMethod(HttpExchange exchange, String method, String id, int ack) throws IOException {
