@@ -16,6 +16,7 @@ import java.net.ServerSocket;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClusterFactory extends KVClusterFactory {
@@ -44,14 +45,19 @@ public class ClusterFactory extends KVClusterFactory {
 
         int replicaCountProps = Config.replicas();
 
-        ServiceFactory serviceFactory = new ServiceFactory(strategy, replicaCountProps, channelRegistry, grpcPortByHttpPort);
+        ServiceFactory serviceFactory = new ServiceFactory(
+                strategy,
+                replicaCountProps,
+                channelRegistry,
+                grpcPortByHttpPort
+        );
 
         return new Cluster(strategy, serviceFactory, channelRegistry);
     }
 
     private Map<Integer, Integer> allocateGrpcPorts(List<Integer> httpPorts) {
         Map<Integer, Integer> grpcPorts = new ConcurrentHashMap<>();
-        HashSet<Integer> reservedPorts = new HashSet<>(httpPorts);
+        Set<Integer> reservedPorts = new HashSet<>(httpPorts);
 
         for (Integer httpPort : httpPorts) {
             int grpcPort = findAvailablePort(httpPort + 1, reservedPorts);
@@ -62,7 +68,7 @@ public class ClusterFactory extends KVClusterFactory {
         return grpcPorts;
     }
 
-    private int findAvailablePort(int preferredPort, HashSet<Integer> reservedPorts) {
+    private int findAvailablePort(int preferredPort, Set<Integer> reservedPorts) {
         int first = Math.max(1024, preferredPort);
         for (int port = first; port < 65535; port++) {
             if (!reservedPorts.contains(port) && isTcpPortAvailable(port)) {
