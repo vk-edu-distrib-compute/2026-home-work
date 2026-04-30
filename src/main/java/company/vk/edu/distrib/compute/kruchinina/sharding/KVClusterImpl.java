@@ -1,0 +1,135 @@
+package company.vk.edu.distrib.compute.kruchinina.sharding;
+
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.KVCluster;
+import company.vk.edu.distrib.compute.kruchinina.base.FileSystemDao;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+public class KVClusterImpl implements KVCluster {
+    private static final Logger LOG = LoggerFactory.getLogger(KVClusterImpl.class);
+    private static final String ENDPOINT_SEPARATOR = ":";
+    private static final int EXPECTED_ENDPOINT_PARTS = 2;
+
+    public enum Algorithm {
+        CONSISTENT_HASHING,
+        RENDEZVOUS_HASHING
+
+    }
+
+    private final List<Integer> ports;
+    private final Algorithm algorithm;
+    private final Map<String, SimpleKVService> services = new ConcurrentHashMap<>();
+    private final List<String> endpoints = new ArrayList<>();
+
+    public KVClusterImpl(List<Integer> ports, Algorithm algorithm) {
+        this.ports = ports;
+        this.algorithm = algorithm;
+    }
+
+    @Override
+    public void start() {
+        if (!services.isEmpty()) {
+            throw new IllegalStateException("Cluster already started");
+        }
+
+        // Формируем список всех endpoint
+        List<String> allEndpoints = ports.stream()
+                .map(p -> "localhost:" + p)
+                .collect(Collectors.toList());
+
+        //Создаём стратегию шардирования
+        ShardingStrategy strategy = createStrategy(allEndpoints);
+
+        //Запускаем каждый узел
+        for (int port : ports) {
+            String endpoint = "localhost:" + port;
+            startNode(port, endpoint, allEndpoints, strategy);
+            endpoints.add(endpoint);
+        }
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Cluster started with {} nodes using {}", ports.size(), algorithm);
+        }
+    }
+
+    private ShardingStrategy createStrategy(List<String> nodes) {
+        switch (algorithm) {
+            case CONSISTENT_HASHING:
+                return new ConsistentHashingStrategy(nodes);
+            case RENDEZVOUS_HASHING:
+                return new RendezvousHashingStrategy();
+        }
+        throw new IllegalStateException("Unhandled algorithm: " + algorithm);
+    }
+
+    private void startNode(int port, String selfAddress, List<String> allNodes, ShardingStrategy strategy) {
+        try {
+            Path storagePath = Path.of("./data-" + port);
+            if (!Files.exists(storagePath)) {
+                Files.createDirectories(storagePath);
+            }
+            Dao<byte[]> dao = new FileSystemDao(storagePath.toString());
+            SimpleKVService service = new SimpleKVService(port, dao, allNodes, selfAddress, strategy);
+            service.start();
+            services.put(selfAddress, service);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to start node on port " + port, e);
+        }
+    }
+
+    @Override
+    public void start(String endpoint) {
+        if (services.containsKey(endpoint)) {
+            throw new IllegalStateException("Node " + endpoint + " already started");
+        }
+        int port = extractPort(endpoint);
+        List<String> allNodes = new ArrayList<>(services.keySet());
+        allNodes.add(endpoint);
+        ShardingStrategy strategy = createStrategy(allNodes);
+        startNode(port, endpoint, allNodes, strategy);
+        endpoints.add(endpoint);
+        LOG.info("Node {} started", endpoint);
+    }
+
+    @Override
+    public void stop() {
+        services.values().forEach(SimpleKVService::stop);
+        services.clear();
+        endpoints.clear();
+        LOG.info("Cluster stopped");
+    }
+
+    @Override
+    public void stop(String endpoint) {
+        SimpleKVService service = services.remove(endpoint);
+        if (service != null) {
+            service.stop();
+            endpoints.remove(endpoint);
+            LOG.info("Node {} stopped", endpoint);
+        } else {
+            throw new IllegalArgumentException("Node not found: " + endpoint);
+        }
+    }
+
+    @Override
+    public List<String> getEndpoints() {
+        return new ArrayList<>(endpoints);
+    }
+
+    private int extractPort(String endpoint) {
+        String[] parts = endpoint.split(ENDPOINT_SEPARATOR);
+        if (parts.length != EXPECTED_ENDPOINT_PARTS) {
+            throw new IllegalArgumentException("Invalid endpoint format: " + endpoint);
+        }
+        return Integer.parseInt(parts[1]);
+    }
+}
