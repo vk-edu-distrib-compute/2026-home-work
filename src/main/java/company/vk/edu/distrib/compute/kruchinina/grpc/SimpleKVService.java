@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SimpleKVService implements KVService {
     private static final Logger LOG = LoggerFactory.getLogger(SimpleKVService.class);
@@ -21,7 +22,7 @@ public class SimpleKVService implements KVService {
     private final int port;
     private final Dao<byte[]> dao;
     private final int grpcPort;
-    private final GrpcClusterClient grpcClient;
+    private final Optional<GrpcClusterClient> grpcClient;
     private final EntityHandler entityHandler;
 
     private HttpServer server;
@@ -42,10 +43,12 @@ public class SimpleKVService implements KVService {
         this.grpcPort = grpcPort;
 
         if (clusterNodes != null && !clusterNodes.isEmpty() && shardingStrategy != null) {
-            this.grpcClient = new GrpcClusterClient();
+            GrpcClusterClient client = new GrpcClusterClient();
+            this.grpcClient = Optional.of(client);
 
             List<String> rawList = new ArrayList<>();
-            Map<String, String> extMap = new java.util.concurrent.ConcurrentHashMap<>();
+            // Интерфейс Map, реализация ConcurrentHashMap — потокобезопасно и удовлетворяет анализатор
+            Map<String, String> extMap = new ConcurrentHashMap<>();
             for (String ext : clusterNodes) {
                 String raw = ext.split("\\?")[0];
                 rawList.add(raw);
@@ -54,14 +57,14 @@ public class SimpleKVService implements KVService {
             String selfRaw = selfAddress.split("\\?")[0];
             this.entityHandler = new EntityHandler(
                     dao,
-                    grpcClient,
+                    grpcClient.orElse(null),
                     Optional.of(shardingStrategy),
                     Collections.unmodifiableList(rawList),
                     Collections.unmodifiableMap(extMap),
                     selfRaw
             );
         } else {
-            this.grpcClient = null;
+            this.grpcClient = Optional.empty();
             this.entityHandler = new EntityHandler(
                     dao, null, Optional.empty(), Collections.emptyList(), Collections.emptyMap(), "");
         }
@@ -73,25 +76,10 @@ public class SimpleKVService implements KVService {
             throw new IllegalStateException("Service already started");
         }
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext("/v0/status", new StatusHandler());
-            server.createContext("/v0/entity", entityHandler);
-            server.createContext(STATS_REPLICA_PATH, new ReplicaStatsHandler(dao));
-            server.createContext(STATS_REPLICA_ACCESS_PATH, new ReplicaAccessHandler(dao));
-            server.setExecutor(null);
-            server.start();
-
+            startHttpServer();
             if (grpcPort > 0) {
-                InternalKeyValueService grpcService = new InternalKeyValueService(dao);
-                grpcServer = ServerBuilder.forPort(grpcPort)
-                        .addService((io.grpc.BindableService) grpcService)
-                        .build()
-                        .start();
-                if (LOG.isInfoEnabled()) {
-                    LOG.info("gRPC server started on port {}", grpcPort);
-                }
+                startGrpcServer();
             }
-
             started = true;
             if (LOG.isInfoEnabled()) {
                 LOG.info("KVService started on port {} (cluster: {})", port, isClusterMode());
@@ -101,14 +89,49 @@ public class SimpleKVService implements KVService {
         }
     }
 
+    private void startHttpServer() throws IOException {
+        server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.createContext("/v0/status", new StatusHandler());
+        server.createContext("/v0/entity", entityHandler);
+        server.createContext(STATS_REPLICA_PATH, new ReplicaStatsHandler(dao));
+        server.createContext(STATS_REPLICA_ACCESS_PATH, new ReplicaAccessHandler(dao));
+        server.setExecutor(null);
+        server.start();
+    }
+
+    private void startGrpcServer() throws IOException {
+        InternalKeyValueService grpcService = new InternalKeyValueService(dao);
+        grpcServer = ServerBuilder.forPort(grpcPort)
+                .addService((io.grpc.BindableService) grpcService)
+                .build()
+                .start();
+        if (LOG.isInfoEnabled()) {
+            LOG.info("gRPC server started on port {}", grpcPort);
+        }
+    }
+
     @Override
     public void stop() {
         if (!started) {
             throw new IllegalStateException("Service not started");
         }
+        stopHttpServer();
+        stopGrpcServer();
+        shutdownGrpcClient();
+        closeDao();
+        started = false;
+        if (LOG.isInfoEnabled()) {
+            LOG.info("KVService stopped on port {}", port);
+        }
+    }
+
+    private void stopHttpServer() {
         if (server != null) {
             server.stop(0);
         }
+    }
+
+    private void stopGrpcServer() {
         if (grpcServer != null) {
             grpcServer.shutdown();
             try {
@@ -117,9 +140,13 @@ public class SimpleKVService implements KVService {
                 Thread.currentThread().interrupt();
             }
         }
-        if (grpcClient != null) {
-            grpcClient.shutdown();
-        }
+    }
+
+    private void shutdownGrpcClient() {
+        grpcClient.ifPresent(GrpcClusterClient::shutdown);
+    }
+
+    private void closeDao() {
         try {
             dao.close();
         } catch (IOException e) {
@@ -127,13 +154,9 @@ public class SimpleKVService implements KVService {
                 LOG.error("Error closing DAO", e);
             }
         }
-        started = false;
-        if (LOG.isInfoEnabled()) {
-            LOG.info("KVService stopped on port {}", port);
-        }
     }
 
     private boolean isClusterMode() {
-        return grpcClient != null;
+        return grpcClient.isPresent();
     }
 }
