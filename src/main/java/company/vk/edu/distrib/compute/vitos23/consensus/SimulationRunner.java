@@ -12,9 +12,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+@SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
 public final class SimulationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SimulationRunner.class);
+    private static final int ONE = 1; // Just for Codacy
 
     private SimulationRunner() {
     }
@@ -83,37 +85,40 @@ public final class SimulationRunner {
         long leaderCount = nodeById.values().stream()
                 .filter(node -> node.getStatus() == NodeStatus.LEADER)
                 .count();
-        if (leaderCount > 1) {
+        if (leaderCount > ONE) {
             log.error("Illegal cluster state: encountered {} leaders", leaderCount);
         }
 
-        StringBuilder sb = new StringBuilder("Cluster state: [");
-        for (Node node : nodeById.values()) {
-            sb.append(String.format(
-                    "%d:%s ",
-                    node.getId(),
-                    node.getStatus()
-            ));
-        }
-        sb.append("] leaderId=");
-        for (Node node : nodeById.values()) {
-            if (!node.isBroken() && node.getLeaderId() != null) {
-                sb.append(node.getLeaderId());
-                break;
+        if (log.isInfoEnabled()) {
+            StringBuilder sb = new StringBuilder("Cluster state: [");
+            for (Node node : nodeById.values()) {
+                sb.append(String.format(
+                        "%d:%s ",
+                        node.getId(),
+                        node.getStatus()
+                ));
             }
+            sb.append("] leaderId=");
+            for (Node node : nodeById.values()) {
+                if (!node.isBroken() && node.getLeaderId() != null) {
+                    sb.append(node.getLeaderId());
+                    break;
+                }
+            }
+            log.info(sb.toString());
         }
-        log.info(sb.toString());
     }
 
     private static void randomFailure(Map<Integer, Node> nodeById) {
         for (Node node : nodeById.values()) {
             if (Math.random() < SimulationProperties.FAILURE_PROBABILITY) {
                 boolean currentlyBroken = node.isBroken();
+                int nodeId = node.getId();
                 if (currentlyBroken) {
-                    log.info("Recovering node {}", node.getId());
+                    log.info("Recovering node {}", nodeId);
                     node.setBroken(false);
                 } else {
-                    log.info("Breaking node {}", node.getId());
+                    log.info("Breaking node {}", nodeId);
                     node.setBroken(true);
                 }
             }

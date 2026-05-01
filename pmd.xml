@@ -13,6 +13,8 @@
         <exclude name="UnitTestAssertionsShouldIncludeMessage"/>
         <exclude name="AbstractClassWithoutAbstractMethod"/>
         <exclude name="GuardLogStatement"/>
+        <!-- Otherwise it's very hard to fix all Codacy's warnings that conflicts with these PMD rules -->
+        <exclude name="UnnecessaryWarningSuppression"/>
     </rule>
     <rule ref="category/java/codestyle.xml">
         <exclude name="AtLeastOneConstructor"/>

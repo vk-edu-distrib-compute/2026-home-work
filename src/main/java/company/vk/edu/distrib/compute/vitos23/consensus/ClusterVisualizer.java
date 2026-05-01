@@ -4,6 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.io.Serial;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,11 @@ public final class ClusterVisualizer {
         });
     }
 
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     private static class ClusterPanel extends JPanel {
+
+        @Serial
+        private static final long serialVersionUID = 123123L;
 
         private final List<Node> nodes;
 

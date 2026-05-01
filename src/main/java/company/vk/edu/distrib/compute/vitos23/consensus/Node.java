@@ -78,40 +78,44 @@ public class Node {
                 continue;
             }
             switch (message.type()) {
-                case PING -> messageSender.send(message.fromId(), new Message(id, MessageType.ANSWER));
+                case PING -> messageSender.send(message.fromId(), createMessage(MessageType.ANSWER));
                 case ELECT -> {
-                    messageSender.send(message.fromId(), new Message(id, MessageType.ANSWER));
+                    messageSender.send(message.fromId(), createMessage(MessageType.ANSWER));
                     initiateElection();
                 }
-                case ANSWER -> {
-                    boolean answeredToElect = false;
-                    electionLock.lock();
-                    try {
-                        if (electing) {
-                            receivedAnswerToElect = true;
-                            electionCondition.signalAll();
-                            answeredToElect = true;
-                        }
-                    } finally {
-                        electionLock.unlock();
-                    }
-                    if (!answeredToElect && leaderId.get() != NO_LEADER && leaderId.get() == message.fromId()) {
-                        leaderConfirmed.set(true);
-                    }
-                }
-                case VICTORY -> {
-                    electionLock.lock();
-                    try {
-                        electing = false;
-                        electionCondition.signalAll();
-                    } finally {
-                        electionLock.unlock();
-                    }
-                    leaderId.set(message.fromId());
-                    leaderConfirmed.set(true);
-                }
+                case ANSWER -> handleAnswerMessage(message);
+                case VICTORY -> handleVictoryMessage(message);
             }
         }
+    }
+
+    private void handleAnswerMessage(Message message) {
+        boolean answeredToElect = false;
+        electionLock.lock();
+        try {
+            if (electing) {
+                receivedAnswerToElect = true;
+                electionCondition.signalAll();
+                answeredToElect = true;
+            }
+        } finally {
+            electionLock.unlock();
+        }
+        if (!answeredToElect && leaderId.get() != NO_LEADER && leaderId.get() == message.fromId()) {
+            leaderConfirmed.set(true);
+        }
+    }
+
+    private void handleVictoryMessage(Message message) {
+        electionLock.lock();
+        try {
+            electing = false;
+            electionCondition.signalAll();
+        } finally {
+            electionLock.unlock();
+        }
+        leaderId.set(message.fromId());
+        leaderConfirmed.set(true);
     }
 
     // False positive
@@ -131,7 +135,7 @@ public class Node {
 
             log.info("Node {} initiated election", id);
             if (!broken.get()) {
-                messageSender.sendToMoreImportant(new Message(id, MessageType.ELECT));
+                messageSender.sendToMoreImportant(createMessage(MessageType.ELECT));
             }
 
             electionLock.lock();
@@ -142,7 +146,7 @@ public class Node {
                     leaderId.set(id);
                     leaderConfirmed.set(true);
                     log.info("Node {} became leader", id);
-                    messageSender.sendToAll(new Message(id, MessageType.VICTORY));
+                    messageSender.sendToAll(createMessage(MessageType.VICTORY));
                 }
                 electing = false;
             } catch (InterruptedException e) {
@@ -165,7 +169,7 @@ public class Node {
 
                 leaderConfirmed.set(false);
                 log.info("Node {}: pinging leader {}", id, localLeaderId);
-                messageSender.send(localLeaderId, new Message(id, MessageType.PING));
+                messageSender.send(localLeaderId, createMessage(MessageType.PING));
 
                 Thread.sleep(SimulationProperties.REQUEST_TIMEOUT.toMillis());
 
@@ -187,6 +191,10 @@ public class Node {
                 return;
             }
         }
+    }
+
+    private Message createMessage(MessageType type) {
+        return new Message(id, type);
     }
 
 }
