@@ -1,0 +1,35 @@
+syntax = "proto3";
+option java_package = "company.vk.edu.distrib.compute.expanse.dto.proto";
+option java_multiple_files = true;
+
+service EntityService {
+    rpc GetEntity (GetEntityRequest) returns (GetEntityResponse);
+    rpc PutEntity (PutEntityRequest) returns (PutEntityResponse);
+    rpc DeleteEntity (DeleteEntityRequest) returns (DeleteEntityResponse);
+}
+
+message GetEntityRequest {
+    string id = 1;
+}
+
+message GetEntityResponse {
+    int32 code = 1;
+    bytes response = 2;
+}
+
+message PutEntityRequest {
+    string id = 1;
+    bytes body = 2;
+}
+
+message PutEntityResponse {
+    int32 code = 1;
+}
+
+message DeleteEntityRequest {
+    string id = 1;
+}
+
+message DeleteEntityResponse {
+    int32 code = 1;
+}
