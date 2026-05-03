@@ -238,11 +238,12 @@ public class ConsensusNode implements Runnable {
             gotAnswerFromHigherNode = false;
 
             boolean hasHigherCandidate = false;
+            final ConsensusMessage electMessage = new ConsensusMessage(ConsensusMessageType.ELECT, nodeId);
             for (Integer peerId : allNodeIds) {
                 if (peerId <= nodeId) {
                     continue;
                 }
-                final boolean sent = cluster.send(peerId, new ConsensusMessage(ConsensusMessageType.ELECT, nodeId));
+                final boolean sent = cluster.send(peerId, electMessage);
                 hasHigherCandidate = hasHigherCandidate || sent;
             }
             if (!hasHigherCandidate) {

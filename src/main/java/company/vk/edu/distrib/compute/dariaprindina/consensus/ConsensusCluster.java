@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("PMD.AvoidSynchronizedStatement")
 public class ConsensusCluster {
@@ -23,10 +25,12 @@ public class ConsensusCluster {
             throw new IllegalArgumentException("node IDs must be unique");
         }
         this.clusterLock = new Object();
-        this.nodesById = new HashMap<>();
-        for (Integer id : orderedIds) {
-            nodesById.put(id, new ConsensusNode(id, this, orderedIds, config));
-        }
+        this.nodesById = orderedIds.stream().collect(Collectors.toMap(
+            Function.identity(),
+            id -> new ConsensusNode(id, this, orderedIds, config),
+            (left, right) -> left,
+            HashMap::new
+        ));
     }
 
     public void start() {
