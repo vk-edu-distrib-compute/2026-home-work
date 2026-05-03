@@ -43,15 +43,17 @@ public final class ConsensusSimulationApp {
     }
 
     private static void printState(ConsensusCluster cluster) {
-        final Integer leader = cluster.currentLeader();
-        log.info("Current leader={}", leader);
-        for (ConsensusNodeSnapshot snapshot : cluster.snapshots()) {
-            log.info(
-                "Node {}: state={}, knownLeader={}",
-                snapshot.nodeId(),
-                snapshot.state(),
-                snapshot.knownLeaderId()
-            );
+        if (log.isInfoEnabled()) {
+            final Integer leader = cluster.currentLeader();
+            log.info("Current leader={}", leader);
+            for (ConsensusNodeSnapshot snapshot : cluster.snapshots()) {
+                log.info(
+                    "Node {}: state={}, knownLeader={}",
+                    snapshot.nodeId(),
+                    snapshot.state(),
+                    snapshot.knownLeaderId()
+                );
+            }
         }
     }
 }

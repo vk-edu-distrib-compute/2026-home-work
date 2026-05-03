@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+@SuppressWarnings("PMD.AvoidSynchronizedStatement")
 public class ConsensusCluster {
     private final Map<Integer, ConsensusNode> nodesById;
     private final List<Integer> orderedIds;
+    private final Object clusterLock;
 
     public ConsensusCluster(List<Integer> nodeIds, ConsensusClusterConfig config) {
         Objects.requireNonNull(nodeIds, "nodeIds");
@@ -20,21 +22,26 @@ public class ConsensusCluster {
         if (orderedIds.size() != nodeIds.size()) {
             throw new IllegalArgumentException("node IDs must be unique");
         }
+        this.clusterLock = new Object();
         this.nodesById = new HashMap<>();
         for (Integer id : orderedIds) {
             nodesById.put(id, new ConsensusNode(id, this, orderedIds, config));
         }
     }
 
-    public synchronized void start() {
-        for (ConsensusNode node : nodesById.values()) {
-            node.startNodeThread();
+    public void start() {
+        synchronized (clusterLock) {
+            for (ConsensusNode node : nodesById.values()) {
+                node.startNodeThread();
+            }
         }
     }
 
-    public synchronized void shutdown() {
-        for (ConsensusNode node : nodesById.values()) {
-            node.shutdown();
+    public void shutdown() {
+        synchronized (clusterLock) {
+            for (ConsensusNode node : nodesById.values()) {
+                node.shutdown();
+            }
         }
     }
 
@@ -52,34 +59,42 @@ public class ConsensusCluster {
         }
     }
 
-    public synchronized void forceDown(int nodeId) {
-        getNodeOrThrow(nodeId).forceDown();
-    }
-
-    public synchronized void forceUp(int nodeId) {
-        getNodeOrThrow(nodeId).forceUp();
-    }
-
-    public synchronized List<ConsensusNodeSnapshot> snapshots() {
-        final List<ConsensusNodeSnapshot> snapshots = new ArrayList<>();
-        for (Integer id : orderedIds) {
-            snapshots.add(getNodeOrThrow(id).snapshot());
+    public void forceDown(int nodeId) {
+        synchronized (clusterLock) {
+            getNodeOrThrow(nodeId).forceDown();
         }
-        return snapshots;
     }
 
-    public synchronized Integer currentLeader() {
-        Integer maxLeader = null;
-        for (ConsensusNodeSnapshot snapshot : snapshots()) {
-            if (snapshot.state() == ConsensusNodeState.DOWN || snapshot.knownLeaderId() == null) {
-                continue;
-            }
-            final int candidate = snapshot.knownLeaderId();
-            if (maxLeader == null || candidate > maxLeader) {
-                maxLeader = candidate;
-            }
+    public void forceUp(int nodeId) {
+        synchronized (clusterLock) {
+            getNodeOrThrow(nodeId).forceUp();
         }
-        return maxLeader;
+    }
+
+    public List<ConsensusNodeSnapshot> snapshots() {
+        synchronized (clusterLock) {
+            final List<ConsensusNodeSnapshot> snapshots = new ArrayList<>();
+            for (Integer id : orderedIds) {
+                snapshots.add(getNodeOrThrow(id).snapshot());
+            }
+            return snapshots;
+        }
+    }
+
+    public Integer currentLeader() {
+        synchronized (clusterLock) {
+            Integer maxLeader = null;
+            for (ConsensusNodeSnapshot snapshot : snapshots()) {
+                if (snapshot.state() == ConsensusNodeState.DOWN || snapshot.knownLeaderId() == null) {
+                    continue;
+                }
+                final int candidate = snapshot.knownLeaderId();
+                if (maxLeader == null || candidate > maxLeader) {
+                    maxLeader = candidate;
+                }
+            }
+            return maxLeader;
+        }
     }
 
     private ConsensusNode getNodeOrThrow(int nodeId) {
