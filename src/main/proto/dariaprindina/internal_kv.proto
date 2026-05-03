@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package company.vk.edu.distrib.compute.dariaprindina.grpc;
+
+option java_multiple_files = true;
+option java_package = "company.vk.edu.distrib.compute.dariaprindina.grpc";
+option java_outer_classname = "DPInternalKvProto";
+
+service DPInternalKvService {
+  rpc Handle(InternalRequest) returns (InternalResponse);
+}
+
+message InternalRequest {
+  string method = 1;
+  string id = 2;
+  bytes body = 3;
+}
+
+message InternalResponse {
+  int32 status_code = 1;
+  bytes body = 2;
+}
