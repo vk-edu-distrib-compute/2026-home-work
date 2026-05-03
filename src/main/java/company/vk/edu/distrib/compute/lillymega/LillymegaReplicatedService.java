@@ -9,34 +9,29 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class LillymegaReplicatedService implements ReplicatedService {
     private final LillymegaReplicaSelector replicaSelector;
-    private static final String REPLICATION_FACTOR_PROPERTY = "lillymega.replication.factor";
-    private static final String REPLICATION_FACTOR_ENV = "LILLYMEGA_REPLICATION_FACTOR";
-    private static final int DEFAULT_REPLICATION_FACTOR = 3;
     private static final String METHOD_GET = "GET";
     private static final String METHOD_PUT = "PUT";
     private static final String METHOD_DELETE = "DELETE";
-    private static final String ID_PARAMETER = "id";
-    private static final String ACK_PARAMETER = "ack";
     private static final String REPLICA_STATS_PREFIX = "/stats/replica/";
 
     private final int port;
     private final int replicationFactor;
     private final HttpServer server;
-    private final List<Map<String, VersionedEntry>> replicas = new ArrayList<>();
+    private final List<Map<String, LillymegaVersionedEntry>> replicas = new ArrayList<>();
     private final boolean[] availableReplicas;
     private final AtomicLong[] replicaReadAccess;
     private final AtomicLong[] replicaWriteAccess;
     private final AtomicLong versionGenerator = new AtomicLong();
+    private final LillymegaRequestParser requestParser = new LillymegaRequestParser();
+    private final LillymegaReplicaStatsFormatter statsFormatter = new LillymegaReplicaStatsFormatter();
 
     public LillymegaReplicatedService(int port, int replicationFactor) throws IOException {
         this.port = port;
@@ -100,7 +95,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
     }
 
     private void handleEntity(HttpExchange exchange) throws IOException {
-        RequestParameters parameters = extractParameters(exchange);
+        LillymegaRequestParameters parameters = requestParser.parse(exchange.getRequestURI().getQuery());
         if (parameters == null || parameters.id().isEmpty()) {
             sendEmptyResponse(exchange, 400);
             return;
@@ -147,19 +142,27 @@ public class LillymegaReplicatedService implements ReplicatedService {
             int replicaId = Integer.parseInt(replicaPart);
             validateReplicaId(replicaId);
             if (accessStats) {
-                sendJsonResponse(exchange, replicaAccessStats(replicaId));
+                sendJsonResponse(exchange, statsFormatter.replicaAccessStats(
+                        replicaId,
+                        replicaReadAccess[replicaId],
+                        replicaWriteAccess[replicaId]
+                ));
             } else {
-                sendJsonResponse(exchange, replicaStats(replicaId));
+                sendJsonResponse(exchange, statsFormatter.replicaStats(
+                        replicaId,
+                        availableReplicas[replicaId],
+                        replicas.get(replicaId)
+                ));
             }
         } catch (IllegalArgumentException e) {
             sendEmptyResponse(exchange, 400);
         }
     }
 
-    private void handleGet(HttpExchange exchange, RequestParameters parameters) throws IOException {
+    private void handleGet(HttpExchange exchange, LillymegaRequestParameters parameters) throws IOException {
         List<Integer> replicaIds = replicaSelector.selectReplicas(parameters.id());
         int successfulReads = 0;
-        List<VersionedEntry> entries = new ArrayList<>();
+        List<LillymegaVersionedEntry> entries = new ArrayList<>();
 
         for (int replicaId : replicaIds) {
             if (!availableReplicas[replicaId]) {
@@ -176,9 +179,9 @@ public class LillymegaReplicatedService implements ReplicatedService {
             return;
         }
 
-        VersionedEntry freshest = entries.stream()
+        LillymegaVersionedEntry freshest = entries.stream()
                 .filter(entry -> entry != null)
-                .max(Comparator.comparingLong(VersionedEntry::timestamp))
+                .max(Comparator.comparingLong(LillymegaVersionedEntry::timestamp))
                 .orElseThrow(NoSuchElementException::new);
 
         if (freshest.deleted()) {
@@ -191,10 +194,10 @@ public class LillymegaReplicatedService implements ReplicatedService {
         exchange.close();
     }
 
-    private void handlePut(HttpExchange exchange, RequestParameters parameters) throws IOException {
+    private void handlePut(HttpExchange exchange, LillymegaRequestParameters parameters) throws IOException {
         byte[] body = exchange.getRequestBody().readAllBytes();
         long version = versionGenerator.incrementAndGet();
-        VersionedEntry entry = new VersionedEntry(body, version, false);
+        LillymegaVersionedEntry entry = new LillymegaVersionedEntry(body, version, false);
 
         int successfulWrites = applyToReplicas(parameters.id(), entry);
         if (successfulWrites < parameters.ack()) {
@@ -205,9 +208,9 @@ public class LillymegaReplicatedService implements ReplicatedService {
         sendEmptyResponse(exchange, 201);
     }
 
-    private void handleDelete(HttpExchange exchange, RequestParameters parameters) throws IOException {
+    private void handleDelete(HttpExchange exchange, LillymegaRequestParameters parameters) throws IOException {
         long version = versionGenerator.incrementAndGet();
-        VersionedEntry tombstone = new VersionedEntry(new byte[0], version, true);
+        LillymegaVersionedEntry tombstone = new LillymegaVersionedEntry(new byte[0], version, true);
 
         int successfulDeletes = applyToReplicas(parameters.id(), tombstone);
         if (successfulDeletes < parameters.ack()) {
@@ -218,7 +221,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
         sendEmptyResponse(exchange, 202);
     }
 
-    private int applyToReplicas(String key, VersionedEntry entry) {
+    private int applyToReplicas(String key, LillymegaVersionedEntry entry) {
         int successfulOperations = 0;
         for (int replicaId : replicaSelector.selectReplicas(key)) {
             if (!availableReplicas[replicaId]) {
@@ -231,30 +234,6 @@ public class LillymegaReplicatedService implements ReplicatedService {
         }
 
         return successfulOperations;
-    }
-
-    private RequestParameters extractParameters(HttpExchange exchange) {
-        String query = exchange.getRequestURI().getQuery();
-        if (query == null || query.isEmpty()) {
-            return null;
-        }
-
-        String id = null;
-        Integer ack = null;
-        for (String parameter : query.split("&")) {
-            String[] parts = parameter.split("=", 2);
-            if (parts.length != 2) {
-                return null;
-            }
-
-            if (ID_PARAMETER.equals(parts[0])) {
-                id = parts[1];
-            } else if (ACK_PARAMETER.equals(parts[0])) {
-                ack = Integer.parseInt(parts[1]);
-            }
-        }
-
-        return new RequestParameters(id, ack == null ? 1 : ack);
     }
 
     private void sendEmptyResponse(HttpExchange exchange, int statusCode) throws IOException {
@@ -274,38 +253,5 @@ public class LillymegaReplicatedService implements ReplicatedService {
         if (nodeId < 0 || nodeId >= replicationFactor) {
             throw new IllegalArgumentException("Replica id out of range: " + nodeId);
         }
-    }
-
-    private String replicaStats(int replicaId) {
-        Map<String, VersionedEntry> replica = replicas.get(replicaId);
-        long activeKeys = replica.values().stream()
-                .filter(entry -> !entry.deleted())
-                .count();
-        int payloadBytes = replica.values().stream()
-                .filter(entry -> !entry.deleted())
-                .mapToInt(entry -> entry.value().length)
-                .sum();
-
-        return "{"
-                + "\"replicaId\":" + replicaId + ","
-                + "\"available\":" + availableReplicas[replicaId] + ","
-                + "\"entries\":" + replica.size() + ","
-                + "\"activeKeys\":" + activeKeys + ","
-                + "\"payloadBytes\":" + payloadBytes
-                + "}";
-    }
-
-    private String replicaAccessStats(int replicaId) {
-        return "{"
-                + "\"replicaId\":" + replicaId + ","
-                + "\"reads\":" + replicaReadAccess[replicaId].get() + ","
-                + "\"writes\":" + replicaWriteAccess[replicaId].get()
-                + "}";
-    }
-
-    private record RequestParameters(String id, int ack) {
-    }
-
-    private record VersionedEntry(byte[] value, long timestamp, boolean deleted) {
     }
 }
