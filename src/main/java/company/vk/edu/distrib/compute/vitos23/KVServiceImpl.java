@@ -2,26 +2,32 @@ package company.vk.edu.distrib.compute.vitos23;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.vitos23.exception.AcknowledgementException;
+import company.vk.edu.distrib.compute.vitos23.util.HttpCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.Executors;
+
+import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.NO_BODY_RESPONSE_LENGTH;
+import static company.vk.edu.distrib.compute.vitos23.util.HttpUtils.extractQueryParams;
 
 public class KVServiceImpl implements KVService {
 
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
-    private static final int NO_BODY_RESPONSE_LENGTH = -1;
 
     private final HttpServer server;
-    private final Dao<byte[]> dao;
+    private final EntityRequestProcessor entityRequestProcessor;
 
-    public KVServiceImpl(int port, Dao<byte[]> dao) throws IOException {
+    public KVServiceImpl(int port, EntityRequestProcessor entityRequestProcessor) throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.dao = dao;
+        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+        this.entityRequestProcessor = entityRequestProcessor;
         server.createContext("/v0/status", this::handleStatusCheck);
         server.createContext("/v0/entity", this::dispatchEntityRequest);
     }
@@ -39,7 +45,12 @@ public class KVServiceImpl implements KVService {
             exchange.sendResponseHeaders(HttpCodes.NOT_FOUND, NO_BODY_RESPONSE_LENGTH);
         } catch (IllegalArgumentException e) {
             exchange.sendResponseHeaders(HttpCodes.BAD_REQUEST, NO_BODY_RESPONSE_LENGTH);
+        } catch (AcknowledgementException e) {
+            exchange.sendResponseHeaders(HttpCodes.SERVICE_UNAVAILABLE, NO_BODY_RESPONSE_LENGTH);
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             if (log.isErrorEnabled()) {
                 log.error("Failed to handle request", e);
             }
@@ -49,50 +60,19 @@ public class KVServiceImpl implements KVService {
         }
     }
 
-    private void handleEntityRequest(HttpExchange exchange) throws IOException {
-        String id = extractId(exchange.getRequestURI().getQuery());
-
-        switch (exchange.getRequestMethod()) {
-            case "GET" -> handleGet(exchange, id);
-            case "PUT" -> handlePut(exchange, id);
-            case "DELETE" -> handleDelete(exchange, id);
-            case null, default ->
-                    exchange.sendResponseHeaders(HttpCodes.METHOD_NOT_ALLOWED, NO_BODY_RESPONSE_LENGTH);
-        }
-    }
-
-    private String extractId(String query) {
-        if (query == null || query.isEmpty()) {
+    private void handleEntityRequest(HttpExchange exchange) throws IOException, InterruptedException {
+        Map<String, String> queryParams = extractQueryParams(exchange.getRequestURI().getQuery());
+        String id = queryParams.get("id");
+        if (id == null) {
             throw new IllegalArgumentException("Missing query parameter 'id'");
         }
-        String[] params = query.split("&");
-        for (String param : params) {
-            String[] kv = param.split("=", 2);
-            if ("id".equals(kv[0])) {
-                if (kv.length < 2 || kv[1].isEmpty()) {
-                    throw new IllegalArgumentException("Empty 'id' parameter");
-                }
-                return kv[1];
-            }
+
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> entityRequestProcessor.handleGet(exchange, id, queryParams);
+            case "PUT" -> entityRequestProcessor.handlePut(exchange, id, queryParams);
+            case "DELETE" -> entityRequestProcessor.handleDelete(exchange, id, queryParams);
+            case null, default -> exchange.sendResponseHeaders(HttpCodes.METHOD_NOT_ALLOWED, NO_BODY_RESPONSE_LENGTH);
         }
-        throw new IllegalArgumentException("Missing query parameter 'id'");
-    }
-
-    private void handleGet(HttpExchange exchange, String id) throws IOException {
-        byte[] value = dao.get(id);
-        exchange.sendResponseHeaders(HttpCodes.OK, value.length);
-        exchange.getResponseBody().write(value);
-    }
-
-    private void handlePut(HttpExchange exchange, String id) throws IOException {
-        byte[] body = exchange.getRequestBody().readAllBytes();
-        dao.upsert(id, body);
-        exchange.sendResponseHeaders(HttpCodes.CREATED, NO_BODY_RESPONSE_LENGTH);
-    }
-
-    private void handleDelete(HttpExchange exchange, String id) throws IOException {
-        dao.delete(id);
-        exchange.sendResponseHeaders(HttpCodes.ACCEPTED, NO_BODY_RESPONSE_LENGTH);
     }
 
     @Override

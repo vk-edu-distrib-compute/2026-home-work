@@ -5,6 +5,8 @@ import company.vk.edu.distrib.compute.Dao;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,6 +31,7 @@ public class WalBackedDao implements Dao<byte[]> {
     private boolean closed;
 
     public WalBackedDao(String filePath) throws IOException {
+        Files.createDirectories(Path.of(filePath).getParent());
         this.walFile = new RandomAccessFile(filePath, "rw");
         replayLog();
     }
