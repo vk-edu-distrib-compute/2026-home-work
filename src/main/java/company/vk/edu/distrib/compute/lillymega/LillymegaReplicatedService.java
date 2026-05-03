@@ -17,12 +17,20 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class LillymegaReplicatedService implements ReplicatedService {
     private final LillymegaReplicaSelector replicaSelector;
+    private static final int MIN_ACK = 1;
+    private static final int SUCCESS_STATUS = 200;
+    private static final int CREATED_STATUS = 201;
+    private static final int ACCEPTED_STATUS = 202;
+    private static final int BAD_REQUEST_STATUS = 400;
+    private static final int NOT_FOUND_STATUS = 404;
+    private static final int METHOD_NOT_ALLOWED_STATUS = 405;
+    private static final int INTERNAL_ERROR_STATUS = 500;
     private static final String METHOD_GET = "GET";
     private static final String METHOD_PUT = "PUT";
     private static final String METHOD_DELETE = "DELETE";
     private static final String REPLICA_STATS_PREFIX = "/stats/replica/";
 
-    private final int port;
+    private final int serverPort;
     private final int replicationFactor;
     private final HttpServer server;
     private final List<Map<String, LillymegaVersionedEntry>> replicas = new ArrayList<>();
@@ -34,7 +42,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
     private final LillymegaReplicaStatsFormatter statsFormatter = new LillymegaReplicaStatsFormatter();
 
     public LillymegaReplicatedService(int port, int replicationFactor) throws IOException {
-        this.port = port;
+        this.serverPort = port;
         this.replicationFactor = replicationFactor;
         this.replicaSelector = new LillymegaReplicaSelector(replicationFactor);
         this.availableReplicas = new boolean[replicationFactor];
@@ -55,7 +63,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
 
     @Override
     public int port() {
-        return port;
+        return serverPort;
     }
 
     @Override
@@ -86,49 +94,55 @@ public class LillymegaReplicatedService implements ReplicatedService {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
-            sendEmptyResponse(exchange, 405);
+        if (!METHOD_GET.equals(exchange.getRequestMethod())) {
+            sendEmptyResponse(exchange, METHOD_NOT_ALLOWED_STATUS);
             return;
         }
 
-        sendEmptyResponse(exchange, 200);
+        sendEmptyResponse(exchange, SUCCESS_STATUS);
     }
 
     private void handleEntity(HttpExchange exchange) throws IOException {
         LillymegaRequestParameters parameters = requestParser.parse(exchange.getRequestURI().getQuery());
-        if (parameters == null || parameters.id().isEmpty()) {
-            sendEmptyResponse(exchange, 400);
-            return;
-        }
-
-        if (parameters.ack() < 1 || parameters.ack() > replicationFactor) {
-            sendEmptyResponse(exchange, 400);
+        if (!hasValidParameters(parameters)) {
+            sendEmptyResponse(exchange, BAD_REQUEST_STATUS);
             return;
         }
 
         try {
-            switch (exchange.getRequestMethod()) {
-                case METHOD_GET -> handleGet(exchange, parameters);
-                case METHOD_PUT -> handlePut(exchange, parameters);
-                case METHOD_DELETE -> handleDelete(exchange, parameters);
-                default -> sendEmptyResponse(exchange, 405);
-            }
+            handleEntityByMethod(exchange, parameters);
         } catch (IllegalArgumentException e) {
-            sendEmptyResponse(exchange, 400);
+            sendEmptyResponse(exchange, BAD_REQUEST_STATUS);
         } catch (NoSuchElementException e) {
-            sendEmptyResponse(exchange, 404);
+            sendEmptyResponse(exchange, NOT_FOUND_STATUS);
+        }
+    }
+
+    private boolean hasValidParameters(LillymegaRequestParameters parameters) {
+        return parameters != null
+                && !parameters.id().isEmpty()
+                && parameters.ack() >= MIN_ACK
+                && parameters.ack() <= replicationFactor;
+    }
+
+    private void handleEntityByMethod(HttpExchange exchange, LillymegaRequestParameters parameters) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case METHOD_GET -> handleGet(exchange, parameters);
+            case METHOD_PUT -> handlePut(exchange, parameters);
+            case METHOD_DELETE -> handleDelete(exchange, parameters);
+            default -> sendEmptyResponse(exchange, METHOD_NOT_ALLOWED_STATUS);
         }
     }
 
     private void handleReplicaStats(HttpExchange exchange) throws IOException {
         if (!METHOD_GET.equals(exchange.getRequestMethod())) {
-            sendEmptyResponse(exchange, 405);
+            sendEmptyResponse(exchange, METHOD_NOT_ALLOWED_STATUS);
             return;
         }
 
         String path = exchange.getRequestURI().getPath();
         if (!path.startsWith(REPLICA_STATS_PREFIX)) {
-            sendEmptyResponse(exchange, 404);
+            sendEmptyResponse(exchange, NOT_FOUND_STATUS);
             return;
         }
 
@@ -155,7 +169,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
                 ));
             }
         } catch (IllegalArgumentException e) {
-            sendEmptyResponse(exchange, 400);
+            sendEmptyResponse(exchange, BAD_REQUEST_STATUS);
         }
     }
 
@@ -175,7 +189,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
         }
 
         if (successfulReads < parameters.ack()) {
-            sendEmptyResponse(exchange, 500);
+            sendEmptyResponse(exchange, INTERNAL_ERROR_STATUS);
             return;
         }
 
@@ -185,11 +199,11 @@ public class LillymegaReplicatedService implements ReplicatedService {
                 .orElseThrow(NoSuchElementException::new);
 
         if (freshest.deleted()) {
-            sendEmptyResponse(exchange, 404);
+            sendEmptyResponse(exchange, NOT_FOUND_STATUS);
             return;
         }
 
-        exchange.sendResponseHeaders(200, freshest.value().length);
+        exchange.sendResponseHeaders(SUCCESS_STATUS, freshest.value().length);
         exchange.getResponseBody().write(freshest.value());
         exchange.close();
     }
@@ -201,11 +215,11 @@ public class LillymegaReplicatedService implements ReplicatedService {
 
         int successfulWrites = applyToReplicas(parameters.id(), entry);
         if (successfulWrites < parameters.ack()) {
-            sendEmptyResponse(exchange, 500);
+            sendEmptyResponse(exchange, INTERNAL_ERROR_STATUS);
             return;
         }
 
-        sendEmptyResponse(exchange, 201);
+        sendEmptyResponse(exchange, CREATED_STATUS);
     }
 
     private void handleDelete(HttpExchange exchange, LillymegaRequestParameters parameters) throws IOException {
@@ -214,11 +228,11 @@ public class LillymegaReplicatedService implements ReplicatedService {
 
         int successfulDeletes = applyToReplicas(parameters.id(), tombstone);
         if (successfulDeletes < parameters.ack()) {
-            sendEmptyResponse(exchange, 500);
+            sendEmptyResponse(exchange, INTERNAL_ERROR_STATUS);
             return;
         }
 
-        sendEmptyResponse(exchange, 202);
+        sendEmptyResponse(exchange, ACCEPTED_STATUS);
     }
 
     private int applyToReplicas(String key, LillymegaVersionedEntry entry) {
@@ -244,7 +258,7 @@ public class LillymegaReplicatedService implements ReplicatedService {
     private void sendJsonResponse(HttpExchange exchange, String body) throws IOException {
         byte[] response = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
-        exchange.sendResponseHeaders(200, response.length);
+        exchange.sendResponseHeaders(SUCCESS_STATUS, response.length);
         exchange.getResponseBody().write(response);
         exchange.close();
     }

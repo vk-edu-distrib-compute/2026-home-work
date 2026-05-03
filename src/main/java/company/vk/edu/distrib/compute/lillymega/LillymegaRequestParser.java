@@ -3,6 +3,8 @@ package company.vk.edu.distrib.compute.lillymega;
 final class LillymegaRequestParser {
     private static final String ID_PARAMETER = "id";
     private static final String ACK_PARAMETER = "ack";
+    private static final int PARAMETER_PARTS_COUNT = 2;
+    private static final int DEFAULT_ACK = 1;
 
     LillymegaRequestParameters parse(String query) {
         if (query == null || query.isEmpty()) {
@@ -13,7 +15,7 @@ final class LillymegaRequestParser {
         Integer ack = null;
         for (String parameter : query.split("&")) {
             String[] parts = parameter.split("=", 2);
-            if (parts.length != 2) {
+            if (parts.length != PARAMETER_PARTS_COUNT) {
                 return null;
             }
 
@@ -24,6 +26,6 @@ final class LillymegaRequestParser {
             }
         }
 
-        return new LillymegaRequestParameters(id, ack == null ? 1 : ack);
+        return new LillymegaRequestParameters(id, ack == null ? DEFAULT_ACK : ack);
     }
 }
