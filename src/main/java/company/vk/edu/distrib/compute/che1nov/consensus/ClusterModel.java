@@ -22,20 +22,32 @@ public class ClusterModel {
         for (Integer id : nodeIds) {
             nodes.put(
                     id,
-                    new ClusterNode(
-                            id,
-                            pingInterval,
-                            pingTimeout,
-                            electionTimeout,
-                            failProbability,
-                            minRecover,
-                            maxRecover
-                    )
+                    createNode(id, pingInterval, pingTimeout, electionTimeout, failProbability, minRecover, maxRecover)
             );
         }
         for (ClusterNode node : nodes.values()) {
             node.setPeers(nodes);
         }
+    }
+
+    private static ClusterNode createNode(
+            int id,
+            Duration pingInterval,
+            Duration pingTimeout,
+            Duration electionTimeout,
+            double failProbability,
+            Duration minRecover,
+            Duration maxRecover
+    ) {
+        return new ClusterNode(
+                id,
+                pingInterval,
+                pingTimeout,
+                electionTimeout,
+                failProbability,
+                minRecover,
+                maxRecover
+        );
     }
 
     public void start() {

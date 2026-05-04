@@ -26,7 +26,9 @@ public final class LeaderElectionApp {
         try {
             for (int i = 0; i < 20; i++) {
                 sleep(300);
-                LOGGER.log(Level.INFO, cluster.snapshot());
+                if (LOGGER.isLoggable(Level.INFO)) {
+                    LOGGER.log(Level.INFO, cluster.snapshot());
+                }
             }
         } finally {
             cluster.stop();

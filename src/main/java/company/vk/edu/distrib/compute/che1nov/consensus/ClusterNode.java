@@ -4,18 +4,21 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ClusterNode extends Thread {
-    private final int nodeId;
+    private static final int NO_LEADER = -1;
+
+    private final int id;
     private final BlockingQueue<ClusterMessage> inbox = new LinkedBlockingQueue<>();
     private final Map<Integer, ClusterNode> peers = new ConcurrentHashMap<>();
+    private final ReentrantLock stateLock = new ReentrantLock();
 
     private final long pingIntervalMillis;
     private final long pingTimeoutMillis;
@@ -28,8 +31,8 @@ public class ClusterNode extends Thread {
     private final AtomicBoolean running = new AtomicBoolean(true);
 
     private boolean alive = true;
-    private NodeRole role = NodeRole.FOLLOWER;
-    private Integer leaderId;
+    private NodeRole currentRole = NodeRole.FOLLOWER;
+    private int currentLeaderId = NO_LEADER;
 
     private boolean electionInProgress;
     private boolean receivedElectAnswer;
@@ -50,7 +53,7 @@ public class ClusterNode extends Thread {
             Duration maxRecover
     ) {
         super("cluster-node-" + nodeId);
-        this.nodeId = nodeId;
+        this.id = nodeId;
         this.pingIntervalMillis = pingInterval.toMillis();
         this.pingTimeoutMillis = pingTimeout.toMillis();
         this.electionTimeoutMillis = electionTimeout.toMillis();
@@ -61,25 +64,40 @@ public class ClusterNode extends Thread {
     }
 
     public int nodeId() {
-        return nodeId;
+        return id;
     }
 
-    public synchronized Integer leaderId() {
-        return leaderId;
+    public Integer leaderId() {
+        stateLock.lock();
+        try {
+            return currentLeaderId == NO_LEADER ? null : currentLeaderId;
+        } finally {
+            stateLock.unlock();
+        }
     }
 
-    public synchronized NodeRole role() {
-        return role;
+    public NodeRole role() {
+        stateLock.lock();
+        try {
+            return currentRole;
+        } finally {
+            stateLock.unlock();
+        }
     }
 
-    public synchronized boolean isAliveNode() {
-        return alive;
+    public boolean isAliveNode() {
+        stateLock.lock();
+        try {
+            return alive;
+        } finally {
+            stateLock.unlock();
+        }
     }
 
     public void setPeers(Map<Integer, ClusterNode> allNodes) {
         peers.clear();
         for (Map.Entry<Integer, ClusterNode> entry : allNodes.entrySet()) {
-            if (entry.getKey() != nodeId) {
+            if (entry.getKey() != id) {
                 peers.put(entry.getKey(), entry.getValue());
             }
         }
@@ -89,33 +107,43 @@ public class ClusterNode extends Thread {
         inbox.offer(message);
     }
 
-    public synchronized void forceDown() {
-        markDown(true);
+    public void forceDown() {
+        stateLock.lock();
+        try {
+            markDown(true);
+        } finally {
+            stateLock.unlock();
+        }
     }
 
-    private synchronized void markDown(boolean forced) {
+    private void markDown(boolean forced) {
         if (!alive) {
             return;
         }
         forceStopped = forced;
         alive = false;
-        role = NodeRole.DOWN;
-        leaderId = null;
+        currentRole = NodeRole.DOWN;
+        currentLeaderId = NO_LEADER;
         electionInProgress = false;
         waitingPingAnswer = false;
         recoverAt = forced ? 0L : System.currentTimeMillis() + randomRecoverDelay();
     }
 
-    public synchronized void forceUp() {
-        if (alive) {
-            return;
+    public void forceUp() {
+        stateLock.lock();
+        try {
+            if (alive) {
+                return;
+            }
+            forceStopped = false;
+            alive = true;
+            currentRole = NodeRole.FOLLOWER;
+            currentLeaderId = NO_LEADER;
+            waitingPingAnswer = false;
+            startElectionLocked();
+        } finally {
+            stateLock.unlock();
         }
-        forceStopped = false;
-        alive = true;
-        role = NodeRole.FOLLOWER;
-        leaderId = null;
-        waitingPingAnswer = false;
-        startElection();
     }
 
     public void shutdownNode() {
@@ -125,7 +153,12 @@ public class ClusterNode extends Thread {
 
     @Override
     public void run() {
-        startElection();
+        stateLock.lock();
+        try {
+            startElectionLocked();
+        } finally {
+            stateLock.unlock();
+        }
         while (running.get()) {
             try {
                 maybeSimulateFailure();
@@ -159,136 +192,182 @@ public class ClusterNode extends Thread {
     }
 
     private void onPing(int fromId) {
-        if (!alive) {
-            return;
+        stateLock.lock();
+        try {
+            if (!alive) {
+                return;
+            }
+        } finally {
+            stateLock.unlock();
         }
-        send(fromId, ClusterMessage.answer(nodeId, AnswerKind.PING));
+        send(fromId, ClusterMessage.answer(id, AnswerKind.PING));
     }
 
     private void onElect(int fromId) {
-        if (!alive) {
-            return;
+        boolean shouldElect = false;
+        stateLock.lock();
+        try {
+            if (!alive) {
+                return;
+            }
+            if (id > fromId) {
+                shouldElect = true;
+            }
+        } finally {
+            stateLock.unlock();
         }
-        if (nodeId > fromId) {
-            send(fromId, ClusterMessage.answer(nodeId, AnswerKind.ELECT));
-            startElection();
+        if (shouldElect) {
+            send(fromId, ClusterMessage.answer(id, AnswerKind.ELECT));
+            stateLock.lock();
+            try {
+                startElectionLocked();
+            } finally {
+                stateLock.unlock();
+            }
         }
     }
 
     private void onAnswer(int fromId, AnswerKind answerKind) {
-        if (!alive) {
-            return;
-        }
-        if (answerKind == AnswerKind.PING && Objects.equals(leaderId, fromId)) {
-            waitingPingAnswer = false;
-        }
-        if (answerKind == AnswerKind.ELECT && electionInProgress) {
-            receivedElectAnswer = true;
-            electionDeadlineAt = System.currentTimeMillis() + electionTimeoutMillis;
+        stateLock.lock();
+        try {
+            if (!alive) {
+                return;
+            }
+            if (answerKind == AnswerKind.PING && currentLeaderId == fromId) {
+                waitingPingAnswer = false;
+            }
+            if (answerKind == AnswerKind.ELECT && electionInProgress) {
+                receivedElectAnswer = true;
+                electionDeadlineAt = System.currentTimeMillis() + electionTimeoutMillis;
+            }
+        } finally {
+            stateLock.unlock();
         }
     }
 
     private void onVictory(int winnerId) {
-        if (!alive) {
-            return;
+        stateLock.lock();
+        try {
+            if (!alive) {
+                return;
+            }
+            if (winnerId < id) {
+                startElectionLocked();
+                return;
+            }
+            currentLeaderId = winnerId;
+            electionInProgress = false;
+            receivedElectAnswer = false;
+            waitingPingAnswer = false;
+            currentRole = winnerId == id ? NodeRole.LEADER : NodeRole.FOLLOWER;
+        } finally {
+            stateLock.unlock();
         }
-        if (winnerId < nodeId) {
-            startElection();
-            return;
-        }
-        leaderId = winnerId;
-        electionInProgress = false;
-        receivedElectAnswer = false;
-        waitingPingAnswer = false;
-        role = winnerId == nodeId ? NodeRole.LEADER : NodeRole.FOLLOWER;
     }
 
     private void maybePingLeader() {
         long now = System.currentTimeMillis();
-        if (now < nextPingAt) {
-            return;
-        }
-        nextPingAt = now + pingIntervalMillis;
+        Integer leaderToPing;
+        stateLock.lock();
+        try {
+            if (now < nextPingAt) {
+                return;
+            }
+            nextPingAt = now + pingIntervalMillis;
 
-        if (role == NodeRole.LEADER) {
-            leaderId = nodeId;
-            return;
-        }
+            if (currentRole == NodeRole.LEADER) {
+                currentLeaderId = id;
+                return;
+            }
 
-        if (leaderId == null) {
-            startElection();
-            return;
-        }
-        if (waitingPingAnswer) {
-            return;
-        }
+            if (currentLeaderId == NO_LEADER) {
+                startElectionLocked();
+                return;
+            }
+            if (waitingPingAnswer) {
+                return;
+            }
 
-        send(leaderId, ClusterMessage.ping(nodeId));
-        waitingPingAnswer = true;
-        pingDeadlineAt = now + pingTimeoutMillis;
+            leaderToPing = currentLeaderId;
+            waitingPingAnswer = true;
+            pingDeadlineAt = now + pingTimeoutMillis;
+        } finally {
+            stateLock.unlock();
+        }
+        send(leaderToPing, ClusterMessage.ping(id));
     }
 
     private void checkPingTimeout() {
-        if (!waitingPingAnswer) {
-            return;
-        }
-        if (System.currentTimeMillis() >= pingDeadlineAt) {
-            waitingPingAnswer = false;
-            startElection();
+        stateLock.lock();
+        try {
+            if (!waitingPingAnswer) {
+                return;
+            }
+            if (System.currentTimeMillis() >= pingDeadlineAt) {
+                waitingPingAnswer = false;
+                startElectionLocked();
+            }
+        } finally {
+            stateLock.unlock();
         }
     }
 
-    private synchronized void startElection() {
+    private void startElectionLocked() {
         if (!alive) {
             return;
         }
 
         electionInProgress = true;
         receivedElectAnswer = false;
-        role = NodeRole.CANDIDATE;
+        currentRole = NodeRole.CANDIDATE;
         electionDeadlineAt = System.currentTimeMillis() + electionTimeoutMillis;
 
         List<Integer> higherIds = new ArrayList<>();
         for (Integer peerId : peers.keySet()) {
-            if (peerId > nodeId) {
+            if (peerId > id) {
                 higherIds.add(peerId);
             }
         }
 
         if (higherIds.isEmpty()) {
-            becomeLeader();
+            becomeLeaderLocked();
             return;
         }
 
         for (Integer peerId : higherIds) {
-            send(peerId, ClusterMessage.elect(nodeId));
+            send(peerId, ClusterMessage.elect(id));
         }
     }
 
     private void checkElectionTimeout() {
-        if (!electionInProgress) {
-            return;
+        stateLock.lock();
+        try {
+            if (!electionInProgress) {
+                return;
+            }
+            if (System.currentTimeMillis() < electionDeadlineAt) {
+                return;
+            }
+            if (receivedElectAnswer) {
+                startElectionLocked();
+                return;
+            }
+            becomeLeaderLocked();
+        } finally {
+            stateLock.unlock();
         }
-        if (System.currentTimeMillis() < electionDeadlineAt) {
-            return;
-        }
-        if (receivedElectAnswer) {
-            startElection();
-            return;
-        }
-        becomeLeader();
     }
 
-    private synchronized void becomeLeader() {
+    private void becomeLeaderLocked() {
         if (!alive) {
             return;
         }
-        leaderId = nodeId;
-        role = NodeRole.LEADER;
+        currentLeaderId = id;
+        currentRole = NodeRole.LEADER;
         electionInProgress = false;
         receivedElectAnswer = false;
         waitingPingAnswer = false;
-        broadcast(ClusterMessage.victory(nodeId));
+        broadcast(ClusterMessage.victory(id));
     }
 
     private void send(int targetId, ClusterMessage message) {
@@ -305,20 +384,30 @@ public class ClusterNode extends Thread {
     }
 
     private void maybeSimulateFailure() {
-        if (!alive || failProbability <= 0.0d) {
-            return;
-        }
-        if (ThreadLocalRandom.current().nextDouble() < failProbability) {
-            markDown(false);
+        stateLock.lock();
+        try {
+            if (!alive || failProbability <= 0.0d) {
+                return;
+            }
+            if (ThreadLocalRandom.current().nextDouble() < failProbability) {
+                markDown(false);
+            }
+        } finally {
+            stateLock.unlock();
         }
     }
 
     private void maybeAutoRecover() {
-        if (alive || forceStopped) {
-            return;
-        }
-        if (recoverAt > 0L && System.currentTimeMillis() >= recoverAt) {
-            forceUp();
+        stateLock.lock();
+        try {
+            if (alive || forceStopped) {
+                return;
+            }
+            if (recoverAt > 0L && System.currentTimeMillis() >= recoverAt) {
+                forceUp();
+            }
+        } finally {
+            stateLock.unlock();
         }
     }
 

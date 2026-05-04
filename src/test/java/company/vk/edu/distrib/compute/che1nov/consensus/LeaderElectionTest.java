@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LeaderElectionTest {
+    private static final int SINGLE_LEADER_COUNT = 1;
     private ClusterModel cluster;
 
     @AfterEach
@@ -95,7 +96,7 @@ class LeaderElectionTest {
         long deadline = System.currentTimeMillis() + 5_000;
         while (System.currentTimeMillis() < deadline) {
             List<ClusterNode> leaders = cluster.leaders();
-            if (leaders.size() == 1) {
+            if (leaders.size() == SINGLE_LEADER_COUNT) {
                 Integer expected = cluster.maxLiveNodeId();
                 if (expected != null && leaders.getFirst().nodeId() == expected) {
                     return;
