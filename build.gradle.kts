@@ -1,12 +1,9 @@
-import com.google.protobuf.gradle.id
-
 plugins {
     java
     application
     checkstyle
     pmd
-
-    id("com.google.protobuf") version "0.10.0"
+    id("com.google.protobuf") version "0.9.5"
 }
 
 java {
@@ -19,11 +16,6 @@ repositories {
     mavenCentral()
 }
 
-
-val reactiveGrpcVersion = "1.2.4"
-val grpcVersion = "1.58.0"
-val protobufVersion = "3.4.0"
-
 dependencies {
     checkstyle("com.puppycrawl.tools:checkstyle:13.3.0")
     implementation("com.github.spotbugs:spotbugs-annotations:4.9.8")
@@ -32,41 +24,15 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.32")
     implementation("com.h2database:h2:2.4.240")
     implementation("com.zaxxer:HikariCP:7.0.2")
-
-    implementation("com.google.protobuf:protobuf-java:${protobufVersion}")
-    implementation("com.google.protobuf:protobuf-java-util:${protobufVersion}")
-    implementation("com.salesforce.servicelibs:reactor-grpc-stub:${reactiveGrpcVersion}")
-    implementation("io.grpc:grpc-netty-shaded:${grpcVersion}")
-    implementation("io.grpc:grpc-protobuf:${grpcVersion}")
-    implementation("io.grpc:grpc-services:${grpcVersion}")
-    implementation("io.grpc:grpc-stub:${grpcVersion}")
-    implementation("io.projectreactor:reactor-core:3.8.5")
+    implementation("io.grpc:grpc-netty-shaded:1.73.0")
+    implementation("io.grpc:grpc-protobuf:1.73.0")
+    implementation("io.grpc:grpc-stub:1.73.0")
+    implementation("com.google.protobuf:protobuf-java:4.31.1")
+    compileOnly("javax.annotation:javax.annotation-api:1.3.2")
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:${protobufVersion}"
-    }
-    plugins {
-        id("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
-        }
-        id("reactor-grpc") {
-            artifact = "com.salesforce.servicelibs:reactor-grpc:${reactiveGrpcVersion}"
-        }
-    }
-    generateProtoTasks {
-        all().forEach {
-            it.plugins {
-                create("grpc")
-                create("reactor-grpc")
-            }
-        }
-    }
 }
 
 sourceSets {
@@ -145,4 +111,34 @@ tasks.named("pmdIntegrationTest") {
 
 tasks.named("pmdTest") {
     enabled = false
+}
+
+tasks.withType<Checkstyle>().configureEach {
+    exclude("**/build/generated/**")
+    exclude("**/generated/**")
+    exclude("**/company/vk/edu/distrib/compute/che1nov/grpc/**")
+}
+
+tasks.withType<Pmd>().configureEach {
+    exclude("**/build/generated/**")
+    exclude("**/generated/**")
+    exclude("**/company/vk/edu/distrib/compute/che1nov/grpc/**")
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:4.31.1"
+    }
+    plugins {
+        create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:1.73.0"
+        }
+    }
+    generateProtoTasks {
+        all().configureEach {
+            plugins {
+                create("grpc")
+            }
+        }
+    }
 }
