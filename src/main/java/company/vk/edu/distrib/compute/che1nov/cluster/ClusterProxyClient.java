@@ -1,58 +1,65 @@
 package company.vk.edu.distrib.compute.che1nov.cluster;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import company.vk.edu.distrib.compute.che1nov.grpc.InternalTransportServiceGrpc;
+import company.vk.edu.distrib.compute.che1nov.grpc.ProxyRequest;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+
+import java.io.Closeable;
 import java.util.Map;
 import java.util.Objects;
-import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
-public class ClusterProxyClient {
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(2);
-    public static final String INTERNAL_REQUEST_HEADER = "X-Che1nov-Proxy-Request";
-    public static final String INTERNAL_REQUEST_VALUE = "true";
+public class ClusterProxyClient implements Closeable {
+    private final ConcurrentMap<String, ManagedChannel> channels = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, InternalTransportServiceGrpc.InternalTransportServiceBlockingStub> stubs =
+            new ConcurrentHashMap<>();
 
-    private final HttpClient httpClient;
-
-    public ClusterProxyClient() {
-        this.httpClient = HttpClient.newHttpClient();
-    }
-
-    public HttpResponse<byte[]> forward(
+    public ProxyResponse forward(
             String method,
             String targetEndpoint,
-            String path,
-            Map<String, String> queryParams,
-            boolean internalRequest,
+            String key,
             byte[] body
-    ) throws IOException, InterruptedException {
+    ) {
         validateMethod(method);
-        validateTargetEndpoint(targetEndpoint);
-        validatePath(path);
-        validateQueryParams(queryParams);
+        validateEndpoint(targetEndpoint);
+        validateKey(key);
 
-        URI uri = URI.create(targetEndpoint + path + "?" + encodeQueryParams(queryParams));
+        NodeEndpoint nodeEndpoint = NodeEndpoint.parse(targetEndpoint);
+        String grpcTarget = nodeEndpoint.grpcHost() + ":" + nodeEndpoint.grpcPort();
 
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                .uri(uri)
-                .timeout(REQUEST_TIMEOUT);
-        if (internalRequest) {
-            requestBuilder.header(INTERNAL_REQUEST_HEADER, INTERNAL_REQUEST_VALUE);
+        InternalTransportServiceGrpc.InternalTransportServiceBlockingStub stub =
+                stubs.computeIfAbsent(grpcTarget, this::createStub);
+
+        ProxyRequest request = ProxyRequest.newBuilder()
+                .setMethod(method)
+                .setKey(key)
+                .setBody(com.google.protobuf.ByteString.copyFrom(body == null ? new byte[0] : body))
+                .build();
+
+        var response = stub.forward(request);
+        return new ProxyResponse(response.getStatusCode(), response.getBody().toByteArray());
+    }
+
+    @Override
+    public void close() {
+        for (Map.Entry<String, ManagedChannel> entry : channels.entrySet()) {
+            entry.getValue().shutdownNow();
         }
+        channels.clear();
+        stubs.clear();
+    }
 
-        switch (method) {
-            case "GET" -> requestBuilder.GET();
-            case "PUT" -> requestBuilder.PUT(HttpRequest.BodyPublishers.ofByteArray(body == null ? new byte[0] : body));
-            case "DELETE" -> requestBuilder.DELETE();
-            default -> throw new IllegalArgumentException("Unsupported method: " + method);
-        }
+    private InternalTransportServiceGrpc.InternalTransportServiceBlockingStub createStub(String grpcTarget) {
+        ManagedChannel channel = channels.computeIfAbsent(grpcTarget, this::createChannel);
+        return InternalTransportServiceGrpc.newBlockingStub(channel);
+    }
 
-        return httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofByteArray());
+    private ManagedChannel createChannel(String grpcTarget) {
+        return ManagedChannelBuilder.forTarget(grpcTarget)
+                .usePlaintext()
+                .build();
     }
 
     private static void validateMethod(String method) {
@@ -61,37 +68,18 @@ public class ClusterProxyClient {
         }
     }
 
-    private static void validateTargetEndpoint(String targetEndpoint) {
+    private static void validateEndpoint(String targetEndpoint) {
         if (targetEndpoint == null || targetEndpoint.isBlank()) {
             throw new IllegalArgumentException("targetEndpoint must not be null or blank");
         }
     }
 
-    private static void validatePath(String path) {
-        if (path == null || path.isBlank()) {
-            throw new IllegalArgumentException("path must not be null or blank");
+    private static void validateKey(String key) {
+        if (Objects.isNull(key) || key.isBlank()) {
+            throw new IllegalArgumentException("key must not be null or blank");
         }
     }
 
-    private static void validateQueryParams(Map<String, String> queryParams) {
-        if (queryParams == null || queryParams.isEmpty()) {
-            throw new IllegalArgumentException("queryParams must not be null or empty");
-        }
-    }
-
-    private static String encodeQueryParams(Map<String, String> queryParams) {
-        StringJoiner joiner = new StringJoiner("&");
-        for (Map.Entry<String, String> entry : queryParams.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            if (Objects.isNull(key) || key.isBlank()) {
-                throw new IllegalArgumentException("query parameter key must not be null or blank");
-            }
-
-            String encodedKey = URLEncoder.encode(key, StandardCharsets.UTF_8);
-            String encodedValue = URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
-            joiner.add(encodedKey + "=" + encodedValue);
-        }
-        return joiner.toString();
+    public record ProxyResponse(int statusCode, byte[] body) {
     }
 }

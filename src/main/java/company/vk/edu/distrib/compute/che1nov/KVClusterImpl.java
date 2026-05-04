@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.che1nov;
 
 import company.vk.edu.distrib.compute.KVCluster;
 import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.che1nov.cluster.ClusterGrpcServer;
 import company.vk.edu.distrib.compute.che1nov.cluster.ClusterProxyClient;
 import company.vk.edu.distrib.compute.che1nov.cluster.ShardRouter;
 
@@ -70,6 +71,7 @@ public class KVClusterImpl implements KVCluster {
             for (String endpoint : endpoints) {
                 stopInternal(endpoint);
             }
+            proxyClient.close();
         } finally {
             lifecycleLock.unlock();
         }
@@ -110,14 +112,15 @@ public class KVClusterImpl implements KVCluster {
 
     private void initializeNodes(List<Integer> ports) {
         for (int port : ports) {
-            String endpoint = endpoint(port);
-            nodes.put(endpoint, createClusterNode(port, endpoint));
+            int grpcPort = mapGrpcPort(port);
+            String endpoint = endpoint(port, grpcPort);
+            nodes.put(endpoint, createClusterNode(port, grpcPort, endpoint));
         }
     }
 
-    private ClusterNode createClusterNode(int port, String endpoint) {
+    private ClusterNode createClusterNode(int port, int grpcPort, String endpoint) {
         Path dataPath = Path.of(".data", "node-" + port);
-        return new ClusterNode(port, endpoint, dataPath);
+        return new ClusterNode(port, grpcPort, endpoint, dataPath);
     }
 
     @Override
@@ -136,13 +139,20 @@ public class KVClusterImpl implements KVCluster {
     private static List<String> toEndpoints(List<Integer> ports) {
         List<String> result = new ArrayList<>(ports.size());
         for (int port : ports) {
-            result.add(endpoint(port));
+            result.add(endpoint(port, mapGrpcPort(port)));
         }
         return result;
     }
 
-    private static String endpoint(int port) {
-        return "http://localhost:" + port;
+    private static String endpoint(int port, int grpcPort) {
+        return "http://localhost:" + port + "?grpcPort=" + grpcPort;
+    }
+
+    private static int mapGrpcPort(int httpPort) {
+        if (httpPort <= 32_767) {
+            return httpPort + 32_768;
+        }
+        return httpPort - 32_768;
     }
 
     private static void validatePorts(List<Integer> ports) {
@@ -173,12 +183,15 @@ public class KVClusterImpl implements KVCluster {
 
     private final class ClusterNode {
         private final int port;
+        private final int grpcPort;
         private final String endpoint;
         private final Path dataPath;
         private KVService service;
+        private ClusterGrpcServer grpcServer;
 
-        private ClusterNode(int port, String endpoint, Path dataPath) {
+        private ClusterNode(int port, int grpcPort, String endpoint, Path dataPath) {
             this.port = port;
+            this.grpcPort = grpcPort;
             this.endpoint = endpoint;
             this.dataPath = dataPath;
         }
@@ -186,16 +199,33 @@ public class KVClusterImpl implements KVCluster {
         private void start() {
             try {
                 FSDao dao = new FSDao(dataPath);
-                service = new KVServiceImpl(port, dao, endpoint, shardRouter, proxyClient, replicationFactor);
+                KVServiceImpl kvService = new KVServiceImpl(
+                        port,
+                        dao,
+                        endpoint,
+                        shardRouter,
+                        proxyClient,
+                        replicationFactor
+                );
+                grpcServer = new ClusterGrpcServer(grpcPort, kvService);
+                grpcServer.start();
+                service = kvService;
                 service.start();
             } catch (java.io.IOException e) {
                 throw new java.io.UncheckedIOException("Failed to initialize node on port " + port, e);
             }
         }
 
+        @SuppressWarnings("PMD.UseTryWithResources")
         private void stop() {
-            if (service != null) {
-                service.stop();
+            try {
+                if (service != null) {
+                    service.stop();
+                }
+            } finally {
+                if (grpcServer != null) {
+                    grpcServer.close();
+                }
             }
         }
     }

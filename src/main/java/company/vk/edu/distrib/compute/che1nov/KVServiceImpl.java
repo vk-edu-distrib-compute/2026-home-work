@@ -34,7 +34,6 @@ public class KVServiceImpl implements KVService {
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
     private static final int MIN_PORT = 1;
     private static final int MAX_PORT = 65_535;
-    private static final String ENTITY_PATH = "/v0/entity";
     private static final String GET_METHOD = "GET";
     private static final String PUT_METHOD = "PUT";
     private static final String DELETE_METHOD = "DELETE";
@@ -161,8 +160,7 @@ public class KVServiceImpl implements KVService {
             return;
         }
 
-        boolean internalRequest = isInternalProxyRequest(exchange);
-        if (internalRequest || !isClusterMode()) {
+        if (!isClusterMode()) {
             byte[] requestBody = readRequestBodyIfNeeded(exchange, requestMethod);
             ReplicaResponse response = executeLocal(requestMethod, id, requestBody);
             writeResponse(exchange, response.statusCode(), response.body());
@@ -177,13 +175,7 @@ public class KVServiceImpl implements KVService {
 
         byte[] requestBody = readRequestBodyIfNeeded(exchange, requestMethod);
         List<String> replicaEndpoints = shardRouter.endpointsByKey(id, replicationFactor);
-        ReplicaDecision decision;
-        try {
-            decision = executeReplicated(requestMethod, id, requestBody, ack, replicaEndpoints);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Replication request interrupted", e);
-        }
+        ReplicaDecision decision = executeReplicated(requestMethod, id, requestBody, ack, replicaEndpoints);
         writeResponse(exchange, decision.statusCode(), decision.body());
     }
 
@@ -245,11 +237,6 @@ public class KVServiceImpl implements KVService {
         return localEndpoint != null && shardRouter != null && proxyClient != null;
     }
 
-    private static boolean isInternalProxyRequest(HttpExchange exchange) {
-        String header = exchange.getRequestHeaders().getFirst(ClusterProxyClient.INTERNAL_REQUEST_HEADER);
-        return ClusterProxyClient.INTERNAL_REQUEST_VALUE.equalsIgnoreCase(header);
-    }
-
     private static boolean isSupportedMethod(String requestMethod) {
         return GET_METHOD.equals(requestMethod)
                 || PUT_METHOD.equals(requestMethod)
@@ -269,7 +256,7 @@ public class KVServiceImpl implements KVService {
             byte[] requestBody,
             int ack,
             List<String> replicaEndpoints
-    ) throws IOException, InterruptedException {
+    ) {
         int acknowledged = 0;
         List<ReplicaResponse> successfulReads = new ArrayList<>();
         int requiredSuccessStatus = successStatusForMethod(requestMethod);
@@ -326,17 +313,8 @@ public class KVServiceImpl implements KVService {
             String targetEndpoint,
             String key,
             byte[] requestBody
-    ) throws IOException, InterruptedException {
-        ConcurrentMap<String, String> queryParams = new ConcurrentHashMap<>();
-        queryParams.put("id", key);
-        var response = proxyClient.forward(
-                requestMethod,
-                targetEndpoint,
-                ENTITY_PATH,
-                queryParams,
-                true,
-                requestBody
-        );
+    ) {
+        var response = proxyClient.forward(requestMethod, targetEndpoint, key, requestBody);
         return new ReplicaResponse(response.statusCode(), response.body());
     }
 
@@ -413,9 +391,17 @@ public class KVServiceImpl implements KVService {
         }
     }
 
+    public InternalResponse handleInternalTransport(String method, String key, byte[] body) {
+        ReplicaResponse response = executeLocal(method, key, body == null ? new byte[0] : body);
+        return new InternalResponse(response.statusCode(), response.body() == null ? new byte[0] : response.body());
+    }
+
     private record ReplicaResponse(int statusCode, byte[] body) {
     }
 
     private record ReplicaDecision(int statusCode, byte[] body) {
+    }
+
+    public record InternalResponse(int statusCode, byte[] body) {
     }
 }
