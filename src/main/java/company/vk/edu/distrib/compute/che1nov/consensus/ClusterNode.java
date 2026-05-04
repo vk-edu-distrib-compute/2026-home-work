@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
+@SuppressWarnings("PMD.CyclomaticComplexity")
 public class ClusterNode extends Thread {
     private static final int NO_LEADER = -1;
 
@@ -236,7 +237,7 @@ public class ClusterNode extends Thread {
             if (answerKind == AnswerKind.PING && currentLeaderId == fromId) {
                 waitingPingAnswer = false;
             }
-            if (answerKind == AnswerKind.ELECT && electionInProgress) {
+            if (answerKind == AnswerKind.ELECT && electionInProgress && fromId > id) {
                 receivedElectAnswer = true;
                 electionDeadlineAt = System.currentTimeMillis() + electionTimeoutMillis;
             }
@@ -323,8 +324,10 @@ public class ClusterNode extends Thread {
         electionDeadlineAt = System.currentTimeMillis() + electionTimeoutMillis;
 
         List<Integer> higherIds = new ArrayList<>();
-        for (Integer peerId : peers.keySet()) {
-            if (peerId > id) {
+        for (Map.Entry<Integer, ClusterNode> entry : peers.entrySet()) {
+            Integer peerId = entry.getKey();
+            ClusterNode peerNode = entry.getValue();
+            if (peerId > id && peerNode.isAliveNode()) {
                 higherIds.add(peerId);
             }
         }
