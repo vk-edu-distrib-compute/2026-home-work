@@ -16,6 +16,8 @@ import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class KVClusterImpl implements KVCluster {
+    private static final int GRPC_PORT_SHIFT = 32_768;
+
     private final List<String> endpoints;
     private final Map<String, ClusterNode> nodes;
     private final Set<String> startedEndpoints;
@@ -149,10 +151,10 @@ public class KVClusterImpl implements KVCluster {
     }
 
     private static int mapGrpcPort(int httpPort) {
-        if (httpPort <= 32_767) {
-            return httpPort + 32_768;
+        if (httpPort < GRPC_PORT_SHIFT) {
+            return httpPort + GRPC_PORT_SHIFT;
         }
-        return httpPort - 32_768;
+        return httpPort - GRPC_PORT_SHIFT;
     }
 
     private static void validatePorts(List<Integer> ports) {
