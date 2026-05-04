@@ -24,7 +24,6 @@ public class KVClusterImpl implements KVCluster {
 
     private final List<String> endpoints;
     private final Map<String, ClusterNode> nodes;
-    private final Map<Integer, Integer> grpcPortsByHttpPort;
     private final Set<String> startedEndpoints;
     private final ShardRouter shardRouter;
     private final ClusterProxyClient proxyClient;
@@ -37,7 +36,7 @@ public class KVClusterImpl implements KVCluster {
 
     public KVClusterImpl(List<Integer> ports, String shardingAlgorithm, int replicationFactor) {
         validatePorts(ports);
-        this.grpcPortsByHttpPort = assignGrpcPorts(ports);
+        Map<Integer, Integer> grpcPortsByHttpPort = assignGrpcPorts(ports);
 
         this.endpoints = toEndpoints(ports, grpcPortsByHttpPort);
         this.nodes = new LinkedHashMap<>();
@@ -331,34 +330,28 @@ public class KVClusterImpl implements KVCluster {
             }
         }
 
-        @SuppressWarnings("PMD.UseTryWithResources")
         private void stop() {
             RuntimeException firstFailure = null;
-            try {
-                if (service != null) {
-                    try {
-                        service.stop();
-                    } catch (RuntimeException e) {
+            if (service != null) {
+                try {
+                    service.stop();
+                } catch (RuntimeException e) {
+                    firstFailure = e;
+                }
+            }
+
+            if (grpcServer != null) {
+                try {
+                    grpcServer.close();
+                } catch (RuntimeException e) {
+                    if (firstFailure == null) {
                         firstFailure = e;
-                    } finally {
-                        service = null;
                     }
                 }
-            } finally {
-                if (grpcServer != null) {
-                    try {
-                        grpcServer.close();
-                    } catch (RuntimeException e) {
-                        if (firstFailure == null) {
-                            firstFailure = e;
-                        }
-                    } finally {
-                        grpcServer = null;
-                    }
-                }
-                if (firstFailure != null) {
-                    throw firstFailure;
-                }
+            }
+
+            if (firstFailure != null) {
+                throw firstFailure;
             }
         }
 
