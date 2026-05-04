@@ -24,6 +24,21 @@ public class Monitor implements Runnable {
         return "\u001B[" + colorCode + "m" + s + "\u001B[0m";
     }
 
+    private String formatNodeLine(int id, Node node) {
+        boolean alive = node.isAliveNode();
+        Integer leader = node.getLeaderId();
+        String status = alive ? "UP" : "DOWN";
+        String leaderText = leader == null ? "-" : leader.toString();
+        String line = String.format("Node %2d: %s, leader=%s", id, status, leaderText);
+        
+        if (alive && leader != null && leader == id) {
+            return color(line, "32");
+        } else if (!alive) {
+            return color(line, "31");
+        }
+        return line;
+    }
+
     @Override
     public void run() {
         while (running.get()) {
@@ -31,7 +46,7 @@ public class Monitor implements Runnable {
                 StringBuilder sb = new StringBuilder(128);
                 sb.append("---- CLUSTER STATUS ----\n");
                 for (int id : cluster.nodeIds()) {
-                    sb.append(formatNodeLine(id)).append('\n');
+                    sb.append(formatNodeLine(id, cluster.getNode(id))).append('\n');
                 }
                 LOGGER.info(sb.toString());
             }
@@ -42,21 +57,5 @@ public class Monitor implements Runnable {
                 break;
             }
         }
-    }
-
-    private String formatNodeLine(int id) {
-        Node n = cluster.getNode(id);
-        boolean alive = n.isAliveNode();
-        Integer leader = n.getLeaderId();
-        String status = alive ? "UP" : "DOWN";
-        String leaderText = leader == null ? "-" : leader.toString();
-        String line = String.format("Node %2d: %s, leader=%s", id, status, leaderText);
-        if (!alive) {
-            return color(line, "31");
-        }
-        if (leader != null && leader == id) {
-            return color(line, "32");
-        }
-        return line;
     }
 }

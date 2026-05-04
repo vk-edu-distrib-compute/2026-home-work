@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 
 public final class Main {
     private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
+    private static final String NODE_PREFIX = "Node ";
     private static final String LEADER_PREFIX = " leader=";
 
     private Main() {
@@ -53,7 +54,7 @@ public final class Main {
         Thread.sleep(2000);
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("\n=== Final state ===");
-            cluster.nodeIds().forEach(id -> LOGGER.info("Node "
+            cluster.nodeIds().forEach(id -> LOGGER.info(NODE_PREFIX
                     + id + LEADER_PREFIX + cluster.getNode(id).getLeaderId()));
         }
 
@@ -63,23 +64,33 @@ public final class Main {
     private static void printInitialState(Cluster cluster) {
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("=== Initial stable state ===");
-            cluster.nodeIds().forEach(id -> LOGGER.info("Node "
+            cluster.nodeIds().forEach(id -> LOGGER.info(NODE_PREFIX
                     + id + LEADER_PREFIX + cluster.getNode(id).getLeaderId()));
         }
     }
 
     private static void testLeaderCrash(Cluster cluster, int leaderId) throws InterruptedException {
-        LOGGER.info("\n=== Crashing leader " + leaderId + " ===");
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("\n=== Crashing leader " + leaderId + " ===");
+        }
         cluster.getNode(leaderId).forceDown();
         Thread.sleep(2000);
-        cluster.nodeIds().forEach(id -> LOGGER.info("Node " + id + " leader=" + cluster.getNode(id).getLeaderId()));
+        if (LOGGER.isLoggable(Level.INFO)) {
+            cluster.nodeIds().forEach(id -> LOGGER.info(NODE_PREFIX
+                    + id + " leader=" + cluster.getNode(id).getLeaderId()));
+        }
     }
 
     private static void testLeaderRecovery(Cluster cluster, int leaderId) throws InterruptedException {
-        LOGGER.info("\n=== Recovering leader " + leaderId + " ===");
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("\n=== Recovering leader " + leaderId + " ===");
+        }
         cluster.getNode(leaderId).forceUp();
         Thread.sleep(2000);
-        cluster.nodeIds().forEach(id -> LOGGER.info("Node " + id + " leader=" + cluster.getNode(id).getLeaderId()));
+        if (LOGGER.isLoggable(Level.INFO)) {
+            cluster.nodeIds().forEach(id -> LOGGER.info(NODE_PREFIX
+                    + id + " leader=" + cluster.getNode(id).getLeaderId()));
+        }
     }
 
     private static void testFlapping(Cluster cluster, int n) throws InterruptedException {
