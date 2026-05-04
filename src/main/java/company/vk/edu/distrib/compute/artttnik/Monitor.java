@@ -40,6 +40,10 @@ public class Monitor implements Runnable {
     }
 
     private void buildAndLogClusterStatus() {
+        if (!LOGGER.isLoggable(Level.INFO)) {
+            return;
+        }
+
         StringBuilder sb = new StringBuilder(128);
         sb.append("---- CLUSTER STATUS ----\n");
         for (int id : cluster.nodeIds()) {
