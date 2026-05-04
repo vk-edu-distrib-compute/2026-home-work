@@ -280,7 +280,11 @@ public class MyReplicatedKVService implements ReplicatedService {
                 exchange.sendResponseHeaders(HTTP_BAD_REQUEST, -1);
                 return;
             }
+            processEntityRequest(exchange, params, id);
+        }
 
+        private void processEntityRequest(HttpExchange exchange, Map<String, String> params, String id)
+                throws IOException {
             try {
                 int ack = parseAck(params.get("ack"));
 
