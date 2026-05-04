@@ -1,6 +1,5 @@
 package company.vk.edu.distrib.compute;
 
-import company.vk.edu.distrib.compute.nst1610.Nst1610KVServiceFactory;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -21,6 +20,8 @@ import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
 import company.vk.edu.distrib.compute.vitos23.Vitos23KVServiceFactory;
 import company.vk.edu.distrib.compute.vredakon.VredakonKVServiceFactory;
 import company.vk.edu.distrib.compute.wolfram158.Wolfram158KVServiceFactoryFileWithCacheImpl;
+import company.vk.edu.distrib.compute.nst1610.Nst1610KVServiceFactory;
+
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
