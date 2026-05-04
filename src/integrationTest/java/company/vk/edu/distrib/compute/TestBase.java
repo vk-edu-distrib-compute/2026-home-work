@@ -23,9 +23,16 @@ abstract class TestBase {
 
     static int randomPort() {
         final var port = ThreadLocalRandom.current().nextInt(10000, 60000);
-        for (int i = 0; i < 100_000; i++) {
-            if (isTcpPortAvailable(port)) {
-                return port;
+        for (int j = 0; j < 5; j++) {
+            for (int i = 0; i < 100_000; i++) {
+                if (isTcpPortAvailable(port)) {
+                    return port;
+                }
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException("Interrupted while looking for available port");
             }
         }
         throw new IllegalStateException("Can't find available port");
@@ -64,13 +71,23 @@ abstract class TestBase {
         return httpEndpoint + "/v0/entity?id=" + id;
     }
 
+    static String url(String endpoint, String id, Integer ack) {
+        if (ack == null) return url(endpoint, id);
+        return endpoint + "/v0/entity?id=" + id + "&ack=" + ack;
+    }
+
     protected abstract HttpClient getHttpClient();
 
     protected HttpResponse<byte[]> get(String endpoint, String key)
             throws IOException, URISyntaxException, InterruptedException {
+        return get(endpoint, key, null);
+    }
+
+    protected HttpResponse<byte[]> get(String endpoint, String key, Integer ack)
+            throws IOException, URISyntaxException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
-                .uri(new URI(url(endpoint, key)))
+                .uri(new URI(url(endpoint, key, ack)))
                 .timeout(Duration.ofSeconds(2))
                 .build();
         return getHttpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
@@ -78,9 +95,14 @@ abstract class TestBase {
 
     protected HttpResponse<Void> delete(String endpoint, String key)
             throws IOException, URISyntaxException, InterruptedException {
+       return delete(endpoint, key, null);
+    }
+
+    protected HttpResponse<Void> delete(String endpoint, String key, Integer ack)
+            throws IOException, URISyntaxException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .DELETE()
-                .uri(new URI(url(endpoint, key)))
+                .uri(new URI(url(endpoint, key, ack)))
                 .timeout(TIMEOUT)
                 .build();
         return getHttpClient().send(request, HttpResponse.BodyHandlers.discarding());
@@ -88,9 +110,14 @@ abstract class TestBase {
 
     protected HttpResponse<Void> upsert(String endpoint, String key, byte[] data)
             throws IOException, URISyntaxException, InterruptedException {
+        return upsert(endpoint, key, data, null);
+    }
+
+    protected HttpResponse<Void> upsert(String endpoint, String key, byte[] data, Integer ack)
+            throws IOException, URISyntaxException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .PUT(HttpRequest.BodyPublishers.ofByteArray(data))
-                .uri(new URI(url(endpoint, key)))
+                .uri(new URI(url(endpoint, key, ack)))
                 .timeout(TIMEOUT)
                 .build();
         return getHttpClient().send(request, HttpResponse.BodyHandlers.discarding());
