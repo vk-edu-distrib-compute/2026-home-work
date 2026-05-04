@@ -39,7 +39,6 @@ public class Monitor implements Runnable {
         return line;
     }
 
-    @SuppressWarnings("java:S1149")
     private void buildAndLogClusterStatus() {
         StringBuilder sb = new StringBuilder(128);
         sb.append("---- CLUSTER STATUS ----\n");

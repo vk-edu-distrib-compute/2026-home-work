@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.artttnik;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.IntStream;
 
 public final class Main {
     private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
@@ -39,13 +40,11 @@ public final class Main {
         }
     }
 
-    @SuppressWarnings("java:S1149")
     private static void initializeCluster(Cluster cluster, int n,
                                           double failProb, long tick, long pingInterval, long electionTimeout) {
-        for (int i = 1; i <= n; i++) {
-            Node node = new Node(i, cluster, failProb, tick, pingInterval, electionTimeout);
-            cluster.addNode(node);
-        }
+        IntStream.rangeClosed(1, n)
+                .mapToObj(i -> new Node(i, cluster, failProb, tick, pingInterval, electionTimeout))
+                .forEach(cluster::addNode);
     }
 
     private static void runScenarios(Cluster cluster, int n) throws InterruptedException {
