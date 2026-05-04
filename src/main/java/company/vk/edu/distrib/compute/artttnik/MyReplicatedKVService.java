@@ -35,7 +35,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.ExcessiveImports"})
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.ExcessiveImports", "PMD.GodClass"})
 public class MyReplicatedKVService implements ReplicatedService {
 
     private static final Logger log = LoggerFactory.getLogger(MyReplicatedKVService.class);
@@ -133,14 +133,27 @@ public class MyReplicatedKVService implements ReplicatedService {
 
     @Override
     public void stop() {
+        stopHttpServer();
+        shutdownExecutor();
+        shutdownGrpcServer();
+        proxyService.close();
+        closeReplicaManager();
+        log.info("KVService stopped");
+    }
+
+    private void stopHttpServer() {
         if (server != null) {
             server.stop(0);
         }
+    }
 
+    private void shutdownExecutor() {
         if (executor != null) {
             executor.shutdown();
         }
+    }
 
+    private void shutdownGrpcServer() {
         if (grpcServer != null) {
             grpcServer.shutdown();
             try {
@@ -152,19 +165,13 @@ public class MyReplicatedKVService implements ReplicatedService {
                 grpcServer.shutdownNow();
             }
         }
+    }
 
-        proxyService.close();
-
+    private void closeReplicaManager() {
         try {
             replicaManager.close();
         } catch (IOException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Failed to close replica manager", e);
-            }
-        }
-
-        if (log.isInfoEnabled()) {
-            log.info("KVService stopped");
+            log.debug("Failed to close replica manager", e);
         }
     }
 
@@ -227,33 +234,39 @@ public class MyReplicatedKVService implements ReplicatedService {
 
     private ProxyResult handleLocalRequest(String method, String id, int ack, byte[] body) {
         return switch (method) {
-            case "GET" -> {
-                if (replicaManager.enabledReplicas() < ack) {
-                    yield new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
-                }
-                var res = replicaManager.readLatest(id);
-                if (res.confirmations() < ack) {
-                    yield new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
-                }
-                if (res.latest() == null || res.latest().deleted()) {
-                    yield new ProxyResult(HTTP_NOT_FOUND, new byte[0]);
-                }
-                yield new ProxyResult(HTTP_OK, res.latest().value());
-            }
-            case "PUT" -> {
-                if (replicaManager.put(id, body) < ack) {
-                    yield new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
-                }
-                yield new ProxyResult(HTTP_CREATED, new byte[0]);
-            }
-            case "DELETE" -> {
-                if (replicaManager.delete(id) < ack) {
-                    yield new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
-                }
-                yield new ProxyResult(HTTP_ACCEPTED, new byte[0]);
-            }
+            case "GET" -> handleGetLocal(id, ack);
+            case "PUT" -> handlePutLocal(id, ack, body);
+            case "DELETE" -> handleDeleteLocal(id, ack);
             default -> new ProxyResult(HTTP_METHOD_NOT_ALLOWED, new byte[0]);
         };
+    }
+
+    private ProxyResult handleGetLocal(String id, int ack) {
+        if (replicaManager.enabledReplicas() < ack) {
+            return new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
+        }
+        var res = replicaManager.readLatest(id);
+        if (res.confirmations() < ack) {
+            return new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
+        }
+        if (res.latest() == null || res.latest().deleted()) {
+            return new ProxyResult(HTTP_NOT_FOUND, new byte[0]);
+        }
+        return new ProxyResult(HTTP_OK, res.latest().value());
+    }
+
+    private ProxyResult handlePutLocal(String id, int ack, byte[] body) {
+        if (replicaManager.put(id, body) < ack) {
+            return new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
+        }
+        return new ProxyResult(HTTP_CREATED, new byte[0]);
+    }
+
+    private ProxyResult handleDeleteLocal(String id, int ack) {
+        if (replicaManager.delete(id) < ack) {
+            return new ProxyResult(HTTP_INTERNAL_ERROR, new byte[0]);
+        }
+        return new ProxyResult(HTTP_ACCEPTED, new byte[0]);
     }
 
     private final class EntityHandler implements HttpHandler {
