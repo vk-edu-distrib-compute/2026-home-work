@@ -11,6 +11,7 @@ import io.grpc.stub.StreamObserver;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.concurrent.TimeUnit;
 
 public class ClusterGrpcServer implements Closeable {
     private final Server grpcServer;
@@ -32,6 +33,11 @@ public class ClusterGrpcServer implements Closeable {
     @Override
     public void close() {
         grpcServer.shutdownNow();
+        try {
+            grpcServer.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static final class InternalTransportService

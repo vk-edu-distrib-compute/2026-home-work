@@ -19,6 +19,8 @@ public class KVClusterImpl implements KVCluster {
     private static final int GRPC_PORT_SHIFT = 32_768;
     private static final int MIN_PORT = 1;
     private static final int MAX_PORT = 65_535;
+    private static final int START_RETRIES = 3;
+    private static final long START_RETRY_DELAY_MILLIS = 50L;
 
     private final List<String> endpoints;
     private final Map<String, ClusterNode> nodes;
@@ -236,6 +238,19 @@ public class KVClusterImpl implements KVCluster {
         }
 
         private void start() {
+            for (int attempt = 1; attempt <= START_RETRIES; attempt++) {
+                try {
+                    StartedComponents started = startOnce();
+                    grpcServer = started.grpcServer();
+                    service = started.service();
+                    return;
+                } catch (RuntimeException e) {
+                    handleStartFailure(attempt, e);
+                }
+            }
+        }
+
+        private StartedComponents startOnce() {
             FSDao dao = null;
             KVServiceImpl kvService = null;
             ClusterGrpcServer createdGrpcServer = null;
@@ -252,9 +267,7 @@ public class KVClusterImpl implements KVCluster {
                 createdGrpcServer = new ClusterGrpcServer(grpcPort, kvService);
                 createdGrpcServer.start();
                 kvService.start();
-
-                grpcServer = createdGrpcServer;
-                service = kvService;
+                return new StartedComponents(kvService, createdGrpcServer);
             } catch (java.io.IOException e) {
                 cleanupFailedStart(kvService, createdGrpcServer, dao);
                 throw new java.io.UncheckedIOException("Failed to initialize node on port " + port, e);
@@ -262,6 +275,36 @@ public class KVClusterImpl implements KVCluster {
                 cleanupFailedStart(kvService, createdGrpcServer, dao);
                 throw e;
             }
+        }
+
+        private void handleStartFailure(int attempt, RuntimeException e) {
+            if (!isRetryableBindFailure(e) || attempt == START_RETRIES) {
+                throw e;
+            }
+            sleepBeforeRetry();
+        }
+
+        private void sleepBeforeRetry() {
+            try {
+                Thread.sleep(START_RETRY_DELAY_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private boolean isRetryableBindFailure(Throwable error) {
+            Throwable cause = error;
+            while (cause != null) {
+                if (cause instanceof java.net.BindException) {
+                    return true;
+                }
+                String className = cause.getClass().getName();
+                if (className.contains("NativeIoException")) {
+                    return true;
+                }
+                cause = cause.getCause();
+            }
+            return false;
         }
 
         private void cleanupFailedStart(KVServiceImpl kvService, ClusterGrpcServer createdGrpcServer, FSDao dao) {
@@ -317,6 +360,9 @@ public class KVClusterImpl implements KVCluster {
                     throw firstFailure;
                 }
             }
+        }
+
+        private record StartedComponents(KVServiceImpl service, ClusterGrpcServer grpcServer) {
         }
     }
 }

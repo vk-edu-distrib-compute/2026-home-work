@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 
 public class ClusterProxyClient implements Closeable {
     private final ConcurrentMap<String, ManagedChannel> channels = new ConcurrentHashMap<>();
@@ -45,7 +46,13 @@ public class ClusterProxyClient implements Closeable {
     @Override
     public void close() {
         for (Map.Entry<String, ManagedChannel> entry : channels.entrySet()) {
-            entry.getValue().shutdownNow();
+            ManagedChannel channel = entry.getValue();
+            channel.shutdownNow();
+            try {
+                channel.awaitTermination(1, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         channels.clear();
         stubs.clear();
