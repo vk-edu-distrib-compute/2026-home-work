@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 
 public final class Main {
     private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
+    private static final String LEADER_PREFIX = " leader=";
 
     private Main() {
         throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
@@ -50,15 +51,21 @@ public final class Main {
         testFlapping(cluster, n);
 
         Thread.sleep(2000);
-        LOGGER.info("\n=== Final state ===");
-        cluster.nodeIds().forEach(id -> LOGGER.info("Node " + id + " leader=" + cluster.getNode(id).getLeaderId()));
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("\n=== Final state ===");
+            cluster.nodeIds().forEach(id -> LOGGER.info("Node "
+                    + id + LEADER_PREFIX + cluster.getNode(id).getLeaderId()));
+        }
 
         cluster.shutdownAll();
     }
 
     private static void printInitialState(Cluster cluster) {
-        LOGGER.info("=== Initial stable state ===");
-        cluster.nodeIds().forEach(id -> LOGGER.info("Node " + id + " leader=" + cluster.getNode(id).getLeaderId()));
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("=== Initial stable state ===");
+            cluster.nodeIds().forEach(id -> LOGGER.info("Node "
+                    + id + LEADER_PREFIX + cluster.getNode(id).getLeaderId()));
+        }
     }
 
     private static void testLeaderCrash(Cluster cluster, int leaderId) throws InterruptedException {

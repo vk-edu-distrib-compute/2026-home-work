@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.artttnik;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 
 public class Monitor implements Runnable {
     private static final Logger LOGGER = Logger.getLogger(Monitor.class.getName());
@@ -26,12 +27,14 @@ public class Monitor implements Runnable {
     @Override
     public void run() {
         while (running.get()) {
-            StringBuilder sb = new StringBuilder(128);
-            sb.append("---- CLUSTER STATUS ----\n");
-            for (int id : cluster.nodeIds()) {
-                sb.append(formatNodeLine(id)).append('\n');
+            if (LOGGER.isLoggable(Level.INFO)) {
+                StringBuilder sb = new StringBuilder(128);
+                sb.append("---- CLUSTER STATUS ----\n");
+                for (int id : cluster.nodeIds()) {
+                    sb.append(formatNodeLine(id)).append('\n');
+                }
+                LOGGER.info(sb.toString());
             }
-            LOGGER.info(sb.toString());
             try {
                 Thread.sleep(intervalMs);
             } catch (InterruptedException e) {

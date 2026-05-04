@@ -92,8 +92,10 @@ public class Node extends Thread {
     }
 
     private void log(String s) {
-        String status = alive ? "UP" : "DOWN";
-        LOGGER.info(System.currentTimeMillis() + " [" + getName() + "] " + status + " " + s);
+        if (LOGGER.isLoggable(Level.INFO)) {
+            String status = alive ? "UP" : "DOWN";
+            LOGGER.info(System.currentTimeMillis() + " [" + getName() + "] " + status + " " + s);
+        }
     }
 
     @Override
@@ -145,35 +147,47 @@ public class Node extends Thread {
 
     private void handleMessage(Message m) {
         switch (m.type) {
-            case PING: {
-                if (alive && leaderId != null && leaderId == id) {
-                    cluster.send(id, m.fromId, Message.answer(id));
-                }
+            case PING:
+                handlePing(m);
                 break;
-            }
-            case ELECT: {
-                if (alive && this.id > m.fromId) {
-                    cluster.send(id, m.fromId, Message.answer(id));
-                    log("Received ELECT from " + m.fromId + ", answered and starting election");
-                    startElection();
-                }
+            case ELECT:
+                handleElect(m);
                 break;
-            }
-            case ANSWER: {
-                electionLock.lock();
-                try {
-                    answerArrived.signalAll();
-                } finally {
-                    electionLock.unlock();
-                }
+            case ANSWER:
+                handleAnswer();
                 break;
-            }
-            case VICTORY: {
-                this.leaderId = m.leaderId;
-                log("Accepted VICTORY from " + m.fromId + ", leader=" + m.leaderId);
+            case VICTORY:
+                handleVictory(m);
                 break;
-            }
         }
+    }
+
+    private void handlePing(Message m) {
+        if (alive && leaderId != null && leaderId == id) {
+            cluster.send(id, m.fromId, Message.answer(id));
+        }
+    }
+
+    private void handleElect(Message m) {
+        if (alive && this.id > m.fromId) {
+            cluster.send(id, m.fromId, Message.answer(id));
+            log("Received ELECT from " + m.fromId + ", answered and starting election");
+            startElection();
+        }
+    }
+
+    private void handleAnswer() {
+        electionLock.lock();
+        try {
+            answerArrived.signalAll();
+        } finally {
+            electionLock.unlock();
+        }
+    }
+
+    private void handleVictory(Message m) {
+        this.leaderId = m.leaderId;
+        log("Accepted VICTORY from " + m.fromId + ", leader=" + m.leaderId);
     }
 
     private void sendPingToLeader() {
