@@ -22,10 +22,7 @@ public final class Main {
         long electionTimeout = 800;
 
         Cluster cluster = new Cluster();
-        for (int i = 1; i <= n; i++) {
-            Node node = new Node(i, cluster, failProb, tick, pingInterval, electionTimeout);
-            cluster.addNode(node);
-        }
+        initializeCluster(cluster, n, failProb, tick, pingInterval, electionTimeout);
 
         cluster.startAll();
         Monitor monitor = new Monitor(cluster, 500);
@@ -39,6 +36,15 @@ public final class Main {
             LOGGER.log(Level.WARNING, "Main interrupted", e);
         } finally {
             cleanupMonitor(monitor, monitorThread);
+        }
+    }
+
+    @SuppressWarnings("java:S1149")
+    private static void initializeCluster(Cluster cluster, int n,
+                                          double failProb, long tick, long pingInterval, long electionTimeout) {
+        for (int i = 1; i <= n; i++) {
+            Node node = new Node(i, cluster, failProb, tick, pingInterval, electionTimeout);
+            cluster.addNode(node);
         }
     }
 
