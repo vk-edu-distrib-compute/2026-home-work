@@ -73,6 +73,17 @@ public class Node extends Thread {
     public void forceUp() {
         alive = true;
         log("FORCED UP");
+        new Thread(() -> {
+            try {
+                try {
+                    sleep(50 + rng.nextInt(100));
+                } catch (InterruptedException e) {
+                    currentThread().interrupt();
+                }
+            } finally {
+                startElection();
+            }
+        }, "Node-recover-election-" + id).start();
     }
 
     public void shutdownNode() {
