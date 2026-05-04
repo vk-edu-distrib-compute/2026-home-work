@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.nihuaway00;
+package company.vk.edu.distrib.compute.nihuaway00.storage;
 
 import company.vk.edu.distrib.compute.Dao;
 import org.slf4j.Logger;
