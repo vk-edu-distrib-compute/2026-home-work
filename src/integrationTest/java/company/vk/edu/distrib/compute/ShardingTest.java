@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.Parameter;
 import org.junit.jupiter.params.ParameterizedClass;
@@ -9,16 +8,21 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
-@Disabled // todo remove the line to enable tests
 @ParameterizedClass
 @ArgumentsSource(KVClusterFactoryArgumentsProvider.class)
-public class ShardingTest extends TestBase {
+class ShardingTest extends TestBase {
     static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
-    static final int CLUSTER_SIZE = 2; // should be >= 2
+    static final int CLUSTER_SIZE = 2;
 
     @Parameter
     KVClusterFactory kvClusterFactory;
@@ -43,7 +47,7 @@ public class ShardingTest extends TestBase {
                     assertEquals(201, upsert(endpoint, key, value).statusCode());
 
                     for (String readEndpoint : endpoints) {
-                        final HttpResponse<byte[]> response = get(readEndpoint, key);
+                        HttpResponse<byte[]> response = get(readEndpoint, key);
                         assertEquals(200, response.statusCode());
                         assertArrayEquals(value, response.body());
                     }
@@ -61,15 +65,15 @@ public class ShardingTest extends TestBase {
             KVCluster storage = kvClusterFactory.create(ports);
             storage.start();
             try {
-                final String key = randomKey();
-                final byte[] value = new byte[0];
+                String key = randomKey();
+                byte[] value = new byte[0];
                 List<String> endpoints = storage.getEndpoints();
 
                 for (String endpoint : endpoints) {
                     assertEquals(201, upsert(endpoint, key, value).statusCode());
 
                     for (String readEndpoint : endpoints) {
-                        final HttpResponse<byte[]> response = get(readEndpoint, key);
+                        HttpResponse<byte[]> response = get(readEndpoint, key);
                         assertEquals(200, response.statusCode());
                         assertArrayEquals(value, response.body());
                     }
@@ -87,17 +91,16 @@ public class ShardingTest extends TestBase {
             KVCluster storage = kvClusterFactory.create(ports);
             storage.start();
             try {
-                final String key = randomKey();
-                final byte[] value1 = randomValue();
-                final byte[] value2 = randomValue();
+                String key = randomKey();
+                byte[] value1 = randomValue();
+                byte[] value2 = randomValue();
                 List<String> endpoints = storage.getEndpoints();
 
                 assertEquals(201, upsert(endpoints.get(0), key, value1).statusCode());
-
                 assertEquals(201, upsert(endpoints.get(1), key, value2).statusCode());
 
                 for (String endpoint : endpoints) {
-                    final HttpResponse<byte[]> response = get(endpoint, key);
+                    HttpResponse<byte[]> response = get(endpoint, key);
                     assertEquals(200, response.statusCode());
                     assertArrayEquals(value2, response.body());
                 }
@@ -114,17 +117,16 @@ public class ShardingTest extends TestBase {
             KVCluster storage = kvClusterFactory.create(ports);
             storage.start();
             try {
-                final String key = randomKey();
-                final byte[] value = randomValue();
-                final byte[] empty = new byte[0];
+                String key = randomKey();
+                byte[] value = randomValue();
+                byte[] empty = new byte[0];
                 List<String> endpoints = storage.getEndpoints();
 
                 assertEquals(201, upsert(endpoints.get(0), key, value).statusCode());
-
                 assertEquals(201, upsert(endpoints.get(1), key, empty).statusCode());
 
                 for (String endpoint : endpoints) {
-                    final HttpResponse<byte[]> response = get(endpoint, key);
+                    HttpResponse<byte[]> response = get(endpoint, key);
                     assertEquals(200, response.statusCode());
                     assertArrayEquals(empty, response.body());
                 }
@@ -139,11 +141,10 @@ public class ShardingTest extends TestBase {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             List<Integer> ports = generateRandomPorts();
             KVCluster storage = kvClusterFactory.create(ports);
-
             storage.start();
             try {
-                final String key = randomKey();
-                final byte[] value = randomValue();
+                String key = randomKey();
+                byte[] value = randomValue();
                 List<String> endpoints = storage.getEndpoints();
 
                 for (String endpoint : endpoints) {
@@ -168,20 +169,18 @@ public class ShardingTest extends TestBase {
             KVCluster storage = kvClusterFactory.create(ports);
             storage.start();
             try {
-                final String key1 = randomKey();
-                final byte[] value1 = randomValue();
-                final String key2 = randomKey();
-                final byte[] value2 = randomValue();
+                String key1 = randomKey();
+                byte[] value1 = randomValue();
+                String key2 = randomKey();
+                byte[] value2 = randomValue();
                 List<String> endpoints = storage.getEndpoints();
 
                 assertEquals(201, upsert(endpoints.get(0), key1, value1).statusCode());
-
                 for (String endpoint : endpoints) {
                     assertArrayEquals(value1, get(endpoint, key1).body());
                 }
 
                 assertEquals(201, upsert(endpoints.get(1), key2, value2).statusCode());
-
                 for (String endpoint : endpoints) {
                     assertArrayEquals(value1, get(endpoint, key1).body());
                     assertArrayEquals(value2, get(endpoint, key2).body());
@@ -190,7 +189,6 @@ public class ShardingTest extends TestBase {
                 for (String endpoint : endpoints) {
                     assertEquals(202, delete(endpoint, key1).statusCode());
                 }
-
                 for (String endpoint : endpoints) {
                     assertEquals(404, get(endpoint, key1).statusCode());
                     assertArrayEquals(value2, get(endpoint, key2).body());
@@ -199,7 +197,6 @@ public class ShardingTest extends TestBase {
                 for (String endpoint : endpoints) {
                     assertEquals(202, delete(endpoint, key2).statusCode());
                 }
-
                 for (String endpoint : endpoints) {
                     assertEquals(404, get(endpoint, key1).statusCode());
                     assertEquals(404, get(endpoint, key2).statusCode());
@@ -231,8 +228,8 @@ public class ShardingTest extends TestBase {
                 for (String endpoint : endpoints) {
                     storage.start(endpoint);
 
-                    HttpResponse<byte[]> httpResponse = get(endpoint, key);
-                    if (200 == httpResponse.statusCode() && Arrays.equals(value, httpResponse.body())) {
+                    HttpResponse<byte[]> response = get(endpoint, key);
+                    if (200 == response.statusCode() && Arrays.equals(value, response.body())) {
                         successCount++;
                     }
 

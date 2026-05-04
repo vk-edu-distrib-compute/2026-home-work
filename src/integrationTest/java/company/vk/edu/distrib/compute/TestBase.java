@@ -63,7 +63,12 @@ abstract class TestBase {
     }
 
     static String url(String endpoint, String id) {
-        return endpoint + "/v0/entity?id=" + id;
+        String httpEndpoint = endpoint;
+        int queryStart = endpoint.indexOf('?');
+        if (queryStart >= 0) {
+            httpEndpoint = endpoint.substring(0, queryStart);
+        }
+        return httpEndpoint + "/v0/entity?id=" + id;
     }
 
     static String url(String endpoint, String id, Integer ack) {
