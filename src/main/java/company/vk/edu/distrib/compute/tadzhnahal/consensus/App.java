@@ -19,6 +19,14 @@ public final class App {
             cluster.start();
             cluster.printState();
 
+            LOG.log(Logger.Level.INFO, "demo: node 1 sends PING to node 2");
+            cluster.sendMessage(1, 2, MessageType.PING);
+
+            TimeUnit.MILLISECONDS.sleep(DEMO_DELAY_MS);
+
+            LOG.log(Logger.Level.INFO, "demo: node 3 sends ELECT to node 5");
+            cluster.sendMessage(3, 5, MessageType.ELECT);
+
             TimeUnit.MILLISECONDS.sleep(DEMO_DELAY_MS);
 
             cluster.printState();

@@ -20,6 +20,10 @@ public class Cluster {
         for (int i = 1; i <= nodeCount; i++) {
             nodes.add(new Node(i));
         }
+
+        for (Node node : nodes) {
+            node.setClusterNodes(nodes);
+        }
     }
 
     public List<Node> getNodes() {
@@ -60,6 +64,17 @@ public class Cluster {
         LOG.log(Logger.Level.INFO, "cluster stopped");
     }
 
+    public void sendMessage(int fromId, int toId, MessageType type) {
+        Node sender = findNode(fromId);
+
+        if (sender == null) {
+            LOG.log(Logger.Level.WARNING, "cluster cannot find sender node " + fromId);
+            return;
+        }
+
+        sender.sendMessage(toId, type);
+    }
+
     public void printState() {
         LOG.log(Logger.Level.INFO, "cluster state:");
 
@@ -72,6 +87,16 @@ public class Cluster {
                             + " | inbox=" + node.getInboxSize()
             );
         }
+    }
+
+    private Node findNode(int nodeId) {
+        for (Node node : nodes) {
+            if (node.getNodeId() == nodeId) {
+                return node;
+            }
+        }
+
+        return null;
     }
 
     private void waitNodes() {
