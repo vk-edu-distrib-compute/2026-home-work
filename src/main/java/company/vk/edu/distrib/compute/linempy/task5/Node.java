@@ -10,6 +10,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Класс Node реализует логику узла в распределенной системе с использованием алгоритма Bully.
+ * Включает механизмы детекции отказов, проведения выборов и логирования времени работы алгоритма.
+ */
 public class Node implements Runnable {
     private static final String RESET = "\u001B[0m";
     private static final String RED = "\u001B[31m";
@@ -24,14 +28,14 @@ public class Node implements Runnable {
     private final AtomicBoolean active = new AtomicBoolean(true);
     private final AtomicBoolean electionInProgress = new AtomicBoolean(false);
 
-    private final AtomicLong lastPingSent = new AtomicLong(0);
     private final AtomicLong lastAnswerReceived = new AtomicLong(System.currentTimeMillis());
     private final AtomicLong lastElectionTime = new AtomicLong(0);
+    private final AtomicLong electionStartTime = new AtomicLong(0);
 
-    private final long pingInterval = 3000;
-    private final long pingTimeout = 5000;
-    private final long electionTimeout = 2000;
-    private final long minElectionInterval = 3000;
+    private static final long PING_INTERVAL = 3000;
+    private static final long PING_TIMEOUT = 5000;
+    private static final long ELECTION_TIMEOUT = 2000;
+    private static final long MIN_ELECTION_INTERVAL = 3000;
 
     private volatile int currentLeaderId = -1;
     private volatile ScheduledFuture<?> electionTimeoutTask;
@@ -61,7 +65,7 @@ public class Node implements Runnable {
     public void setStatus(boolean status) {
         if (status && !active.get()) {
             active.set(true);
-            log("RESTORE", "Node recovered and rejoins the cluster.", GREEN);
+            log("RESTORE", "Node recovered and rejoined the cluster.", GREEN);
             startElection();
         } else if (!status && active.get()) {
             active.set(false);
@@ -78,7 +82,7 @@ public class Node implements Runnable {
 
     @Override
     public void run() {
-        scheduler.scheduleAtFixedRate(this::pingLeader, 2, pingInterval / 1000, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::pingLeader, 2000, PING_INTERVAL, TimeUnit.MILLISECONDS);
 
         try {
             while (!Thread.currentThread().isInterrupted()) {
@@ -126,7 +130,13 @@ public class Node implements Runnable {
         this.electionInProgress.set(false);
         cancelElectionTimeout();
         lastAnswerReceived.set(System.currentTimeMillis());
-        log("NEW LEADER", "Node " + msg.senderId() + " is now the leader.", PURPLE);
+
+        long duration = (electionStartTime.get() > 0) ? (System.currentTimeMillis() - electionStartTime.get()) : 0;
+        electionStartTime.set(0);
+
+        String logMsg = String.format("Node %d is now the leader. (Election duration: %d ms)",
+                msg.senderId(), duration);
+        log("NEW LDR", logMsg, PURPLE);
     }
 
     private void handlePing(Message msg) {
@@ -139,25 +149,28 @@ public class Node implements Runnable {
         if (!active.get()) return;
 
         long now = System.currentTimeMillis();
-        if (now - lastElectionTime.get() < minElectionInterval) {
-            log("ELECTION", "Too frequent elections, skipping.", YELLOW);
+        if (now - lastElectionTime.get() < MIN_ELECTION_INTERVAL) {
+            log("ELECT", "Too frequent elections, skipping.", YELLOW);
             return;
         }
-        lastElectionTime.set(now);
 
         if (electionInProgress.get()) return;
 
-        log("ELECTION", "Starting leader election (Bully algorithm)...", YELLOW);
+        log("ELECT", "Starting leader election (Bully algorithm)...", YELLOW);
+        electionStartTime.set(now);
+        lastElectionTime.set(now);
         electionInProgress.set(true);
         cancelElectionTimeout();
 
         boolean higherExists = false;
         for (Integer otherId : cluster.keySet()) {
-            Node otherNode = cluster.get(otherId);
-            if (otherId > this.id && otherNode != null && otherNode.isActive()) {
-                higherExists = true;
-                sendTo(otherId, new Message(MessageType.ELECT, this.id));
-                log("ELECT", "Sent ELECT to node " + otherId, CYAN);
+            if (otherId > this.id) {
+                Node otherNode = cluster.get(otherId);
+                if (otherNode != null && otherNode.isActive()) {
+                    higherExists = true;
+                    sendTo(otherId, new Message(MessageType.ELECT, this.id));
+                    log("ELECT", "Sent ELECT to node " + otherId, CYAN);
+                }
             }
         }
 
@@ -166,10 +179,10 @@ public class Node implements Runnable {
         } else {
             electionTimeoutTask = scheduler.schedule(() -> {
                 if (active.get() && electionInProgress.get()) {
-                    log("ELECTION", "Higher nodes did not respond. Becoming leader.", YELLOW);
+                    log("TIMEOUT", "Higher nodes did not respond. Becoming leader.", YELLOW);
                     becomeLeader();
                 }
-            }, electionTimeout, TimeUnit.MILLISECONDS);
+            }, ELECTION_TIMEOUT, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -181,7 +194,11 @@ public class Node implements Runnable {
         cancelElectionTimeout();
         lastAnswerReceived.set(System.currentTimeMillis());
 
-        log("LEADER", "I AM THE NEW LEADER!", GREEN);
+        long duration = System.currentTimeMillis() - electionStartTime.get();
+        electionStartTime.set(0);
+
+        String logMsg = String.format("I AM THE NEW LEADER! (Election duration: %d ms)", duration);
+        log("LEADER", logMsg, GREEN);
 
         for (Node node : cluster.values()) {
             if (node.getId() != this.id && node.isActive()) {
@@ -206,8 +223,8 @@ public class Node implements Runnable {
         }
 
         long now = System.currentTimeMillis();
-        if (now - lastAnswerReceived.get() > pingTimeout) {
-            log("WARN", "Leader " + currentLeaderId + " did not respond to PING!", RED);
+        if (now - lastAnswerReceived.get() > PING_TIMEOUT) {
+            log("WARN", "Leader " + currentLeaderId + " timed out (no PING response)!", RED);
             startElection();
         } else {
             sendTo(currentLeaderId, new Message(MessageType.PING, this.id));
@@ -229,7 +246,7 @@ public class Node implements Runnable {
     }
 
     public void stop() {
-        log("SHUTDOWN", "Graceful shutdown...", RED);
+        log("SHUTDOWN", "Graceful shutdown initiated...", RED);
         if (id == currentLeaderId) {
             for (Node node : cluster.values()) {
                 if (node.getId() != this.id && node.isActive()) {
