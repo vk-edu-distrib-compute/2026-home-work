@@ -1,9 +1,13 @@
 package company.vk.edu.distrib.compute.wedwincode.task5;
 
+import company.vk.edu.distrib.compute.wedwincode.task5.node.Node;
+import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
+
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+@SuppressWarnings("PMD.SystemPrintln")
 public final class ClusterLogger {
     private static final String RESET = "\u001B[0m";
     private static final String RED = "\u001B[31m";
@@ -29,18 +33,18 @@ public final class ClusterLogger {
     }
 
     public static synchronized void clusterSnapshot(Map<Integer, Node> cluster) {
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder = new StringBuilder(100);
 
-        builder.append("\n");
-        builder.append(GRAY)
+        builder.append('\n')
+                .append(GRAY)
                 .append("========== CLUSTER SNAPSHOT ")
                 .append(LocalTime.now().format(TIME_FORMAT))
                 .append(" ==========")
                 .append(RESET)
-                .append("\n");
+                .append('\n');
 
         for (Node node : cluster.values()) {
-            builder.append(formatNode(node)).append("\n");
+            builder.append(formatNode(node)).append('\n');
         }
 
         builder.append(GRAY)
@@ -48,6 +52,15 @@ public final class ClusterLogger {
                 .append(RESET);
 
         System.out.println(builder);
+    }
+
+    public static synchronized void info(String message) {
+        String time = LocalTime.now().format(TIME_FORMAT);
+
+        System.out.println(
+                GRAY + "[" + time + "] " + RESET
+                        + message
+        );
     }
 
     private static String formatNode(Node node) {

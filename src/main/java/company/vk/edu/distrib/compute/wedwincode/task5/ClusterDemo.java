@@ -1,12 +1,20 @@
 package company.vk.edu.distrib.compute.wedwincode.task5;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import company.vk.edu.distrib.compute.wedwincode.task5.node.Node;
+import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 
-public class ClusterDemo {
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public final class ClusterDemo {
+
+    private ClusterDemo() {
+        throw new UnsupportedOperationException("Utility class");
+    }
+
     static void main() {
         try {
-            Map<Integer, Node> cluster = new LinkedHashMap<>();
+            Map<Integer, Node> cluster = new ConcurrentHashMap<>();
 
             for (int i = 1; i <= 5; i++) {
                 cluster.put(i, new Node(i));
@@ -26,7 +34,7 @@ public class ClusterDemo {
 
             Thread.sleep(5_000);
 
-            System.out.println("\n--- Graceful shutdown current leader ---");
+            ClusterLogger.info("\n--- Graceful shutdown current leader ---");
             Node leader = findCurrentLeader(cluster);
 
             if (leader != null) {
@@ -35,12 +43,12 @@ public class ClusterDemo {
 
             Thread.sleep(7_000);
 
-            System.out.println("\n--- Enable node 5 ---");
+            ClusterLogger.info("\n--- Enable node 5 ---");
             cluster.get(5).setEnabled(true);
 
             Thread.sleep(10_000);
 
-            System.out.println("\n--- Final cluster state ---");
+            ClusterLogger.info("\n--- Final cluster state ---");
             ClusterLogger.clusterSnapshot(cluster);
 
             clusterMonitor.stop();
@@ -49,7 +57,7 @@ public class ClusterDemo {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("thread was interrupted");
+            throw new RuntimeException("thread was interrupted", e);
         }
     }
 

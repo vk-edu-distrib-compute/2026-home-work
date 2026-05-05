@@ -1,22 +1,25 @@
 package company.vk.edu.distrib.compute.wedwincode.task5;
 
+import company.vk.edu.distrib.compute.wedwincode.task5.node.Node;
+
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClusterMonitor implements Runnable {
     private final Map<Integer, Node> cluster;
-    private volatile boolean running = true;
+    private final AtomicBoolean running = new AtomicBoolean(true);
 
     public ClusterMonitor(Map<Integer, Node> cluster) {
         this.cluster = cluster;
     }
 
     public void stop() {
-        running = false;
+        running.set(false);
     }
 
     @Override
     public void run() {
-        while (running) {
+        while (running.get()) {
             ClusterLogger.clusterSnapshot(cluster);
 
             try {

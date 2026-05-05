@@ -1,5 +1,7 @@
 package company.vk.edu.distrib.compute.wedwincode.task5;
 
+import company.vk.edu.distrib.compute.wedwincode.task5.node.Node;
+import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
