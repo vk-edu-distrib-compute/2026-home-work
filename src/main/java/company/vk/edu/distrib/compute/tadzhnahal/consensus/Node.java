@@ -47,13 +47,21 @@ public class Node extends Thread {
 
     @Override
     public void run() {
+        LOG.log(Logger.Level.INFO, getName() + " started");
+
         while (!isInterrupted()) {
             try {
                 Message message = inbox.take();
-                LOG.log(Logger.Level.INFO, getName() + " got " + message);
+                handleMessage(message);
             } catch (InterruptedException e) {
                 interrupt();
             }
         }
+
+        LOG.log(Logger.Level.INFO, getName() + " stopped");
+    }
+
+    private void handleMessage(Message message) {
+        LOG.log(Logger.Level.INFO, getName() + " got " + message);
     }
 }
