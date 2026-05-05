@@ -136,21 +136,19 @@ public final class ConsensusMain {
         int actual = cluster.getConsensusLeader();
 
         if (actual == -2) {
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info("[FAIL] Split-brain detected – two or more nodes believe they are leader!");
-            }
+            logLevelInfo("[FAIL] Split-brain detected – two or more nodes believe they are leader!");
         } else if (actual < 0) {
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info("[WARN] No consensus leader found yet (election still in progress?)");
-            }
+            logLevelInfo("[WARN] No consensus leader found yet (election still in progress?)");
         } else if (expectedLeaderId > 0 && actual != expectedLeaderId) {
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info(String.format("[WARN] Leader is node %d, expected node %d%n", actual, expectedLeaderId));
-            }
+            logLevelInfo(String.format("[WARN] Leader is node %d, expected node %d%n", actual, expectedLeaderId));
         } else {
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info(String.format("[OK]   Single leader confirmed: node %d%n", actual));
-            }
+            logLevelInfo(String.format("[OK]   Single leader confirmed: node %d%n", actual));
+        }
+    }
+
+    private static void logLevelInfo(final String message) {
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info(message);
         }
     }
 
