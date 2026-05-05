@@ -5,11 +5,12 @@ import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -118,8 +119,17 @@ class ClusterTest {
 
     private record TestCluster(Map<Integer, Node> nodes, List<Thread> threads) {
 
+        private static final class TestClusterException extends RuntimeException {
+            @Serial
+            private static final long serialVersionUID = 1504190869763212296L;
+
+            private TestClusterException(Throwable cause) {
+                super(cause);
+            }
+        }
+
         static TestCluster start(int size) {
-                Map<Integer, Node> nodes = new LinkedHashMap<>();
+                Map<Integer, Node> nodes = new ConcurrentHashMap<>();
                 for (int i = 1; i <= size; i++) {
                     Node node = new Node(i);
                     node.setRandomFailuresEnabled(false);
@@ -223,7 +233,7 @@ class ClusterTest {
                     Thread.sleep(millis);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw new RuntimeException(e);
+                    throw new TestClusterException(e);
                 }
             }
         }

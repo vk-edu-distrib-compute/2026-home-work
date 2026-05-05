@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute.wedwincode.task5;
 
+import company.vk.edu.distrib.compute.wedwincode.task5.node.ClusterException;
 import company.vk.edu.distrib.compute.wedwincode.task5.node.Node;
 import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 
@@ -57,7 +58,7 @@ public final class ClusterDemo {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("thread was interrupted", e);
+            throw new ClusterException("thread was interrupted", e);
         }
     }
 

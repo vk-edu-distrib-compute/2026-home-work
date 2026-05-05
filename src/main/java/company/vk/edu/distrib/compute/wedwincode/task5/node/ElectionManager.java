@@ -32,7 +32,13 @@ final class ElectionManager {
         electionInProgress.set(false);
     }
 
-    synchronized void startElection() {
+    void startElection() {
+        synchronized (this) {
+            startElectionInternal();
+        }
+    }
+
+    private void startElectionInternal() {
         if (!canStartElection()) {
             return;
         }
@@ -71,7 +77,13 @@ final class ElectionManager {
         }
     }
 
-    synchronized void forceBecomeLeaderAfterTransfer() {
+    void forceBecomeLeaderAfterTransfer() {
+        synchronized (this) {
+            forceBecomeLeaderAfterTransferInternal();
+        }
+    }
+
+    private void forceBecomeLeaderAfterTransferInternal() {
         if (!node.isAlive()) {
             return;
         }

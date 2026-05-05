@@ -9,7 +9,13 @@ final class GracefulShutdownManager {
         this.node = node;
     }
 
-    synchronized void gracefulShutdown() {
+    void gracefulShutdown() {
+        synchronized (this) {
+            gracefulShutdownInternal();
+        }
+    }
+
+    private void gracefulShutdownInternal() {
         if (!node.isAlive()) {
             return;
         }

@@ -9,6 +9,8 @@ import java.util.Map;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class ClusterLogger {
+    private static final Object LOCK = new Object();
+
     private static final String RESET = "\u001B[0m";
     private static final String RED = "\u001B[31m";
     private static final String GREEN = "\u001B[32m";
@@ -16,51 +18,57 @@ public final class ClusterLogger {
     private static final String BLUE = "\u001B[34m";
     private static final String GRAY = "\u001B[90m";
 
-    private static final DateTimeFormatter TIME_FORMAT =
-            DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private ClusterLogger() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
-    public static synchronized void event(int nodeId, String event) {
-        String time = LocalTime.now().format(TIME_FORMAT);
+    public static void event(int nodeId, String event) {
+        synchronized (LOCK) {
+            String time = LocalTime.now().format(TIME_FORMAT);
 
-        System.out.println(
-                GRAY + "[" + time + "] " + RESET
-                        + BLUE + "{node=" + nodeId + "} " + RESET
-                        + event
-        );
-    }
-
-    public static synchronized void clusterSnapshot(Map<Integer, Node> cluster) {
-        StringBuilder builder = new StringBuilder(100);
-
-        builder.append('\n')
-                .append(GRAY)
-                .append("========== CLUSTER SNAPSHOT ")
-                .append(LocalTime.now().format(TIME_FORMAT))
-                .append(" ==========")
-                .append(RESET)
-                .append('\n');
-
-        for (Node node : cluster.values()) {
-            builder.append(formatNode(node)).append('\n');
+            System.out.println(
+                    GRAY + "[" + time + "] " + RESET
+                            + BLUE + "{node=" + nodeId + "} " + RESET
+                            + event
+            );
         }
-
-        builder.append(GRAY)
-                .append("============================================")
-                .append(RESET);
-
-        System.out.println(builder);
     }
 
-    public static synchronized void info(String message) {
-        String time = LocalTime.now().format(TIME_FORMAT);
+    public static void clusterSnapshot(Map<Integer, Node> cluster) {
+        synchronized (LOCK) {
+            StringBuilder builder = new StringBuilder(100);
 
-        System.out.println(
-                GRAY + "[" + time + "] " + RESET
-                        + message
-        );
+            builder.append('\n')
+                    .append(GRAY)
+                    .append("========== CLUSTER SNAPSHOT ")
+                    .append(LocalTime.now().format(TIME_FORMAT))
+                    .append(" ==========")
+                    .append(RESET)
+                    .append('\n');
+
+            for (Node node : cluster.values()) {
+                builder.append(formatNode(node)).append('\n');
+            }
+
+            builder.append(GRAY)
+                    .append("============================================")
+                    .append(RESET);
+
+            System.out.println(builder);
+        }
+    }
+
+    public static void info(String message) {
+        synchronized (LOCK) {
+            String time = LocalTime.now().format(TIME_FORMAT);
+
+            System.out.println(
+                    GRAY + "[" + time + "] " + RESET
+                            + message
+            );
+        }
     }
 
     private static String formatNode(Node node) {
