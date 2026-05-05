@@ -1,65 +1,67 @@
 package company.vk.edu.distrib.compute;
 
 import company.vk.edu.distrib.compute.maryarta.consensus.Cluster;
-import org.checkerframework.checker.units.qual.C;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.Parameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
 
 public class ConsensusTest {
+    private static final Logger log = LoggerFactory.getLogger(ConsensusTest.class);
+    private static final long LEADER_WAIT_TIMEOUT_MS = 10_000;
+    private static final long POLL_INTERVAL_MS = 100;
 
     @Test
-    public void testLeaderID() throws InterruptedException {
-        List<Integer> ids = getRandomId(4);
-        int max = ids.stream().max(Integer::compareTo).get();
+    public void shouldElectMaxAvailableNodeAsLeader() throws InterruptedException {
+        List<Integer> ids = List.of(42, 75, 82, 13);
+        int maxId = maxId(ids);
+        int secondMaxId = secondMax(ids);
+        int observerNodeId = min(ids);
         Cluster cluster = new Cluster(ids);
-        Thread.sleep(10_000);
+        waitUntilLeaderIs(cluster, observerNodeId, maxId);
+        Assertions.assertEquals(maxId, cluster.nodes.get(observerNodeId).getLeaderID());
+        cluster.stopNode(maxId);
+        log.info("Node {} was stopped", maxId);
+        waitUntilLeaderIs(cluster, observerNodeId, secondMaxId);
+        Assertions.assertEquals(secondMaxId, cluster.nodes.get(observerNodeId).getLeaderID());
+        cluster.startNode(maxId);
+        log.info("Node {} was started", maxId);
+        waitUntilLeaderIs(cluster, observerNodeId, maxId);
+        Assertions.assertEquals(maxId,cluster.nodes.get(observerNodeId).getLeaderID());
+    }
 
-        Assertions.assertEquals(max, cluster.nodes.get(ids.getFirst()).getLeaderID());
+    private void waitUntilLeaderIs(Cluster cluster, int observerNodeId, int expectedLeaderId) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + LEADER_WAIT_TIMEOUT_MS;
+        while (System.currentTimeMillis() < deadline) {
+            int actualLeaderId = cluster.nodes.get(observerNodeId).getLeaderID();
+            if (actualLeaderId == expectedLeaderId) {
+                return;
+            }
+            Thread.sleep(POLL_INTERVAL_MS);
+        }
+    }
 
-        cluster.stopNode(max);
+    private int maxId(List<Integer> ids){
+        return ids.stream()
+                .max(Integer::compareTo)
+                .orElseThrow();
+    }
 
-        Logger log = LoggerFactory.getLogger("node");
-        log.info("node {} was stopped", max);
-        Thread.sleep(20_000);
-        int min = ids.stream().min(Integer::compareTo).get();
-        int secondMax = ids.stream()
+    private int secondMax(List<Integer> ids) {
+        return ids.stream()
                 .distinct()
                 .sorted(Comparator.reverseOrder())
                 .skip(1)
                 .findFirst()
                 .orElseThrow();
-        log.info("node {} min ", min);
-
-        Assertions.assertEquals(secondMax, cluster.nodes.get(min).getLeaderID());
-
-        cluster.startNode(max);
-        log.info("node {} was started", max);
-        Thread.sleep(10_000);
-        Assertions.assertEquals(max, cluster.nodes.get(ids.getFirst()).getLeaderID());
+    }
+    private int min(List<Integer> ids) {
+        return ids.stream()
+                .min(Integer::compareTo)
+                .orElseThrow();
 
     }
-//    @Test
-//    public void randomNodeStop(){
-//
-//    }
-
-
-    private List<Integer> getRandomId(int n){
-        Random random = new Random();
-        List<Integer> ids = new ArrayList<>();
-        for(int i = 0; i<n; i++){
-            ids.add(random.nextInt(100));
-        }
-        return ids;
-    }
-
-
 }
