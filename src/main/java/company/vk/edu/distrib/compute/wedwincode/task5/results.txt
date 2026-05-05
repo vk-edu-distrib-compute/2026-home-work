@@ -1,0 +1,119 @@
+========== CLUSTER SNAPSHOT 10:47:24 ==========
+Node 1 | status=FOLLOWER | leader=-1
+Node 2 | status=FOLLOWER | leader=-1
+Node 3 | status=FOLLOWER | leader=-1
+Node 4 | status=FOLLOWER | leader=-1
+Node 5 | status=FOLLOWER | leader=-1
+============================================
+[10:47:24] {node=2} started election
+[10:47:24] {node=5} started election
+[10:47:24] {node=1} started election
+[10:47:24] {node=3} started election
+[10:47:24] {node=4} started election
+[10:47:24] {node=1} got ANSWER from higher node 3
+[10:47:24] {node=2} got ANSWER from higher node 5
+[10:47:24] {node=3} got ANSWER from higher node 5
+[10:47:24] {node=4} got ANSWER from higher node 5
+[10:47:24] {node=1} got ANSWER from higher node 5
+[10:47:24] {node=2} got ANSWER from higher node 3
+[10:47:24] {node=3} got ANSWER from higher node 4
+[10:47:24] {node=1} got ANSWER from higher node 4
+[10:47:24] {node=2} got ANSWER from higher node 4
+[10:47:24] {node=1} got ANSWER from higher node 2
+[10:47:25] {node=5} became LEADER
+[10:47:25] {node=3} accepted leader 5
+[10:47:25] {node=1} accepted leader 5
+[10:47:25] {node=4} accepted leader 5
+[10:47:25] {node=2} accepted leader 5
+
+========== CLUSTER SNAPSHOT 10:47:27 ==========
+Node 1 | status=FOLLOWER | leader=5
+Node 2 | status=FOLLOWER | leader=5
+Node 3 | status=FOLLOWER | leader=5
+Node 4 | status=FOLLOWER | leader=5
+Node 5 | status=LEADER | leader=5
+============================================
+
+--- Graceful shutdown current leader ---
+[10:47:29] {node=5} requested graceful shutdown
+[10:47:29] {node=5} transferring leadership to node 4
+[10:47:29] {node=4} became LEADER by graceful transfer
+[10:47:29] {node=5} was manually disabled
+[10:47:29] {node=3} accepted leader 4
+[10:47:29] {node=1} accepted leader 4
+[10:47:29] {node=2} accepted leader 4
+
+========== CLUSTER SNAPSHOT 10:47:29 ==========
+Node 1 | status=FOLLOWER | leader=4
+Node 2 | status=FOLLOWER | leader=4
+Node 3 | status=FOLLOWER | leader=4
+Node 4 | status=LEADER | leader=4
+Node 5 | status=DOWN | leader=-1
+============================================
+
+========== CLUSTER SNAPSHOT 10:47:32 ==========
+Node 1 | status=FOLLOWER | leader=4
+Node 2 | status=FOLLOWER | leader=4
+Node 3 | status=FOLLOWER | leader=4
+Node 4 | status=LEADER | leader=4
+Node 5 | status=DOWN | leader=-1
+============================================
+
+========== CLUSTER SNAPSHOT 10:47:34 ==========
+Node 1 | status=FOLLOWER | leader=4
+Node 2 | status=FOLLOWER | leader=4
+Node 3 | status=FOLLOWER | leader=4
+Node 4 | status=LEADER | leader=4
+Node 5 | status=DOWN | leader=-1
+============================================
+
+--- Enable node 5 ---
+[10:47:36] {node=5} was manually enabled
+[10:47:36] {node=5} started election
+
+========== CLUSTER SNAPSHOT 10:47:37 ==========
+Node 1 | status=FOLLOWER | leader=4
+Node 2 | status=FOLLOWER | leader=4
+Node 3 | status=FOLLOWER | leader=4
+Node 4 | status=LEADER | leader=4
+Node 5 | status=FOLLOWER | leader=-1
+============================================
+[10:47:37] {node=5} became LEADER
+[10:47:37] {node=1} accepted leader 5
+[10:47:37] {node=3} accepted leader 5
+[10:47:37] {node=4} accepted leader 5
+[10:47:37] {node=2} accepted leader 5
+
+========== CLUSTER SNAPSHOT 10:47:39 ==========
+Node 1 | status=FOLLOWER | leader=5
+Node 2 | status=FOLLOWER | leader=5
+Node 3 | status=FOLLOWER | leader=5
+Node 4 | status=FOLLOWER | leader=5
+Node 5 | status=LEADER | leader=5
+============================================
+
+========== CLUSTER SNAPSHOT 10:47:42 ==========
+Node 1 | status=FOLLOWER | leader=5
+Node 2 | status=FOLLOWER | leader=5
+Node 3 | status=FOLLOWER | leader=5
+Node 4 | status=FOLLOWER | leader=5
+Node 5 | status=LEADER | leader=5
+============================================
+
+========== CLUSTER SNAPSHOT 10:47:44 ==========
+Node 1 | status=FOLLOWER | leader=5
+Node 2 | status=FOLLOWER | leader=5
+Node 3 | status=FOLLOWER | leader=5
+Node 4 | status=FOLLOWER | leader=5
+Node 5 | status=LEADER | leader=5
+============================================
+
+--- Final cluster state ---
+
+========== CLUSTER SNAPSHOT 10:47:46 ==========
+Node 1 | status=FOLLOWER | leader=5
+Node 2 | status=FOLLOWER | leader=5
+Node 3 | status=FOLLOWER | leader=5
+Node 4 | status=FOLLOWER | leader=5
+Node 5 | status=LEADER | leader=5
+============================================
