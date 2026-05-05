@@ -148,9 +148,10 @@ public class Node extends Thread {
             electionLock.unlock();
         }
 
+        var msg = new Message(MessageType.ELECT, id);
         for (Node node : allNodes) {
             if (node.id > id) {
-                node.send(new Message(MessageType.ELECT, id));
+                node.send(msg);
             }
         }
 
