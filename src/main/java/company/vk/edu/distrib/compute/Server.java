@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute;
 
 import module java.base;
-import company.vk.edu.distrib.compute.dummy.DummyKVServiceFactory;
 import company.vk.edu.distrib.compute.maryarta.KVClusterFactoryImpl;
 import company.vk.edu.distrib.compute.maryarta.KVServiceFactoryImpl;
 import org.slf4j.LoggerFactory;

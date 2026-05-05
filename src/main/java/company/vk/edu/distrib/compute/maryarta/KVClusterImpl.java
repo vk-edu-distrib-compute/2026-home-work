@@ -7,7 +7,6 @@ import company.vk.edu.distrib.compute.maryarta.sharding.RendezvousHashing;
 import company.vk.edu.distrib.compute.maryarta.sharding.ShardingStrategy;
 import company.vk.edu.distrib.compute.maryarta.sharding.ShardedKVServiceImpl;
 
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;

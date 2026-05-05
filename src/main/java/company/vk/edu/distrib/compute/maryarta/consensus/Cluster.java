@@ -4,43 +4,35 @@ import java.util.*;
 
 public class Cluster {
     public final Map<Integer, Node> nodes;
-    private List<Integer> ids;
+    private final List<Integer> nodeIds;
 
-    public Cluster(List<Integer> ids){
-        this.ids = ids;
+    public Cluster(List<Integer> nodeIds) {
+        this.nodeIds = nodeIds;
         nodes = new HashMap<>();
-        create();
-        start();
+        createNodes();
     }
 
-    public Cluster(){
-        ids = new ArrayList<>(Arrays.asList(1,2,3,4,5));
-        nodes = new HashMap<>();
-        create();
-        start();
-    }
-
-    private void create(){
-        for(int i: ids){
-            Node node = new Node(nodes, i);
-            nodes.put(i, node);
+    private void createNodes() {
+        for (int nodeId : nodeIds) {
+            Node node = new Node(nodes, nodeId);
+            nodes.put(nodeId, node);
         }
     }
 
-    private void start(){
-        for(Map.Entry<Integer, Node> node : nodes.entrySet()){
-            Thread thread = new Thread(node.getValue());
-            thread.start();
-            node.getValue().start();
+    public void startNodes() {
+        for (Node node : nodes.values()) {
+            Thread nodeThread = new Thread(node, "node-" + node.getId());
+            nodeThread.start();
+            node.start();
         }
     }
 
-
-    public void stopNode(int id){
+    public void stopNode(int id) {
         nodes.get(id).stop();
     }
-    public void startNode(int id){
-        nodes.get(id).start();
+
+    public void recoverNode(int id) {
+        nodes.get(id).recover();
     }
 
 }

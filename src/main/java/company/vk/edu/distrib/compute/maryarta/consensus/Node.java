@@ -4,16 +4,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static company.vk.edu.distrib.compute.maryarta.consensus.MessageType.*;
 
-public class Node implements Runnable{
+public class Node implements Runnable {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private static final int PING_TIMEOUT = 1000;
+    private static final int PING_TIMEOUT_MS = 1000;
     private static final long ELECTION_TIMEOUT_MS = 1000;
-    private static final double FAILURE_PROBABILITY = 0.20; // 10%
+    private static final double FAILURE_PROBABILITY = 0.20;
     private static final long FAILURE_CHECK_INTERVAL_MS = 3000;
 
     private static final long MIN_RECOVERY_DELAY_MS = 2000;
@@ -22,15 +23,14 @@ public class Node implements Runnable{
     private final int id;
     private final BlockingQueue<Message> inbox = new LinkedBlockingQueue<>();
     private final Map<Integer, Node> nodes;
-    private volatile boolean isEnable = true;
+    private final AtomicBoolean isEnable = new AtomicBoolean();
 
-    private volatile int leaderID = -1;
+    private final AtomicInteger leaderID = new AtomicInteger(-1);
 
-    private long pingDeadlineAt = 0;
-    private boolean waitingLeaderAnswer = false;
-
-    private boolean electionInProgress = false;
-    private int electionRound = 0;
+    private long pingDeadlineAt;
+    private boolean waitingLeaderAnswer;
+    private boolean electionInProgress;
+    private int electionRound;
     private final AtomicBoolean receivedAnswerOnElect = new AtomicBoolean(false);
 
     private static final Logger log = LoggerFactory.getLogger("node");
@@ -41,40 +41,37 @@ public class Node implements Runnable{
         log.info("Node {} started", id);
     }
 
-    public void start(){
-        isEnable = true;
-        scheduler.scheduleWithFixedDelay(this::failRandomly, FAILURE_CHECK_INTERVAL_MS, FAILURE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    public void start() {
+        isEnable.set(true);
+        scheduler.scheduleWithFixedDelay(this::failRandomly,
+                FAILURE_CHECK_INTERVAL_MS,
+                FAILURE_CHECK_INTERVAL_MS,
+                TimeUnit.MILLISECONDS);
         scheduler.scheduleWithFixedDelay(this::checkLeaderAvailability, 0, 5, TimeUnit.SECONDS);
     }
 
     private synchronized void failRandomly() {
-        if (!isEnable) {
+        if (!isEnable.get()) {
             return;
         }
         double value = ThreadLocalRandom.current().nextDouble();
         if (value >= FAILURE_PROBABILITY) {
             return;
         }
-        long recoveryDelayMs = ThreadLocalRandom.current().nextLong(
-                MIN_RECOVERY_DELAY_MS,
-                MAX_RECOVERY_DELAY_MS + 1
-        );
+        long recoveryDelayMs = ThreadLocalRandom.current().nextLong(MIN_RECOVERY_DELAY_MS, MAX_RECOVERY_DELAY_MS + 1);
         failFor(recoveryDelayMs);
     }
 
     public synchronized void failFor(long recoveryDelayMs) {
-        if (!isEnable) {
+        if (!isEnable.get()) {
             return;
         }
         stop();
-        scheduler.schedule(
-                this::recover,
-                recoveryDelayMs,
-                TimeUnit.MILLISECONDS
-        );
+        log.warn("Node {} failed for {} ms", id, recoveryDelayMs);
+        scheduler.schedule(this::recover, recoveryDelayMs, TimeUnit.MILLISECONDS);
     }
 
-    private void sendMessage(MessageType messageType, int toId, MessageType answerTo){
+    private void sendMessage(MessageType messageType, int toId, MessageType answerTo) {
         Node target = nodes.get(toId);
         if (target == null) {
             log.warn("Node {} cannot send {} to {}: target not found", id, messageType, toId);
@@ -84,17 +81,22 @@ public class Node implements Runnable{
         target.receive(message);
     }
 
-    private void handlePing(int fromId){ // лидер отвечает на пинг
+    private void handlePing(int fromId) {
         sendMessage(ANSWER, fromId, PING);
-        log.info("Leader {} answered to PING to {}", id, fromId);
+        log.info("Node {} answered to PING from {}", id, fromId);
     }
 
-    private void handleElect(int fromId){ // старшая нода отвечает на запросы о голосовании
+    private void handleElect(int fromId) {
         if (fromId >= this.id) {
             return;
         }
         sendMessage(ANSWER, fromId, ELECT);
-        log.info("Node {} answered to ELECT to {}", id, fromId);
+        log.info("Node {} answered to ELECT from {}", id, fromId);
+        if (leaderID.get() == this.id) {
+            sendMessage(VICTORY, fromId, null);
+            log.info("Node {} sent VICTORY to {}", id, fromId);
+            return;
+        }
         startElection();
     }
 
@@ -112,20 +114,19 @@ public class Node implements Runnable{
         if (!waitingLeaderAnswer) {
             return;
         }
-        if (fromId != leaderID) {
+        if (fromId != leaderID.get()) {
             return;
         }
         long now = System.currentTimeMillis();
         waitingLeaderAnswer = false;
 
         if (now >= pingDeadlineAt) {
-            log.warn("Node {} received late PING answer from leader {}. Start election", id, leaderID);
-            leaderID = -1;
+            log.warn("Node {} received late PING answer from leader {}; starting election", id, leaderID);
+            leaderID.set(-1);
             startElection();
-            return;
         }
-//        log.info("Node {} checked leader {} availability", id, leaderID);
     }
+
     private synchronized void handleElectAnswer(int fromId) {
         if (!electionInProgress) {
             return;
@@ -133,12 +134,12 @@ public class Node implements Runnable{
         if (fromId <= this.id) {
             return;
         }
-        log.info("Node {} got ELECT answer from {}", id, fromId);
+        log.info("Node {} received ELECT answer from {}", id, fromId);
         receivedAnswerOnElect.set(true);
     }
 
-    private synchronized void handleVictory(int leaderID){
-        this.leaderID = leaderID;
+    private synchronized void handleVictory(int leaderID) {
+        this.leaderID.set(leaderID);
         receivedAnswerOnElect.set(false);
         waitingLeaderAnswer = false;
         electionInProgress = false;
@@ -146,10 +147,10 @@ public class Node implements Runnable{
     }
 
     public void receive(Message message) {
-        if (!isEnable) {
+        if (!isEnable.get()) {
             return;
         }
-        inbox.offer(message); // сообщение попадает во входящую очередь
+        inbox.offer(message);
     }
 
     @Override
@@ -166,8 +167,11 @@ public class Node implements Runnable{
         }
     }
 
-    private void handleMessage(Message message){
-        switch (message.type){
+    private void handleMessage(Message message) {
+        if (!isEnable.get()) {
+            return;
+        }
+        switch (message.type) {
             case PING -> handlePing(message.fromId);
             case ELECT -> handleElect(message.fromId);
             case ANSWER -> handleAnswer(message.answerTo, message.fromId);
@@ -176,76 +180,75 @@ public class Node implements Runnable{
     }
 
     private synchronized void checkLeaderAvailability() {
-        if (!isEnable) {
+        if (!isEnable.get()) {
             return;
         }
-        if (id == leaderID) {
+        int currentLeaderId = leaderID.get();
+        if (id == currentLeaderId) {
             return;
         }
-        if (leaderID <= 0) {
+        if (currentLeaderId <= 0) {
             startElection();
             return;
         }
 
         long now = System.currentTimeMillis();
         if (!waitingLeaderAnswer) {
-            sendMessage(MessageType.PING, leaderID, null);
-
+            sendMessage(PING, currentLeaderId, null);
             waitingLeaderAnswer = true;
-            pingDeadlineAt = now + PING_TIMEOUT;
+            pingDeadlineAt = now + PING_TIMEOUT_MS;
 
-            log.info("Node {} sent PING to leader {}", id, leaderID);
+            log.info("Node {} sent PING to leader {}", id, currentLeaderId);
             return;
         }
 
         if (now >= pingDeadlineAt) {
-            log.warn("Node {} detected leader {} failure", id, leaderID);
+            log.warn("Node {} detected leader {} failure", id, currentLeaderId);
             waitingLeaderAnswer = false;
-            leaderID = -1;
+            leaderID.set(-1);
             startElection();
         }
     }
 
-    private synchronized void startElection(){
-        if (!isEnable) {
+    private synchronized void startElection() {
+        if (!isEnable.get()) {
             return;
         }
         if (electionInProgress) {
             return;
         }
         electionRound++;
-        int currentRound = electionRound;
+
         electionInProgress = true;
         receivedAnswerOnElect.set(false);
 
         int electSent = 0;
-        Set<Integer> ids = nodes.keySet();
-        log.info("Node {} starts election. Known nodes: {}", this.id, nodes.keySet());
-        for(int id: ids){
-            if(id > this.id){
-                sendMessage(ELECT, id, null);
+        log.info("Node {} started election", this.id);
+        for (int target: nodes.keySet()) {
+            if (target > this.id) {
+                sendMessage(ELECT, target, null);
                 electSent++;
-                log.info("Node {} send ELECT to {} ", this.id, id);
+                log.info("Node {} sent ELECT to {}", this.id, target);
             }
         }
-        if(electSent == 0){
+        if (electSent == 0) {
             becomeLeader();
             return;
         }
+        int currentRound = electionRound;
         waitElectionAnswer(currentRound);
-
     }
 
-    private void becomeLeader(){
-        log.info("Node {} wants to become a leader", this.id);
-        leaderID = id;
+    private synchronized void becomeLeader() {
+        leaderID.set(id);
         electionInProgress = false;
         waitingLeaderAnswer = false;
         receivedAnswerOnElect.set(false);
-        for(int target: nodes.keySet()){
-            if (target != this.id){
+        log.info("Node {} became leader", this.id);
+        for (int target: nodes.keySet()) {
+            if (target != this.id) {
                 sendMessage(VICTORY, target, null);
-                log.info("Node {} send victory to {} ", this.id, target);
+                log.info("Node {} sent VICTORY to {}", this.id, target);
             }
         }
 
@@ -259,9 +262,7 @@ public class Node implements Runnable{
                 Thread.currentThread().interrupt();
                 return;
             }
-
             checkElectionAnswerAfterTimeout(round);
-
         }, "election-timeout-" + id).start();
     }
 
@@ -272,12 +273,13 @@ public class Node implements Runnable{
         if (round != electionRound) {
             return;
         }
-        if (!receivedAnswerOnElect.get()) {
+
+        if (receivedAnswerOnElect.get()) {
+            log.info("Node {} received ELECT answer in time; stays follower", id);
+            electionInProgress = false;
+        } else {
             log.info("Node {} did not receive ELECT answer in time", id);
             becomeLeader();
-        } else {
-            log.info("Node {} received ELECT answer in time, stays follower", id);
-            electionInProgress = false;
         }
     }
 
@@ -293,16 +295,24 @@ public class Node implements Runnable{
     }
 
     private void setEnabled(boolean enabled) {
-        isEnable = enabled;
-        leaderID = -1;
+        isEnable.set(enabled);
+        leaderID.set(-1);
         waitingLeaderAnswer = false;
         electionInProgress = false;
         receivedAnswerOnElect.set(false);
         inbox.clear();
     }
 
-    public int getLeaderID(){
-        return leaderID;
+    public int getLeaderID() {
+        return leaderID.get();
+    }
+
+    public boolean isEnable() {
+        return isEnable.get();
+    }
+
+    public int getId() {
+        return id;
     }
 
 }
