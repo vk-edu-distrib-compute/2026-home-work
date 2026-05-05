@@ -3,8 +3,6 @@ package company.vk.edu.distrib.compute.korjick.core.application.node;
 import company.vk.edu.distrib.compute.korjick.core.domain.Entity;
 import company.vk.edu.distrib.compute.korjick.ports.output.EntityGateway;
 
-import java.util.function.BooleanSupplier;
-
 public class RemoteEntityNode implements EntityNode {
     private final String endpoint;
     private final EntityGateway gateway;
