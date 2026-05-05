@@ -29,8 +29,16 @@ public class NodeRegistry {
     }
 
     public void generateNodes(int n) {
+        generateNodes(n, NodeConfig.defaultConfig(), null);
+    }
+
+    public void generateNodes(int n, NodeConfig nodeConfig) {
+        generateNodes(n, nodeConfig, null);
+    }
+
+    public void generateNodes(int n, NodeConfig nodeConfig, FailureConfig failureConfig) {
         for (int nodeId = 0; nodeId < n; nodeId++) {
-            Node node = new Node(this, nodeId);
+            Node node = new Node(this, nodeId, nodeConfig, failureConfig);
             nodeById.put(nodeId, node);
             Thread thread = new Thread(node, "task5-node-" + nodeId);
             threadById.put(nodeId, thread);
