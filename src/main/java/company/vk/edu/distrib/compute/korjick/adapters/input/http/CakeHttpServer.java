@@ -3,7 +3,6 @@ package company.vk.edu.distrib.compute.korjick.adapters.input.http;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpsServer;
 import company.vk.edu.distrib.compute.korjick.core.application.exception.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,10 +39,11 @@ public class CakeHttpServer {
 
     public String getEndpoint() {
         var address = this.server.getAddress();
-        return String.format("%s%s:%s",
-                this.server instanceof HttpsServer ? "https://" : "http://",
-                address.getHostString(),
-                address.getPort());
+        return resolveEndpoint(address.getHostString(), address.getPort());
+    }
+
+    public static String resolveEndpoint(String host, int port) {
+        return String.format("http://%s:%d", host, port);
     }
 
     private record ErrorHandler(HttpHandler delegate) implements HttpHandler {

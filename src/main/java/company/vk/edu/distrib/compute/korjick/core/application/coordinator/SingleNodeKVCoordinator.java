@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.korjick.core.application;
+package company.vk.edu.distrib.compute.korjick.core.application.coordinator;
 
 import company.vk.edu.distrib.compute.korjick.core.application.exception.EntityNotFoundException;
 import company.vk.edu.distrib.compute.korjick.core.application.exception.StorageFailureException;
@@ -8,13 +8,14 @@ import company.vk.edu.distrib.compute.korjick.ports.output.EntityRepository;
 import java.io.IOException;
 import java.util.NoSuchElementException;
 
-public class SingleNodeCoordinator {
+public class SingleNodeKVCoordinator implements KVCoordinator {
     private final EntityRepository repository;
 
-    public SingleNodeCoordinator(EntityRepository repository) {
+    public SingleNodeKVCoordinator(EntityRepository repository) {
         this.repository = repository;
     }
 
+    @Override
     public Entity get(Entity.Key key) {
         try {
             return repository.get(key.value());
@@ -25,6 +26,7 @@ public class SingleNodeCoordinator {
         }
     }
 
+    @Override
     public void upsert(Entity entity) {
         try {
             repository.upsert(entity.key().value(), entity);
@@ -33,6 +35,7 @@ public class SingleNodeCoordinator {
         }
     }
 
+    @Override
     public void delete(Entity.Key key) {
         try {
             repository.delete(key.value());

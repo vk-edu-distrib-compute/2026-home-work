@@ -1,7 +1,7 @@
 package company.vk.edu.distrib.compute.korjick.app.cluster;
 
 import company.vk.edu.distrib.compute.KVCluster;
-import company.vk.edu.distrib.compute.KVService;
+import company.vk.edu.distrib.compute.korjick.app.node.CakeKVNode;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -9,49 +9,47 @@ import java.util.List;
 import java.util.Map;
 
 public class CakeKVCluster implements KVCluster, Closeable {
-    private final Map<String, KVService> services;
+    private final Map<String, CakeKVNode> nodes;
 
-    public CakeKVCluster(Map<String, KVService> services) {
-        this.services = Map.copyOf(services);
+    public CakeKVCluster(Map<String, CakeKVNode> nodes) {
+        this.nodes = Map.copyOf(nodes);
     }
 
     @Override
     public void start() {
-        services.values().forEach(KVService::start);
+        nodes.values().forEach(CakeKVNode::start);
     }
 
     @Override
     public void start(String endpoint) {
-        var service = services.get(endpoint);
-        if (service != null) {
-            service.start();
+        var node = nodes.get(endpoint);
+        if (node != null) {
+            node.start();
         }
     }
 
     @Override
     public void stop() {
-        services.values().forEach(KVService::stop);
+        nodes.values().forEach(CakeKVNode::stop);
     }
 
     @Override
     public void stop(String endpoint) {
-        KVService service = services.get(endpoint);
-        if (service != null) {
-            service.stop();
+        CakeKVNode node = nodes.get(endpoint);
+        if (node != null) {
+            node.stop();
         }
     }
 
     @Override
     public void close() throws IOException {
-        for (KVService service : services.values()) {
-            if (service instanceof Closeable closeable) {
-                closeable.close();
-            }
+        for (CakeKVNode node : nodes.values()) {
+            node.close();
         }
     }
 
     @Override
     public List<String> getEndpoints() {
-        return this.services.keySet().stream().toList();
+        return this.nodes.keySet().stream().toList();
     }
 }

@@ -1,9 +1,10 @@
 package company.vk.edu.distrib.compute.korjick.adapters.input.grpc;
 
 import company.vk.edu.distrib.compute.korjick.adapters.input.http.Constants;
-import company.vk.edu.distrib.compute.korjick.core.application.SingleNodeCoordinator;
+import company.vk.edu.distrib.compute.korjick.core.application.coordinator.SingleNodeKVCoordinator;
 import company.vk.edu.distrib.compute.korjick.core.application.exception.EntityNotFoundException;
 import company.vk.edu.distrib.compute.korjick.core.domain.Entity;
+import company.vk.edu.distrib.compute.korjick.ports.output.EntityRepository;
 import company.vk.edu.distrib.compute.proto.korjick.EntityResponse;
 import company.vk.edu.distrib.compute.proto.korjick.KeyRequest;
 import company.vk.edu.distrib.compute.proto.korjick.ReactorGrpcKVServiceGrpc;
@@ -22,13 +23,13 @@ public class CakeGrpcServer extends ReactorGrpcKVServiceGrpc.GrpcKVServiceImplBa
 
     private static final int PORT_PREFIX = 50000;
     private final Server server;
-    private final SingleNodeCoordinator coordinator;
+    private final SingleNodeKVCoordinator coordinator;
     private final String endpoint;
 
     public CakeGrpcServer(String host, int port,
-                          SingleNodeCoordinator coordinator) {
+                          EntityRepository repository) {
         super();
-        this.coordinator = coordinator;
+        this.coordinator = new SingleNodeKVCoordinator(repository);
 
         int grpcPort = resolveGrpcPort(port);
         this.server = NettyServerBuilder

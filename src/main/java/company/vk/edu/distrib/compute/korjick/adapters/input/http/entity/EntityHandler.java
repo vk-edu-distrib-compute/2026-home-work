@@ -3,7 +3,7 @@ package company.vk.edu.distrib.compute.korjick.adapters.input.http.entity;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.korjick.adapters.input.http.Constants;
-import company.vk.edu.distrib.compute.korjick.core.application.SingleNodeCoordinator;
+import company.vk.edu.distrib.compute.korjick.core.application.coordinator.KVCoordinator;
 import company.vk.edu.distrib.compute.korjick.core.domain.Entity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,9 +18,9 @@ public class EntityHandler implements HttpHandler {
     private static final String ID_QUERY_PARAM_VALUE = "id";
     private static final String ACK_QUERY_PARAM_VALUE = "ack";
 
-    private final SingleNodeCoordinator coordinator;
+    private final KVCoordinator coordinator;
 
-    public EntityHandler(SingleNodeCoordinator coordinator) {
+    public EntityHandler(KVCoordinator coordinator) {
         this.coordinator = coordinator;
     }
 
