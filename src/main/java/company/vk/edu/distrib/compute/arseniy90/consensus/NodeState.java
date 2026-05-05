@@ -39,10 +39,6 @@ public class NodeState {
         this.role.set(role);
     }
 
-    public boolean isElectionInProgress() {
-        return isElectionInProgress.get();
-    }
-
     public boolean compareAndSetElection(boolean expect, boolean update) {
         return isElectionInProgress.compareAndSet(expect, update);
     }

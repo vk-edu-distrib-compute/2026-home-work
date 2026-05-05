@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 public class Node implements Runnable {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElectionManager.class.getName());
+    private static final Integer LEADER_TIMEOUT = 3000;
 
     private final int id;
     private final Map<Integer, Node> cluster;
@@ -145,7 +146,7 @@ public class Node implements Runnable {
                 leaderNode.receiveMessage(new Message(MessageType.PING, id, "ping msg"));
             }
 
-            if (System.currentTimeMillis() - state.getLastLeaderContactTime() > 3000) {
+            if (System.currentTimeMillis() - state.getLastLeaderContactTime() > LEADER_TIMEOUT) {
                 LOGGER.info("Node {}: Leader {} timeout. Start elections.", id, currentLeader);
                 state.setLeaderId(-1);
                 state.setRole(NodeRole.FOLLOWER);

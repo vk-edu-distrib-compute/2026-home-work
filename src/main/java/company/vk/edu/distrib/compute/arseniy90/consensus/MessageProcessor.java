@@ -50,11 +50,13 @@ public class MessageProcessor {
     }
 
     private void handleElect(Message msg) {
-        LOGGER.info("Node {}: got ELECT from node {}", id, msg.getSenderId());
         if (msg.getSenderId() < id) {
-            Node senderNode = cluster.get(msg.getSenderId());
-            if (senderNode != null) {
-                senderNode.receiveMessage(new Message(MessageType.ANSWER, id, "message processor: elect msg"));
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Node {}: got ELECT from node {}", id, msg.getSenderId());
+            }
+            Node sender = cluster.get(msg.getSenderId());
+            if (sender != null) {
+                sender.receiveMessage(new Message(MessageType.ANSWER, id, "message processor: elect msg"));
             }
             electionManager.startElection();
         }
@@ -80,13 +82,17 @@ public class MessageProcessor {
             state.resetLeaderContactTime();
             state.compareAndSetElection(true, false);
             state.setRole(NodeRole.FOLLOWER);
-            LOGGER.info("Node {}: accepted new leader {}", id, state.getLeaderId());
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Node {}: accepted new leader {}", id, state.getLeaderId());
+            }
         }
     }
 
     private void handleResign(Message msg) {
-        LOGGER.info("Node {}: leader {} leaves. Start pre-term elections", id, msg.getSenderId());
         if (state.getLeaderId() == msg.getSenderId()) {
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Node {}: leader {} leaves. Start pre-term elections", id, msg.getSenderId());
+            }
             state.setLeaderId(-1);
             state.setRole(NodeRole.FOLLOWER);
             electionManager.startElection();

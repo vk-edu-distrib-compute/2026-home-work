@@ -7,17 +7,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class Main {
+    private static final Integer NODES_COUNT = 4;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class.getName());
 
     private Main() {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        int n = 4;
         Map<Integer, Node> cluster = new ConcurrentHashMap<>();
 
-        for (int i = 1; i <= n; i++) {
-            cluster.put(i, new Node(i, cluster));
+        Node[] nodes = new Node[NODES_COUNT];
+        for (int i = 0; i < NODES_COUNT; i++) {
+            nodes[i] = new Node(i + 1, cluster);
+        }
+
+        for (int i = 0; i < NODES_COUNT; i++) {
+            cluster.put(i + 1, nodes[i]);
         }
                              
         LOGGER.info("\nCluster initialization\n");
@@ -65,6 +71,8 @@ public final class Main {
               .append(" | Role: ").append(node.getRole())
               .append(" | Leader: ").append(id == node.getLeaderId()).append('\n');
         }
-        LOGGER.info(sb.toString());
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("{}", sb.toString());
+        }
     }
 }
