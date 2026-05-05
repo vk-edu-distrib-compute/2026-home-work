@@ -1,7 +1,9 @@
-package company.vk.edu.distrib.compute.nihuaway00;
+package company.vk.edu.distrib.compute.nihuaway00.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.nihuaway00.sharding.ShardRouter;
+import company.vk.edu.distrib.compute.nihuaway00.storage.EntityDao;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,11 +13,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 public class EntityHandler implements HttpHandler {
-
+    private final ShardRouter shardRouter;
     private final EntityDao dao;
 
-    EntityHandler(EntityDao dao) {
+    public EntityHandler(EntityDao dao, ShardRouter shardRouter) {
         this.dao = dao;
+        this.shardRouter = shardRouter;
     }
 
     @Override
@@ -23,22 +26,40 @@ public class EntityHandler implements HttpHandler {
         String method = exchange.getRequestMethod();
         URI uri = exchange.getRequestURI();
         Map<String, String> params = HttpUtils.parseQuery(uri.getQuery());
+        String id = params.get("id");
+
+        if (id == null || id.isBlank()) {
+            HttpUtils.sendError(exchange, 400, "id is required");
+            return;
+        }
 
         try (exchange) {
             try {
+                String targetNodeEndpoint = shardRouter.getResponsibleNode(id);
+
+                if (!shardRouter.isLocalNode(targetNodeEndpoint)) {
+                    try {
+                        shardRouter.proxyRequest(exchange, targetNodeEndpoint);
+                    } catch (InterruptedException e) {
+                        //восстанавливаем флаг isInterrupted, иначе будут проблемы с graceful shutdown
+                        Thread.currentThread().interrupt();
+                        HttpUtils.sendError(exchange, 503, "Request interrupted");
+                        return;
+                    }
+                    return;
+                }
+
                 switch (method) {
                     case "GET" -> {
-                        handleGetEntity(exchange, params);
+                        handleGetEntity(exchange, id);
                     }
                     case "PUT" -> {
-                        handlePutEntity(exchange, params);
+                        handlePutEntity(exchange, id);
                     }
                     case "DELETE" -> {
-                        handleDeleteEntity(exchange, params);
+                        handleDeleteEntity(exchange, id);
                     }
-                    default -> {
-                        exchange.close();
-                    }
+                    default -> HttpUtils.sendError(exchange, 405, "Method not allowed");
                 }
             } catch (NoSuchElementException err) {
                 HttpUtils.sendError(exchange, 404, err.getMessage());
@@ -50,9 +71,8 @@ public class EntityHandler implements HttpHandler {
         }
     }
 
-    public void handleGetEntity(HttpExchange exchange, Map<String, String> params)
+    public void handleGetEntity(HttpExchange exchange, String id)
             throws IOException, NoSuchElementException, IllegalArgumentException {
-        String id = params.get("id");
         byte[] data = dao.get(id);
         exchange.sendResponseHeaders(200, data.length);
         try (OutputStream os = exchange.getResponseBody()) {
@@ -60,9 +80,8 @@ public class EntityHandler implements HttpHandler {
         }
     }
 
-    public void handlePutEntity(HttpExchange exchange, Map<String, String> params)
+    public void handlePutEntity(HttpExchange exchange, String id)
             throws IOException, IllegalArgumentException {
-        String id = params.get("id");
 
         try (InputStream is = exchange.getRequestBody()) {
             var data = is.readAllBytes();
@@ -71,9 +90,8 @@ public class EntityHandler implements HttpHandler {
         }
     }
 
-    public void handleDeleteEntity(HttpExchange exchange, Map<String, String> params)
+    public void handleDeleteEntity(HttpExchange exchange, String id)
             throws IOException, IllegalArgumentException {
-        String id = params.get("id");
         dao.delete(id);
         exchange.sendResponseHeaders(202, -1);
     }
