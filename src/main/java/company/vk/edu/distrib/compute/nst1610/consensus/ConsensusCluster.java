@@ -11,13 +11,14 @@ import java.util.stream.IntStream;
 
 public final class ConsensusCluster implements AutoCloseable {
     private final ConsensusConfig config;
+    private final ElectionCoordinator electionCoordinator;
     private final Map<Integer, Node> nodes;
 
     public ConsensusCluster(Set<Integer> nodeIds, ConsensusConfig config) {
         this.config = config;
+        this.electionCoordinator = new ElectionCoordinator();
         Map<Integer, Node> nodes = new LinkedHashMap<>();
         for (int nodeId : nodeIds.stream().sorted().toList()) {
-            ElectionCoordinator electionCoordinator = new ElectionCoordinator();
             nodes.put(nodeId, new Node(nodeId, config, electionCoordinator));
         }
         this.nodes = Map.copyOf(nodes);

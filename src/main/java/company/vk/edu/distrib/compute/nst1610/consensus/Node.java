@@ -86,7 +86,6 @@ public final class Node extends Thread {
             failed = false;
             leader = false;
             leaderId = -1;
-            leaderClock = 0L;
             waitingPingAnswer = false;
             waitingElectionAnswer = false;
             waitingVictory = false;

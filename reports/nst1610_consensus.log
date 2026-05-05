@@ -1,0 +1,250 @@
+Scenario: startup
+2026-05-05 17:09:45.531 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 5 and has max id
+2026-05-05 17:09:45.531 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 1 because START
+2026-05-05 17:09:45.531 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 3 because START
+2026-05-05 17:09:45.531 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 2 because START
+2026-05-05 17:09:45.532 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 5
+2026-05-05 17:09:45.531 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 4 because START
+2026-05-05 17:09:45.533 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 5
+2026-05-05 17:09:45.533 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 5
+NodeSnapshot[nodeId=1, failed=false, leader=false, knownLeaderId=5, leaderClock=5]
+NodeSnapshot[nodeId=2, failed=false, leader=false, knownLeaderId=5, leaderClock=5]
+NodeSnapshot[nodeId=3, failed=false, leader=false, knownLeaderId=5, leaderClock=5]
+NodeSnapshot[nodeId=4, failed=false, leader=false, knownLeaderId=5, leaderClock=5]
+NodeSnapshot[nodeId=5, failed=false, leader=true, knownLeaderId=5, leaderClock=5]
+
+Scenario: leader-failure
+2026-05-05 17:09:47.050 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 1 because START
+2026-05-05 17:09:47.050 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 2 because START
+2026-05-05 17:09:47.050 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 3 because START
+2026-05-05 17:09:47.050 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 4 because START
+2026-05-05 17:09:47.050 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 5 and has max id
+2026-05-05 17:09:47.050 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 5
+2026-05-05 17:09:47.050 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 5
+2026-05-05 17:09:47.050 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 5
+2026-05-05 17:09:47.050 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 5
+2026-05-05 17:09:47.050 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 5
+2026-05-05 17:09:47.050 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 5
+2026-05-05 17:09:48.255 - INFO  [main] c.v.e.d.c.nst1610.consensus.Node - Node 5 failed
+2026-05-05 17:09:48.366 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 6 because LEADER_UNAVAILABLE
+2026-05-05 17:09:48.366 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 7 because ELDER_NODE_ELECT
+2026-05-05 17:09:48.366 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 8 because ELDER_NODE_ELECT
+2026-05-05 17:09:48.388 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 9 because LEADER_UNAVAILABLE
+2026-05-05 17:09:48.389 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 10 because ELDER_NODE_ELECT
+2026-05-05 17:09:48.389 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 11 because ELDER_NODE_ELECT
+2026-05-05 17:09:48.758 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 12 because LEADER_MISSING
+2026-05-05 17:09:48.758 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 13 because ELDER_NODE_ELECT
+2026-05-05 17:09:48.758 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 4 on clock 8
+2026-05-05 17:09:48.758 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 4 on clock 8
+2026-05-05 17:09:48.758 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 4 on clock 8
+2026-05-05 17:09:48.758 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 became leader on clock 8
+2026-05-05 17:09:48.758 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 4 on clock 8
+2026-05-05 17:09:48.759 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 14 because ELDER_NODE_ELECT
+2026-05-05 17:09:48.759 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 4 on clock 8
+2026-05-05 17:09:48.759 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 4 on clock 8
+2026-05-05 17:09:49.135 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 4 on clock 14
+2026-05-05 17:09:49.135 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 became leader on clock 14
+2026-05-05 17:09:49.135 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 4 on clock 14
+2026-05-05 17:09:49.135 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 4 on clock 14
+2026-05-05 17:09:49.135 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 4 on clock 14
+NodeSnapshot[nodeId=1, failed=false, leader=false, knownLeaderId=4, leaderClock=14]
+NodeSnapshot[nodeId=2, failed=false, leader=false, knownLeaderId=4, leaderClock=14]
+NodeSnapshot[nodeId=3, failed=false, leader=false, knownLeaderId=4, leaderClock=14]
+NodeSnapshot[nodeId=4, failed=false, leader=true, knownLeaderId=4, leaderClock=14]
+NodeSnapshot[nodeId=5, failed=true, leader=false, knownLeaderId=-1, leaderClock=5]
+
+Scenario: recovery
+2026-05-05 17:09:50.265 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 1 because START
+2026-05-05 17:09:50.265 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 2 because START
+2026-05-05 17:09:50.265 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 3 because START
+2026-05-05 17:09:50.265 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 4 because START
+2026-05-05 17:09:50.265 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 5 and has max id
+2026-05-05 17:09:50.265 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 5
+2026-05-05 17:09:50.265 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 5
+2026-05-05 17:09:50.265 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 5
+2026-05-05 17:09:50.265 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 5
+2026-05-05 17:09:50.265 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 5
+2026-05-05 17:09:50.265 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 5
+2026-05-05 17:09:51.270 - INFO  [main] c.v.e.d.c.nst1610.consensus.Node - Node 5 failed
+2026-05-05 17:09:51.315 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 6 because LEADER_UNAVAILABLE
+2026-05-05 17:09:51.327 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 7 because LEADER_UNAVAILABLE
+2026-05-05 17:09:51.328 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 8 because LEADER_UNAVAILABLE
+2026-05-05 17:09:51.328 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 9 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.333 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 10 because LEADER_UNAVAILABLE
+2026-05-05 17:09:51.333 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 11 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.333 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 12 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.703 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 13 because LEADER_MISSING
+2026-05-05 17:09:51.703 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 4 on clock 6
+2026-05-05 17:09:51.703 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 15 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.703 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 14 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.703 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 4 on clock 6
+2026-05-05 17:09:51.703 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 became leader on clock 6
+2026-05-05 17:09:51.703 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 4 on clock 6
+2026-05-05 17:09:51.703 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 4 on clock 6
+2026-05-05 17:09:51.703 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 4 on clock 6
+2026-05-05 17:09:51.703 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 16 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.703 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 17 because ELDER_NODE_ELECT
+2026-05-05 17:09:51.703 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 4 on clock 6
+2026-05-05 17:09:52.086 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 4 on clock 17
+2026-05-05 17:09:52.086 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 became leader on clock 17
+2026-05-05 17:09:52.086 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 4 on clock 17
+2026-05-05 17:09:52.086 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 4 on clock 17
+2026-05-05 17:09:52.086 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 4 on clock 17
+2026-05-05 17:09:52.671 - INFO  [main] c.v.e.d.c.nst1610.consensus.Node - Node 5 recovered
+2026-05-05 17:09:52.671 - INFO  [main] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 18 and has max id
+2026-05-05 17:09:52.671 - INFO  [main] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 18
+2026-05-05 17:09:52.671 - INFO  [main] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 18
+2026-05-05 17:09:52.671 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 18
+2026-05-05 17:09:52.671 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 18
+2026-05-05 17:09:52.671 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 18
+2026-05-05 17:09:52.671 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 18
+NodeSnapshot[nodeId=1, failed=false, leader=false, knownLeaderId=5, leaderClock=18]
+NodeSnapshot[nodeId=2, failed=false, leader=false, knownLeaderId=5, leaderClock=18]
+NodeSnapshot[nodeId=3, failed=false, leader=false, knownLeaderId=5, leaderClock=18]
+NodeSnapshot[nodeId=4, failed=false, leader=false, knownLeaderId=5, leaderClock=18]
+NodeSnapshot[nodeId=5, failed=false, leader=true, knownLeaderId=5, leaderClock=18]
+
+Scenario: frequent-failures
+2026-05-05 17:09:54.178 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 1 because START
+2026-05-05 17:09:54.178 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 3 because START
+2026-05-05 17:09:54.178 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 2 because START
+2026-05-05 17:09:54.178 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 5 and has max id
+2026-05-05 17:09:54.178 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 4 because START
+2026-05-05 17:09:54.178 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 5
+2026-05-05 17:09:54.178 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 5
+2026-05-05 17:09:54.179 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 5
+2026-05-05 17:09:54.179 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 5
+2026-05-05 17:09:54.441 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 failed
+2026-05-05 17:09:54.707 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 failed
+2026-05-05 17:09:54.711 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 failed
+2026-05-05 17:09:54.815 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 6 because LEADER_UNAVAILABLE
+2026-05-05 17:09:54.816 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 7 because LEADER_UNAVAILABLE
+2026-05-05 17:09:54.974 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 failed
+2026-05-05 17:09:55.073 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 3 on clock 6
+2026-05-05 17:09:55.073 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 became leader on clock 6
+2026-05-05 17:09:55.349 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 recovered
+2026-05-05 17:09:55.349 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 8 because RECOVERY
+2026-05-05 17:09:55.349 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 3 on clock 6
+2026-05-05 17:09:55.349 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 9 because ELDER_NODE_ELECT
+2026-05-05 17:09:55.608 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 recovered
+2026-05-05 17:09:55.608 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 10 because RECOVERY
+2026-05-05 17:09:55.617 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 recovered
+2026-05-05 17:09:55.617 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 11 and has max id
+2026-05-05 17:09:55.617 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 11
+2026-05-05 17:09:55.617 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 11
+2026-05-05 17:09:55.617 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 11
+2026-05-05 17:09:55.617 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 11
+2026-05-05 17:09:55.617 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 11
+2026-05-05 17:09:55.718 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 recovered
+2026-05-05 17:09:55.718 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 12 because RECOVERY
+2026-05-05 17:09:55.719 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 13 because ELDER_NODE_ELECT
+2026-05-05 17:09:55.719 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 14 because ELDER_NODE_ELECT
+2026-05-05 17:09:55.719 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 15 because ELDER_NODE_ELECT
+2026-05-05 17:09:55.719 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 16 and has max id
+2026-05-05 17:09:55.719 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 16
+2026-05-05 17:09:55.719 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 16
+2026-05-05 17:09:55.719 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 16
+2026-05-05 17:09:55.719 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 16
+2026-05-05 17:09:55.719 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 16
+2026-05-05 17:09:55.720 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 16
+2026-05-05 17:09:55.720 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 16
+2026-05-05 17:09:55.720 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 16
+2026-05-05 17:09:55.720 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 16
+2026-05-05 17:09:55.720 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 16
+2026-05-05 17:09:56.257 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 failed
+2026-05-05 17:09:56.664 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 failed
+2026-05-05 17:09:56.837 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 failed
+2026-05-05 17:09:56.902 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 recovered
+2026-05-05 17:09:56.902 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 17 because RECOVERY
+2026-05-05 17:09:56.903 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 18 and has max id
+2026-05-05 17:09:56.903 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 18
+2026-05-05 17:09:56.903 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 19 because ELDER_NODE_ELECT
+2026-05-05 17:09:56.903 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 18
+2026-05-05 17:09:56.903 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 18
+2026-05-05 17:09:56.903 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 18
+2026-05-05 17:09:56.903 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 20 and has max id
+2026-05-05 17:09:56.903 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 20
+2026-05-05 17:09:56.903 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 18
+2026-05-05 17:09:56.903 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 20
+2026-05-05 17:09:56.903 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 20
+2026-05-05 17:09:56.903 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 20
+2026-05-05 17:09:56.903 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 20
+2026-05-05 17:09:56.957 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 failed
+2026-05-05 17:09:57.114 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 21 because LEADER_UNAVAILABLE
+2026-05-05 17:09:57.114 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 22 because ELDER_NODE_ELECT
+2026-05-05 17:09:57.218 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 failed
+2026-05-05 17:09:57.247 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 recovered
+2026-05-05 17:09:57.247 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 23 because RECOVERY
+2026-05-05 17:09:57.302 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 20
+2026-05-05 17:09:57.322 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 recovered
+2026-05-05 17:09:57.323 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 24 because RECOVERY
+2026-05-05 17:09:57.375 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 25 because LEADER_MISSING
+2026-05-05 17:09:57.376 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 26 because ELDER_NODE_ELECT
+2026-05-05 17:09:57.376 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 20
+2026-05-05 17:09:57.376 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 27 because ELDER_NODE_ELECT
+2026-05-05 17:09:57.591 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 failed
+2026-05-05 17:09:57.646 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 28 because LEADER_MISSING
+2026-05-05 17:09:57.648 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 starts election on clock 29 because ELDER_NODE_ELECT
+2026-05-05 17:09:57.696 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 recovered
+2026-05-05 17:09:57.699 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 30 and has max id
+2026-05-05 17:09:57.699 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 30
+2026-05-05 17:09:57.699 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 30
+2026-05-05 17:09:57.699 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 30
+2026-05-05 17:09:57.699 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 failed
+2026-05-05 17:09:57.699 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 30
+2026-05-05 17:09:57.910 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 recovered
+2026-05-05 17:09:57.911 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 31 because RECOVERY
+2026-05-05 17:09:57.911 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 30
+2026-05-05 17:09:57.911 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 32 and has max id
+2026-05-05 17:09:57.911 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 32
+2026-05-05 17:09:57.911 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 32
+2026-05-05 17:09:57.911 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 32
+2026-05-05 17:09:57.911 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 32
+2026-05-05 17:09:58.021 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 recovered
+2026-05-05 17:09:58.021 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 33 because RECOVERY
+2026-05-05 17:09:58.021 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 32
+2026-05-05 17:09:58.021 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 35 and has max id
+2026-05-05 17:09:58.021 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 34 because ELDER_NODE_ELECT
+2026-05-05 17:09:58.021 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 35
+2026-05-05 17:09:58.021 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 35
+2026-05-05 17:09:58.021 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 accepted leader 5 on clock 35
+2026-05-05 17:09:58.021 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 35
+2026-05-05 17:09:58.021 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 35
+2026-05-05 17:09:58.021 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 accepted leader 5 on clock 35
+2026-05-05 17:09:58.076 - INFO  [consensus-node-2] c.v.e.d.c.nst1610.consensus.Node - Node 2 failed
+2026-05-05 17:09:58.182 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 recovered
+2026-05-05 17:09:58.182 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 36 because RECOVERY
+2026-05-05 17:09:58.182 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 starts election on clock 37 because ELDER_NODE_ELECT
+2026-05-05 17:09:58.182 - INFO  [consensus-node-4] c.v.e.d.c.nst1610.consensus.Node - Node 4 failed
+2026-05-05 17:09:58.182 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 38 because ELDER_NODE_ELECT
+2026-05-05 17:09:58.182 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 35
+2026-05-05 17:09:58.182 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 starts election 39 and has max id
+2026-05-05 17:09:58.182 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 accepted leader 5 on clock 39
+2026-05-05 17:09:58.182 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 became leader on clock 39
+2026-05-05 17:09:58.182 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 5 on clock 39
+2026-05-05 17:09:58.182 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 5 on clock 39
+2026-05-05 17:09:58.236 - INFO  [consensus-node-5] c.v.e.d.c.nst1610.consensus.Node - Node 5 failed
+2026-05-05 17:09:58.394 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 40 because LEADER_UNAVAILABLE
+2026-05-05 17:09:58.394 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 41 because ELDER_NODE_ELECT
+2026-05-05 17:09:58.658 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 starts election on clock 42 because LEADER_MISSING
+2026-05-05 17:09:58.657 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 accepted leader 3 on clock 41
+2026-05-05 17:09:58.658 - INFO  [consensus-node-1] c.v.e.d.c.nst1610.consensus.Node - Node 1 accepted leader 3 on clock 41
+2026-05-05 17:09:58.658 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 became leader on clock 41
+2026-05-05 17:09:58.658 - INFO  [consensus-node-3] c.v.e.d.c.nst1610.consensus.Node - Node 3 starts election on clock 43 because ELDER_NODE_ELECT
+NodeSnapshot[nodeId=1, failed=false, leader=false, knownLeaderId=3, leaderClock=41]
+NodeSnapshot[nodeId=2, failed=true, leader=false, knownLeaderId=-1, leaderClock=35]
+NodeSnapshot[nodeId=3, failed=false, leader=true, knownLeaderId=3, leaderClock=41]
+NodeSnapshot[nodeId=4, failed=true, leader=false, knownLeaderId=-1, leaderClock=35]
+NodeSnapshot[nodeId=5, failed=true, leader=false, knownLeaderId=-1, leaderClock=39]
