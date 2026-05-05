@@ -70,7 +70,7 @@ public final class ClusterMonitor extends Thread {
         String leaderText = leader == null ? "нет" : String.valueOf(leader);
         if (log.isInfoEnabled()) {
             log.info("кластер: активных {}/{}; лидер {}; ожидаемый максимум среди активных {}",
-                    alive, nodes.size(), leader, maxAliveId);
+                    alive, nodes.size(), leaderText, maxAliveId);
         }
         logNodes(nodes);
     }
