@@ -158,8 +158,8 @@ public class Node implements Runnable {
         leaderMonitor.resetTimers();
     }
 
-    void forceBecomeLeaderAfterTransfer() {
-        electionManager.forceBecomeLeaderAfterTransfer();
+    boolean forceBecomeLeaderAfterTransfer() {
+        return electionManager.forceBecomeLeaderAfterTransfer();
     }
 
     void markCrashed() {
@@ -181,6 +181,7 @@ public class Node implements Runnable {
     private void enableNode() {
         ClusterLogger.event(id, "was manually enabled");
 
+        crashed.set(false);
         leaderId.set(-1);
         state.set(State.FOLLOWER);
         electionManager.reset();

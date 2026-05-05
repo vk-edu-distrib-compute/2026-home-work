@@ -36,31 +36,77 @@ final class GracefulShutdownManager {
             return;
         }
 
-        Node nextLeader = findHighestAliveNodeExceptSelf();
+        boolean transferred = transferLeadership();
 
-        if (nextLeader == null) {
-            ClusterLogger.event(node.getId(), "no alive replacement leader found, shutting down");
+        if (!transferred) {
+            ClusterLogger.event(
+                    node.getId(),
+                    "no alive replacement leader found, shutting down"
+            );
             node.setEnabled(false);
             return;
         }
 
-        transferLeadership(nextLeader);
         node.setEnabled(false);
     }
 
-    private void transferLeadership(Node nextLeader) {
-        ClusterLogger.event(
-                node.getId(),
-                "transferring leadership to node " + nextLeader.getId()
-        );
+    private boolean transferLeadership() {
+        Node nextLeader = findHighestAliveNodeExceptSelf();
 
-        nextLeader.forceBecomeLeaderAfterTransfer();
+        while (nextLeader != null) {
+            ClusterLogger.event(
+                    node.getId(),
+                    "transferring leadership to node " + nextLeader.getId()
+            );
 
+            boolean transferred = nextLeader.forceBecomeLeaderAfterTransfer();
+
+            if (transferred) {
+                broadcastVictory(nextLeader);
+                return true;
+            }
+
+            ClusterLogger.event(
+                    node.getId(),
+                    "candidate node " + nextLeader.getId() + " failed during graceful transfer"
+            );
+
+            nextLeader = findHighestAliveNodeExcept(node.getId(), nextLeader.getId());
+        }
+
+        return false;
+    }
+
+    private void broadcastVictory(Node nextLeader) {
         Message victory = new Message(Message.Type.VICTORY, nextLeader.getId());
 
         for (Node clusterNode : node.getCluster().values()) {
             sendVictoryIfNeeded(clusterNode, nextLeader, victory);
         }
+    }
+
+    private Node findHighestAliveNodeExcept(int currentNodeId, int failedCandidateId) {
+        Node result = null;
+
+        for (Node clusterNode : node.getCluster().values()) {
+            if (clusterNode.getId() == currentNodeId) {
+                continue;
+            }
+
+            if (clusterNode.getId() == failedCandidateId) {
+                continue;
+            }
+
+            if (!clusterNode.isAlive()) {
+                continue;
+            }
+
+            if (result == null || clusterNode.getId() > result.getId()) {
+                result = clusterNode;
+            }
+        }
+
+        return result;
     }
 
     private void sendVictoryIfNeeded(Node clusterNode, Node nextLeader, Message victory) {

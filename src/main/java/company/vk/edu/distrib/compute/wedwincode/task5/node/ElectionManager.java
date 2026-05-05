@@ -88,23 +88,24 @@ final class ElectionManager {
         }
     }
 
-    void forceBecomeLeaderAfterTransfer() {
+    boolean forceBecomeLeaderAfterTransfer() {
         electionLock.lock();
         try {
-            forceBecomeLeaderAfterTransferInternal();
+            return forceBecomeLeaderAfterTransferInternal();
         } finally {
             electionLock.unlock();
         }
     }
 
-    private void forceBecomeLeaderAfterTransferInternal() {
+    private boolean forceBecomeLeaderAfterTransferInternal() {
         if (!node.isAlive()) {
-            return;
+            return false;
         }
 
         node.setLeaderState(node.getId());
         electionInProgress.set(false);
         ClusterLogger.event(node.getId(), "became LEADER by graceful transfer");
+        return true;
     }
 
     private boolean canStartElection() {

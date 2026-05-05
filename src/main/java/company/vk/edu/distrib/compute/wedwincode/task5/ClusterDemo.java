@@ -16,8 +16,11 @@ public final class ClusterDemo {
     }
 
     static void main() {
+        Map<Integer, Node> cluster = new ConcurrentHashMap<>();
+        ClusterMonitor clusterMonitor = null;
+
         try {
-            Map<Integer, Node> cluster = IntStream.rangeClosed(1, 5)
+            cluster = IntStream.rangeClosed(1, 5)
                     .boxed()
                     .collect(Collectors.toMap(
                             i -> i, Node::new,
@@ -27,12 +30,12 @@ public final class ClusterDemo {
 
             for (Node node : cluster.values()) {
                 node.setCluster(cluster);
-                node.setRandomFailuresEnabled(true);
+                // node.setRandomFailuresEnabled(true);
             }
 
             cluster.values().forEach(node -> new Thread(node, "node-" + node.getId()).start());
 
-            ClusterMonitor clusterMonitor = new ClusterMonitor(cluster);
+            clusterMonitor = new ClusterMonitor(cluster);
             new Thread(clusterMonitor, "clusterMonitor").start();
 
             Thread.sleep(5_000);
@@ -61,6 +64,14 @@ public final class ClusterDemo {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ClusterException("thread was interrupted", e);
+        } finally {
+            if (clusterMonitor != null) {
+                clusterMonitor.stop();
+            }
+
+            for (Node node : cluster.values()) {
+                node.stop();
+            }
         }
     }
 

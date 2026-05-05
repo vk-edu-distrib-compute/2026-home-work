@@ -47,6 +47,10 @@ final class FailureManager {
             return;
         }
 
+        if (!node.isManuallyEnabled()) {
+            return;
+        }
+
         node.markRecovered();
         ClusterLogger.event(node.getId(), "recovered");
         node.receiveMessage(new Message(Message.Type.ELECT, node.getId()));
