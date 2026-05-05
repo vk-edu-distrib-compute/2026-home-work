@@ -16,7 +16,7 @@ public final class ConsensusCluster implements AutoCloseable {
         ElectionCoordinator electionCoordinator = new ElectionCoordinator();
         Map<Integer, Node> nodes = new ConcurrentHashMap<>();
         for (int nodeId : nodeIds.stream().sorted().toList()) {
-            nodes.put(nodeId, new Node(nodeId, config, electionCoordinator));
+            nodes.put(nodeId, createNode(nodeId, config, electionCoordinator));
         }
         this.nodes = Map.copyOf(nodes);
         for (Node node : nodes.values()) {
@@ -29,6 +29,10 @@ public final class ConsensusCluster implements AutoCloseable {
             .boxed()
             .collect(Collectors.toCollection(LinkedHashSet::new));
         return new ConsensusCluster(ids, config);
+    }
+
+    private static Node createNode(int nodeId, ConsensusConfig config, ElectionCoordinator electionCoordinator) {
+        return new Node(nodeId, config, electionCoordinator);
     }
 
     public void start() {
