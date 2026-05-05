@@ -278,6 +278,7 @@ public class Node implements Runnable {
             lastPingSentAt = 0;
             resetElectionStateLocked();
         }
+        log("new leader elected: " + id);
         broadcastVictory();
     }
 
@@ -301,12 +302,14 @@ public class Node implements Runnable {
             }
         }
         if (shouldRecover) {
+            log("UP");
             enable();
         }
         return shouldRecover;
     }
 
     private boolean tryAutoFailure(long now) {
+        Long recoveryDelay = null;
         synchronized (stateLock) {
             if (!enabled || !failureConfig.isEnabled() || now < nextDiceAt) {
                 return false;
@@ -322,9 +325,11 @@ public class Node implements Runnable {
             currentLeaderId = -1;
             resetElectionStateLocked();
             recoveryScheduled = true;
-            recoverAt = now + randomRecoveryDelay();
-            return true;
+            recoveryDelay = randomRecoveryDelay();
+            recoverAt = now + recoveryDelay;
         }
+        log("DOWN; recovery in " + recoveryDelay + " ms");
+        return true;
     }
 
     private long randomRecoveryDelay() {
@@ -333,5 +338,9 @@ public class Node implements Runnable {
         }
         return ThreadLocalRandom.current()
                 .nextLong(failureConfig.minRecoveryDelayMs(), failureConfig.maxRecoveryDelayMs() + 1);
+    }
+
+    private void log(String message) {
+        System.out.println("[node " + id + "] " + message);
     }
 }
