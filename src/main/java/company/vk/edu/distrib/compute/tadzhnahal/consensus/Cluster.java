@@ -109,7 +109,7 @@ public class Cluster {
         waitThread(simulator);
     }
 
-    public int getCurrentLeaderId() {
+    public synchronized int getCurrentLeaderId() {
         for (Node node : nodes) {
             if (node.isWorking() && node.getLeaderId() == node.getNodeId()) {
                 return node.getNodeId();
