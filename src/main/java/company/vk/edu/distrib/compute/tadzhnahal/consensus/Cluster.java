@@ -43,6 +43,7 @@ public class Cluster {
         }
 
         started = true;
+        startElectionFromFirstNode();
     }
 
     public synchronized void stop() {
@@ -75,6 +76,16 @@ public class Cluster {
         sender.sendMessage(toId, type);
     }
 
+    public int getLeaderId() {
+        for (Node node : nodes) {
+            if (node.getNodeStatus() == NodeStatus.LEADER) {
+                return node.getNodeId();
+            }
+        }
+
+        return Node.NO_LEADER;
+    }
+
     public void printState() {
         LOG.log(Logger.Level.INFO, "cluster state:");
 
@@ -83,10 +94,30 @@ public class Cluster {
                     Logger.Level.INFO,
                     "node " + node.getNodeId()
                             + " | " + node.getNodeStatus()
+                            + " | leader=" + node.getLeaderId()
                             + " | threadAlive=" + node.isAlive()
                             + " | inbox=" + node.getInboxSize()
             );
         }
+    }
+
+    public void startElectionFromNode(int nodeId) {
+        Node node = findNode(nodeId);
+
+        if (node == null) {
+            LOG.log(Logger.Level.WARNING, "cluster cannot find node " + nodeId);
+            return;
+        }
+
+        node.startElection();
+    }
+
+    private void startElectionFromFirstNode() {
+        if (nodes.isEmpty()) {
+            return;
+        }
+
+        nodes.get(0).startElection();
     }
 
     private Node findNode(int nodeId) {

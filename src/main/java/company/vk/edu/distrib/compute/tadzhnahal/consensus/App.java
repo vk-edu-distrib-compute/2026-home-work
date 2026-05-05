@@ -7,7 +7,7 @@ public final class App {
     private static final Logger LOG = System.getLogger(App.class.getName());
 
     private static final int DEFAULT_NODE_COUNT = 5;
-    private static final long DEMO_DELAY_MS = 500L;
+    private static final long ELECTION_DEMO_DELAY_MS = 1500L;
 
     private App() {
     }
@@ -17,19 +17,11 @@ public final class App {
 
         try {
             cluster.start();
-            cluster.printState();
 
-            LOG.log(Logger.Level.INFO, "demo: node 1 sends PING to node 2");
-            cluster.sendMessage(1, 2, MessageType.PING);
-
-            TimeUnit.MILLISECONDS.sleep(DEMO_DELAY_MS);
-
-            LOG.log(Logger.Level.INFO, "demo: node 3 sends ELECT to node 5");
-            cluster.sendMessage(3, 5, MessageType.ELECT);
-
-            TimeUnit.MILLISECONDS.sleep(DEMO_DELAY_MS);
+            TimeUnit.MILLISECONDS.sleep(ELECTION_DEMO_DELAY_MS);
 
             cluster.printState();
+            LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOG.log(Logger.Level.WARNING, "demo interrupted");

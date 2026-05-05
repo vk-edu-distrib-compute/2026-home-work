@@ -1,21 +1,26 @@
 package company.vk.edu.distrib.compute.tadzhnahal.consensus;
 
 import java.lang.System.Logger;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Node extends Thread {
-    private static final Logger LOG = System.getLogger(Node.class.getName());
+    public static final int NO_LEADER = -1;
 
-    private static final int NO_LEADER = -1;
+    private static final Logger LOG = System.getLogger(Node.class.getName());
 
     private final int nodeId;
     private final BlockingQueue<Message> inbox = new LinkedBlockingQueue<>();
+    private final Election election = new Election(this);
 
     private List<Node> clusterNodes = Collections.emptyList();
     private NodeStatus status = NodeStatus.FOLLOWER;
+    private int leaderId = NO_LEADER;
+    private boolean electionInProgress;
+    private boolean answerFromHigherNode;
 
     public Node(int nodeId) {
         super("node-" + nodeId);
@@ -28,6 +33,10 @@ public class Node extends Thread {
 
     public synchronized NodeStatus getNodeStatus() {
         return status;
+    }
+
+    public synchronized int getLeaderId() {
+        return leaderId;
     }
 
     public synchronized void setNodeStatus(NodeStatus status) {
@@ -71,6 +80,10 @@ public class Node extends Thread {
         target.receive(message);
     }
 
+    public void startElection() {
+        election.start();
+    }
+
     public int getInboxSize() {
         return inbox.size();
     }
@@ -91,16 +104,92 @@ public class Node extends Thread {
         LOG.log(Logger.Level.INFO, getName() + " stopped");
     }
 
+    synchronized boolean tryStartElection() {
+        if (electionInProgress) {
+            return false;
+        }
+
+        electionInProgress = true;
+        answerFromHigherNode = false;
+        status = NodeStatus.FOLLOWER;
+        leaderId = NO_LEADER;
+
+        return true;
+    }
+
+    synchronized void finishElection() {
+        electionInProgress = false;
+    }
+
+    synchronized void rememberAnswerFromHigherNode() {
+        answerFromHigherNode = true;
+    }
+
+    synchronized boolean hasAnswerFromHigherNode() {
+        return answerFromHigherNode;
+    }
+
+    synchronized void rememberLeader(int leaderId) {
+        this.leaderId = leaderId;
+
+        if (leaderId == nodeId) {
+            status = NodeStatus.LEADER;
+            return;
+        }
+
+        status = NodeStatus.FOLLOWER;
+    }
+
+    synchronized List<Node> getClusterNodesSnapshot() {
+        return new ArrayList<>(clusterNodes);
+    }
+
     private void handleMessage(Message message) {
         LOG.log(Logger.Level.INFO, getName() + " got " + message);
 
         if (message.getType() == MessageType.PING) {
-            sendMessage(message.getFromId(), MessageType.ANSWER);
+            handlePing(message);
+            return;
+        }
+
+        if (message.getType() == MessageType.ELECT) {
+            handleElect(message);
+            return;
+        }
+
+        if (message.getType() == MessageType.ANSWER) {
+            handleAnswer(message);
+            return;
+        }
+
+        if (message.getType() == MessageType.VICTORY) {
+            handleVictory(message);
         }
     }
 
-    private synchronized Node findNode(int nodeId) {
-        for (Node node : clusterNodes) {
+    private void handlePing(Message message) {
+        sendMessage(message.getFromId(), MessageType.ANSWER);
+    }
+
+    private void handleElect(Message message) {
+        if (message.getFromId() < nodeId) {
+            sendMessage(message.getFromId(), MessageType.ANSWER);
+            startElection();
+        }
+    }
+
+    private void handleAnswer(Message message) {
+        rememberAnswerFromHigherNode();
+        LOG.log(Logger.Level.INFO, getName() + " got answer from node " + message.getFromId());
+    }
+
+    private void handleVictory(Message message) {
+        rememberLeader(message.getLeaderId());
+        LOG.log(Logger.Level.INFO, getName() + " accepts leader " + message.getLeaderId());
+    }
+
+    private Node findNode(int nodeId) {
+        for (Node node : getClusterNodesSnapshot()) {
             if (node.getNodeId() == nodeId) {
                 return node;
             }
