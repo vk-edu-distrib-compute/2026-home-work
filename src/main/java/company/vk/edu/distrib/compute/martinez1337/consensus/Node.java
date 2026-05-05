@@ -1,5 +1,8 @@
 package company.vk.edu.distrib.compute.martinez1337.consensus;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
@@ -8,63 +11,74 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Node extends Thread {
+    private static final Logger log = LoggerFactory.getLogger(Node.class);
+
     private final int id;
     private final List<Node> allNodes;
     private final BlockingQueue<Message> inbox = new LinkedBlockingQueue<>();
-    private volatile int leaderId = -1;
-    private volatile boolean alive = true;
+    private final AtomicInteger leaderId = new AtomicInteger(-1);
+    private final AtomicBoolean alive = new AtomicBoolean(true);
     private final Random random = new Random();
 
-    private volatile long lastLeaderResponse = System.currentTimeMillis();
+    private final AtomicLong lastLeaderResponse = new AtomicLong(System.currentTimeMillis());
     private static final long PING_INTERVAL = 2000;
     private static final long TIMEOUT = 4000;
     private static final long ELECTION_TIMEOUT = 1200;
     private static final double DEATH_PROBABILITY = 0.05;
 
-    private final Object electionLock = new Object();
-    private volatile boolean electionInProgress = false;
-    private volatile boolean higherNodeAnswered = false;
-    private volatile ScheduledFuture<?> electionTimeoutTask;
-    private volatile ScheduledExecutorService scheduler;
+    private final ReentrantLock electionLock = new ReentrantLock();
+    private final AtomicBoolean electionInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean higherNodeAnswered = new AtomicBoolean(false);
+    private final AtomicReference<ScheduledFuture<?>> electionTimeoutTask = new AtomicReference<>();
+    private final AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<>();
 
     public Node(int id, List<Node> allNodes) {
+        super();
         this.id = id;
         this.allNodes = allNodes;
     }
 
     @Override
     public void run() {
-        scheduler = Executors.newScheduledThreadPool(1);
-        scheduler.scheduleAtFixedRate(this::sendPingIfNeeded, 0, PING_INTERVAL, TimeUnit.MILLISECONDS);
-        scheduler.scheduleAtFixedRate(this::checkLeaderTimeout, 0, 500, TimeUnit.MILLISECONDS);
-        scheduler.scheduleAtFixedRate(this::randomFailureSimulation, 0, 1000, TimeUnit.MILLISECONDS);
+        scheduler.set(Executors.newScheduledThreadPool(1));
+        scheduler.get().scheduleAtFixedRate(this::sendPingIfNeeded, 0, PING_INTERVAL, TimeUnit.MILLISECONDS);
+        scheduler.get().scheduleAtFixedRate(this::checkLeaderTimeout, 0, 500, TimeUnit.MILLISECONDS);
+        scheduler.get().scheduleAtFixedRate(this::randomFailureSimulation, 0, 1000, TimeUnit.MILLISECONDS);
 
         startElection();
 
-        while (!Thread.currentThread().isInterrupted()) {
+        while (!currentThread().isInterrupted()) {
             try {
                 Message msg = inbox.poll(100, TimeUnit.MILLISECONDS);
-                if (msg != null && alive) {
+                if (msg != null && alive.get()) {
                     handleMessage(msg);
                 }
             } catch (InterruptedException e) {
                 break;
             }
         }
-        scheduler.shutdown();
+        ScheduledExecutorService s = scheduler.get();
+        if (s != null) {
+            s.shutdown();
+        }
     }
 
     private void handleMessage(Message msg) {
         switch (msg.type()) {
             case PING -> {
-                if (leaderId == id && alive) {
+                if (leaderId.get() == id && alive.get()) {
                     sendTo(msg.senderId(), new Message(MessageType.ANSWER, id));
                 }
             }
             case ELECT -> {
-                if (!alive) {
+                if (!alive.get()) {
                     return;
                 }
                 if (msg.senderId() < id) {
@@ -73,36 +87,31 @@ public class Node extends Thread {
                 }
             }
             case ANSWER -> {
-                if (msg.senderId() == leaderId) {
-                    lastLeaderResponse = System.currentTimeMillis();
+                if (msg.senderId() == leaderId.get()) {
+                    lastLeaderResponse.set(System.currentTimeMillis());
                 }
                 if (msg.senderId() > id) {
-                    higherNodeAnswered = true;
+                    higherNodeAnswered.set(true);
                 }
             }
             case VICTORY -> {
-                leaderId = msg.senderId();
-                lastLeaderResponse = System.currentTimeMillis();
-                synchronized (electionLock) {
-                    electionInProgress = false;
-                    higherNodeAnswered = false;
-                    if (electionTimeoutTask != null) {
-                        electionTimeoutTask.cancel(false);
-                        electionTimeoutTask = null;
-                    }
-                }
+                leaderId.set(msg.senderId());
+                lastLeaderResponse.set(System.currentTimeMillis());
+                resetElectionState();
             }
         }
     }
 
     private void sendPingIfNeeded() {
-        if (!alive) return;
-        if (leaderId == -1) {
+        if (!alive.get()) {
+            return;
+        }
+        if (leaderId.get() == -1) {
             startElection();
             return;
         }
-        if (leaderId != -1 && leaderId != id) {
-            Node leader = getNodeById(leaderId);
+        if (leaderId.get() != -1 && leaderId.get() != id) {
+            Node leader = getNodeById(leaderId.get());
             if (leader != null) {
                 leader.send(new Message(MessageType.PING, id));
             }
@@ -110,24 +119,33 @@ public class Node extends Thread {
     }
 
     private void checkLeaderTimeout() {
-        if (!alive) return;
-        if (leaderId != -1 && leaderId != id && System.currentTimeMillis() - lastLeaderResponse > TIMEOUT) {
+        if (!alive.get()) {
+            return;
+        }
+        if (leaderId.get() != -1
+                && leaderId.get() != id
+                && System.currentTimeMillis() - lastLeaderResponse.get() > TIMEOUT) {
             startElection();
         }
     }
 
-    synchronized void startElection() {
-        if (!alive) return;
-        synchronized (electionLock) {
-            if (electionInProgress) {
+    void startElection() {
+        if (!alive.get()) {
+            return;
+        }
+        electionLock.lock();
+        try {
+            if (electionInProgress.get()) {
                 return;
             }
-            electionInProgress = true;
-            higherNodeAnswered = false;
-            if (electionTimeoutTask != null) {
-                electionTimeoutTask.cancel(false);
-                electionTimeoutTask = null;
+            electionInProgress.set(true);
+            higherNodeAnswered.set(false);
+            if (electionTimeoutTask.get() != null) {
+                electionTimeoutTask.get().cancel(false);
+                electionTimeoutTask.set(null);
             }
+        } finally {
+            electionLock.unlock();
         }
 
         for (Node node : allNodes) {
@@ -136,41 +154,55 @@ public class Node extends Thread {
             }
         }
 
-        electionTimeoutTask = scheduler.schedule(() -> {
-            if (!alive) return;
-            synchronized (electionLock) {
-                if (!electionInProgress) return;
-                if (!higherNodeAnswered) {
+        electionTimeoutTask.set(scheduler.get().schedule(() -> {
+            if (!alive.get()) {
+                return;
+            }
+            electionLock.lock();
+            try {
+                if (!electionInProgress.get()) {
+                    return;
+                }
+                if (!higherNodeAnswered.get()) {
                     declareVictory();
                 }
-                electionInProgress = false;
-                higherNodeAnswered = false;
-                electionTimeoutTask = null;
+                electionInProgress.set(false);
+                higherNodeAnswered.set(false);
+                electionTimeoutTask.set(null);
+            } finally {
+                electionLock.unlock();
             }
-        }, ELECTION_TIMEOUT, TimeUnit.MILLISECONDS);
+        }, ELECTION_TIMEOUT, TimeUnit.MILLISECONDS));
     }
 
     private void declareVictory() {
-        leaderId = id;
+        leaderId.set(id);
         allNodes.forEach(node -> node.send(new Message(MessageType.VICTORY, id)));
     }
 
     public void crash() {
-        alive = false;
-        synchronized (electionLock) {
-            electionInProgress = false;
-            higherNodeAnswered = false;
-            if (electionTimeoutTask != null) {
-                electionTimeoutTask.cancel(false);
-                electionTimeoutTask = null;
+        alive.set(false);
+        resetElectionState();
+    }
+
+    private void resetElectionState() {
+        electionLock.lock();
+        try {
+            electionInProgress.set(false);
+            higherNodeAnswered.set(false);
+            if (electionTimeoutTask.get() != null) {
+                electionTimeoutTask.get().cancel(false);
+                electionTimeoutTask.set(null);
             }
+        } finally {
+            electionLock.unlock();
         }
     }
 
     public void recover() {
-        alive = true;
-        leaderId = -1;
-        lastLeaderResponse = System.currentTimeMillis();
+        alive.set(true);
+        leaderId.set(-1);
+        lastLeaderResponse.set(System.currentTimeMillis());
         startElection();
     }
 
@@ -179,8 +211,10 @@ public class Node extends Thread {
             crash();
             new Thread(() -> {
                 try {
-                    Thread.sleep(3000 + random.nextInt(5000));
-                } catch (InterruptedException ignored) {}
+                    sleep(3000 + random.nextInt(5000));
+                } catch (InterruptedException ignored) {
+                    log.warn("sleep interrupted");
+                }
                 recover();
             }).start();
         }
@@ -206,9 +240,15 @@ public class Node extends Thread {
         return null;
     }
 
-    public int getNodeId() { return id; }
+    public int getNodeId() {
+        return id;
+    }
 
-    public int getLeaderId() { return leaderId; }
+    public int getLeaderId() {
+        return leaderId.get();
+    }
 
-    public boolean isUp() { return alive; }
+    public boolean isUp() {
+        return alive.get();
+    }
 }
