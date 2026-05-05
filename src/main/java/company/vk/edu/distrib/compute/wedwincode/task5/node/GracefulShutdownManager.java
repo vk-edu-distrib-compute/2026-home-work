@@ -2,16 +2,24 @@ package company.vk.edu.distrib.compute.wedwincode.task5.node;
 
 import company.vk.edu.distrib.compute.wedwincode.task5.ClusterLogger;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 final class GracefulShutdownManager {
     private final Node node;
+
+    private final Lock shutdownLock = new ReentrantLock();
 
     GracefulShutdownManager(Node node) {
         this.node = node;
     }
 
     void gracefulShutdown() {
-        synchronized (this) {
+        shutdownLock.lock();
+        try {
             gracefulShutdownInternal();
+        } finally {
+            shutdownLock.unlock();
         }
     }
 

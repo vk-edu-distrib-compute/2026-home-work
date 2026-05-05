@@ -5,11 +5,15 @@ import company.vk.edu.distrib.compute.wedwincode.task5.ClusterLogger;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 final class ElectionManager {
     private static final long ANSWER_TIMEOUT_MS = 700;
     private static final long ELECTION_TIMEOUT_MS = 1_500;
     private static final int INTERRUPTED_MARKER = Integer.MIN_VALUE;
+
+    private final Lock electionLock = new ReentrantLock();
 
     private final Node node;
     private final BlockingQueue<Message> messages;
@@ -33,8 +37,11 @@ final class ElectionManager {
     }
 
     void startElection() {
-        synchronized (this) {
+        electionLock.lock();
+        try {
             startElectionInternal();
+        } finally {
+            electionLock.unlock();
         }
     }
 
@@ -45,9 +52,11 @@ final class ElectionManager {
 
         prepareElection();
         sendElectMessagesToHigherNodes();
+
         ElectionResult answerResult = waitForAnswersFromHigherNodes();
 
-        if (answerResult == ElectionResult.INTERRUPTED || answerResult == ElectionResult.LEADER_ALREADY_SELECTED) {
+        if (answerResult == ElectionResult.INTERRUPTED
+                || answerResult == ElectionResult.LEADER_ALREADY_SELECTED) {
             return;
         }
 
@@ -57,7 +66,9 @@ final class ElectionManager {
         }
 
         ElectionResult victoryResult = waitForVictoryFromHigherNode();
-        if (victoryResult == ElectionResult.INTERRUPTED || victoryResult == ElectionResult.LEADER_ALREADY_SELECTED) {
+
+        if (victoryResult == ElectionResult.INTERRUPTED
+                || victoryResult == ElectionResult.LEADER_ALREADY_SELECTED) {
             return;
         }
 
@@ -78,8 +89,11 @@ final class ElectionManager {
     }
 
     void forceBecomeLeaderAfterTransfer() {
-        synchronized (this) {
+        electionLock.lock();
+        try {
             forceBecomeLeaderAfterTransferInternal();
+        } finally {
+            electionLock.unlock();
         }
     }
 

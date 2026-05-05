@@ -6,10 +6,12 @@ import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class ClusterLogger {
-    private static final Object LOCK = new Object();
+    private static final Lock LOCK = new ReentrantLock();
 
     private static final String RESET = "\u001B[0m";
     private static final String RED = "\u001B[31m";
@@ -18,14 +20,16 @@ public final class ClusterLogger {
     private static final String BLUE = "\u001B[34m";
     private static final String GRAY = "\u001B[90m";
 
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter TIME_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private ClusterLogger() {
         throw new UnsupportedOperationException("Utility class");
     }
 
     public static void event(int nodeId, String event) {
-        synchronized (LOCK) {
+        LOCK.lock();
+        try {
             String time = LocalTime.now().format(TIME_FORMAT);
 
             System.out.println(
@@ -33,11 +37,28 @@ public final class ClusterLogger {
                             + BLUE + "{node=" + nodeId + "} " + RESET
                             + event
             );
+        } finally {
+            LOCK.unlock();
+        }
+    }
+
+    public static void info(String message) {
+        LOCK.lock();
+        try {
+            String time = LocalTime.now().format(TIME_FORMAT);
+
+            System.out.println(
+                    GRAY + "[" + time + "] " + RESET
+                            + message
+            );
+        } finally {
+            LOCK.unlock();
         }
     }
 
     public static void clusterSnapshot(Map<Integer, Node> cluster) {
-        synchronized (LOCK) {
+        LOCK.lock();
+        try {
             StringBuilder builder = new StringBuilder(100);
 
             builder.append('\n')
@@ -57,17 +78,8 @@ public final class ClusterLogger {
                     .append(RESET);
 
             System.out.println(builder);
-        }
-    }
-
-    public static void info(String message) {
-        synchronized (LOCK) {
-            String time = LocalTime.now().format(TIME_FORMAT);
-
-            System.out.println(
-                    GRAY + "[" + time + "] " + RESET
-                            + message
-            );
+        } finally {
+            LOCK.unlock();
         }
     }
 
