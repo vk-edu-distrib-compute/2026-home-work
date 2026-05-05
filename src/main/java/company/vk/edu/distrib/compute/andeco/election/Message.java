@@ -5,15 +5,15 @@ import java.util.Objects;
 public final class Message {
     private final MessageType type;
     private final int from;
-    private final long election;
+    private final long electionId;
 
-    public Message(MessageType type, int from, long election) {
+    public Message(MessageType type, int from, long electionId) {
         this.type = Objects.requireNonNull(type);
         this.from = from;
-        this.election = election;
+        this.electionId = electionId;
     }
 
-    public MessageType type() {
+    public MessageType getType() {
         return type;
     }
 
@@ -21,8 +21,8 @@ public final class Message {
         return from;
     }
 
-    public long election() {
-        return election;
+    public long getElectionId() {
+        return electionId;
     }
 }
 

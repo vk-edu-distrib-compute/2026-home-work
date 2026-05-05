@@ -2,28 +2,8 @@ package company.vk.edu.distrib.compute.andeco.election;
 
 import java.util.concurrent.TimeUnit;
 
-public final class ElectionConfig {
-    private final long loopPollMs;
-    private final long pingPeriodMs;
-    private final long pingTimeoutMs;
-    private final long answerTimeoutMs;
-    private final long victoryTimeoutMs;
-    private final long stepDownCooldownMs;
-
-    public ElectionConfig(long loopPollMs,
-                          long pingPeriodMs,
-                          long pingTimeoutMs,
-                          long answerTimeoutMs,
-                          long victoryTimeoutMs,
-                          long stepDownCooldownMs) {
-        this.loopPollMs = loopPollMs;
-        this.pingPeriodMs = pingPeriodMs;
-        this.pingTimeoutMs = pingTimeoutMs;
-        this.answerTimeoutMs = answerTimeoutMs;
-        this.victoryTimeoutMs = victoryTimeoutMs;
-        this.stepDownCooldownMs = stepDownCooldownMs;
-    }
-
+public record ElectionConfig(long loopPollMs, long pingPeriodMs, long pingTimeoutMs,
+                             long answerTimeoutMs, long victoryTimeoutMs, long stepDownCooldownMs) {
     public static ElectionConfig defaults(long pingTimeoutMs, long answerTimeoutMs, long victoryTimeoutMs) {
         return new ElectionConfig(
                 100,
@@ -35,27 +15,24 @@ public final class ElectionConfig {
         );
     }
 
-    public long loopPollMs() {
-        return loopPollMs;
-    }
 
-    public long pingPeriodNs() {
+    public long getPingPeriodNs() {
         return TimeUnit.MILLISECONDS.toNanos(pingPeriodMs);
     }
 
-    public long pingTimeoutNs() {
+    public long getPingTimeoutNs() {
         return TimeUnit.MILLISECONDS.toNanos(pingTimeoutMs);
     }
 
-    public long answerTimeoutNs() {
+    public long getAnswerTimeoutNs() {
         return TimeUnit.MILLISECONDS.toNanos(answerTimeoutMs);
     }
 
-    public long victoryTimeoutNs() {
+    public long getVictoryTimeoutNs() {
         return TimeUnit.MILLISECONDS.toNanos(victoryTimeoutMs);
     }
 
-    public long stepDownCooldownNs() {
+    public long getStepDownCooldownNs() {
         return TimeUnit.MILLISECONDS.toNanos(stepDownCooldownMs);
     }
 }

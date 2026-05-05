@@ -68,9 +68,13 @@ public final class ClusterMonitor extends Thread {
                 .orElse(-1);
 
         String leaderText = leader == null ? "нет" : String.valueOf(leader);
-        log.info("кластер: активных {}/{}; лидер {}; ожидаемый максимум среди активных {}",
-                alive, nodes.size(), leaderText, maxAliveId);
-
+        if (log.isInfoEnabled()) {
+            log.info("кластер: активных {}/{}; лидер {}; ожидаемый максимум среди активных {}",
+                    alive, nodes.size(), leader, maxAliveId);
+        }
+        logNodes(nodes);
+    }
+    private static void logNodes(List<ElectionNode> nodes) {
         for (ElectionNode node : nodes) {
             String color = switch (node.role()) {
                 case LEADER -> GREEN;

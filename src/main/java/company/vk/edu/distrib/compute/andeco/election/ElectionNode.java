@@ -145,49 +145,89 @@ public final class ElectionNode extends Thread {
     private void onTick() {
         long now = System.nanoTime();
 
-        if (role == NodeRole.DOWN) {
-            if (recoverAtNs != 0 && now >= recoverAtNs) {
-                goUp("auto");
-            }
+        if (handleDownState(now)) {
             return;
         }
 
         maybeFail(now);
 
-        if (role == NodeRole.LEADER) {
-            lastLeaderSeenNs = now;
+        if (handleLeaderState(now)) {
             return;
         }
 
-        if (steppedDownUntilNs != 0 && now < steppedDownUntilNs) {
+        if (isInStepDownCooldown(now)) {
             return;
         }
 
-        if (leader == null) {
-            ensureElectionProgress(now);
+        if (handleNoLeader(now)) {
             return;
         }
 
-        if (now - lastPingSentNs >= config.pingPeriodNs()) {
-            lastPingSentNs = now;
-            send(leader, new Message(MessageType.PING, id, election));
-        }
+        maybeSendPing(now);
 
-        if (now - lastLeaderSeenNs > config.pingTimeoutNs()) {
-            log("лидер " + leader + " недоступен по таймауту, старт выборов");
-            leader = null;
-            startElection("leader-timeout");
+        if (checkLeaderTimeout(now)) {
             return;
         }
 
         ensureElectionProgress(now);
     }
 
+    private boolean handleDownState(long now) {
+        if (role != NodeRole.DOWN) {
+            return false;
+        }
+
+        if (recoverAtNs != 0 && now >= recoverAtNs) {
+            goUp("auto");
+        }
+        return true;
+    }
+
+    private boolean handleLeaderState(long now) {
+        if (role != NodeRole.LEADER) {
+            return false;
+        }
+
+        lastLeaderSeenNs = now;
+        return true;
+    }
+
+    private boolean isInStepDownCooldown(long now) {
+        return steppedDownUntilNs != 0 && now < steppedDownUntilNs;
+    }
+
+    private boolean handleNoLeader(long now) {
+        if (leader != null) {
+            return false;
+        }
+
+        ensureElectionProgress(now);
+        return true;
+    }
+
+    private void maybeSendPing(long now) {
+        if (now - lastPingSentNs >= config.getPingPeriodNs()) {
+            lastPingSentNs = now;
+            send(leader, new Message(MessageType.PING, id, election));
+        }
+    }
+
+    private boolean checkLeaderTimeout(long now) {
+        if (now - lastLeaderSeenNs <= config.getPingTimeoutNs()) {
+            return false;
+        }
+
+        log("лидер " + leader + " недоступен по таймауту, старт выборов");
+        leader = null;
+        startElection("leader-timeout");
+        return true;
+    }
+
     private void ensureElectionProgress(long now) {
         if (answerDeadlineNs != 0 && now >= answerDeadlineNs) {
             answerDeadlineNs = 0;
             if (hasAnswer) {
-                victoryDeadlineNs = now + config.victoryTimeoutNs();
+                victoryDeadlineNs = now + config.getVictoryTimeoutNs();
             } else {
                 becomeLeaderAndBroadcast();
             }
@@ -205,11 +245,11 @@ public final class ElectionNode extends Thread {
             return;
         }
 
-        if (message.election() < election) {
+        if (message.getElectionId() < election) {
             return;
         }
 
-        switch (message.type()) {
+        switch (message.getType()) {
             case PING -> onPing(message);
             case ELECT -> onElect(message);
             case ANSWER -> onAnswer(message);
@@ -225,8 +265,8 @@ public final class ElectionNode extends Thread {
     }
 
     private void onElect(Message message) {
-        if (message.election() > election) {
-            election = message.election();
+        if (message.getElectionId() > election) {
+            election = message.getElectionId();
             hasAnswer = false;
             answerDeadlineNs = 0;
             victoryDeadlineNs = 0;
@@ -241,7 +281,7 @@ public final class ElectionNode extends Thread {
     }
 
     private void onAnswer(Message message) {
-        if (message.election() != election) {
+        if (message.getElectionId() != election) {
             return;
         }
 
@@ -255,11 +295,11 @@ public final class ElectionNode extends Thread {
     }
 
     private void onVictory(Message message) {
-        if (message.election() < election) {
+        if (message.getElectionId() < election) {
             return;
         }
 
-        election = message.election();
+        election = message.getElectionId();
         answerDeadlineNs = 0;
         victoryDeadlineNs = 0;
         hasAnswer = false;
@@ -283,18 +323,18 @@ public final class ElectionNode extends Thread {
     }
 
     private void onStepDown(Message message) {
-        if (message.election() < election) {
+        if (message.getElectionId() < election) {
             return;
         }
         if (message.from() == leader || leader == null) {
             leader = null;
         }
 
-        if (message.election() > election) {
-            election = message.election();
+        if (message.getElectionId() > election) {
+            election = message.getElectionId();
         }
 
-        steppedDownUntilNs = System.nanoTime() + config.stepDownCooldownNs();
+        steppedDownUntilNs = System.nanoTime() + config.getStepDownCooldownNs();
         startElection("step-down-from-" + message.from());
     }
 
@@ -324,7 +364,7 @@ public final class ElectionNode extends Thread {
             send(target, new Message(MessageType.ELECT, id, election));
         }
 
-        answerDeadlineNs = System.nanoTime() + config.answerTimeoutNs();
+        answerDeadlineNs = System.nanoTime() + config.getAnswerTimeoutNs();
         victoryDeadlineNs = 0;
         log("выборы запущены (" + reason + "), наибольшие id: " + higherIds);
     }
