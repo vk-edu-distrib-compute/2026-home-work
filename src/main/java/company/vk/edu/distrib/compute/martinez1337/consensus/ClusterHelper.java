@@ -3,11 +3,9 @@ package company.vk.edu.distrib.compute.martinez1337.consensus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -18,7 +16,7 @@ public final class ClusterHelper {
     private ClusterHelper() {
     }
 
-    static void main() throws InterruptedException {
+    static void main() {
         int n = 5;
         List<Node> nodes = new ArrayList<>();
         for (int i = 1; i <= n; i++) {
@@ -26,26 +24,41 @@ public final class ClusterHelper {
         }
         nodes.forEach(Thread::start);
 
-        BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(System.out));
         ScheduledExecutorService printer = Executors.newScheduledThreadPool(1);
+
         printer.scheduleAtFixedRate(() -> {
             try {
-                bw.write("=== Cluster State ===");
-                bw.newLine();
-
+                StringBuilder state = new StringBuilder("\n=== Cluster State ===\n");
                 for (Node node : nodes) {
-                    bw.write(String.format("Node %d: alive=%b, leader=%d",
+                    state.append(String.format("Node %d: alive=%b, leader=%d\n",
                             node.getNodeId(), node.isUp(), node.getLeaderId()));
-                    bw.newLine();
                 }
-                bw.flush();
-            } catch (IOException e) {
-                log.warn(e.getMessage());
+                log.info(state.toString());
+            } catch (Exception e) {
+                log.error("Error while printing state", e);
             }
         }, 2, 1, TimeUnit.SECONDS);
 
-        // Пример внешнего воздействия: убить узел 5 через 10 сек
-        Thread.sleep(10_000);
-        nodes.get(4).crash();
+        try (Scanner scanner = new Scanner(System.in)) {
+            log.info("Simulation started. Press ENTER to stop...");
+
+            Thread.sleep(10_000);
+            if (nodes.size() >= 5) {
+                nodes.get(4).crash();
+                log.warn("Node 5 has been crashed!");
+            }
+
+            if (scanner.hasNextLine()) {
+                scanner.nextLine();
+            }
+        } catch (InterruptedException e) {
+            log.error("Main thread interrupted", e);
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            log.error("Unexpected error", e);
+        } finally {
+            printer.shutdownNow();
+            log.info("Simulation finished.");
+        }
     }
 }
