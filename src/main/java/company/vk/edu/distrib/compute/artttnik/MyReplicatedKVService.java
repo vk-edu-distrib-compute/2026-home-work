@@ -36,7 +36,7 @@ public class MyReplicatedKVService implements ReplicatedService {
     private final int servicePort;
     private final int grpcPort;
     private final MyReplicaManager replicaManager;
-    private final ProxyService proxyService;
+    private final ProxyService service;
     private final LocalRequestHandler localHandler;
 
     private ExecutorService executor;
@@ -68,7 +68,7 @@ public class MyReplicatedKVService implements ReplicatedService {
         this.replicaManager = new MyReplicaManager(replicaDaos);
         this.localHandler = new LocalRequestHandler(this.replicaManager);
         String selfEndpoint = formatEndpoint(port, grpcPort);
-        this.proxyService = new ProxyService(selfEndpoint, endpoints, shardingStrategy);
+        this.service = new ProxyService(selfEndpoint, endpoints, shardingStrategy);
     }
 
     public static int defaultGrpcPort(int httpPort) {
@@ -114,7 +114,7 @@ public class MyReplicatedKVService implements ReplicatedService {
         stopHttpServer();
         shutdownExecutor();
         shutdownGrpcServer();
-        proxyService.close();
+        service.close();
         closeReplicaManager();
         log.info("KVService stopped");
     }
@@ -196,6 +196,6 @@ public class MyReplicatedKVService implements ReplicatedService {
     }
 
     ProxyService proxyService() {
-        return proxyService;
+        return service;
     }
 }

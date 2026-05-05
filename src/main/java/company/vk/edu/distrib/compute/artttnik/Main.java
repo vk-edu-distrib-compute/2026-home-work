@@ -41,8 +41,10 @@ public final class Main {
 
     private static void initializeCluster(Cluster cluster, int n,
                                           double failProb, long tick, long pingInterval, long electionTimeout) {
+        Node node;
+
         for (int i = 1; i <= n; i++) {
-            Node node = new Node(i, cluster, failProb, tick, pingInterval, electionTimeout);
+            node = new Node(i, cluster, failProb, tick, pingInterval, electionTimeout);
             cluster.addNode(node);
         }
     }
