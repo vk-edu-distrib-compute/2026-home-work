@@ -40,10 +40,16 @@ public final class Main {
     }
 
     private static void initializeCluster(Cluster cluster, int n,
-                                          double failProb, long tick, long pingInterval, long electionTimeout) {
+                                          double failProb, long tick,
+                                          long pingInterval, long electionTimeout) {
         for (int i = 1; i <= n; i++) {
-            cluster.addNode(new Node(i, cluster, failProb, tick, pingInterval, electionTimeout));
+            cluster.addNode(createNode(i, cluster, failProb, tick, pingInterval, electionTimeout));
         }
+    }
+
+    private static Node createNode(int id, Cluster cluster, double failProb,
+                                   long tick, long pingInterval, long electionTimeout) {
+        return new Node(id, cluster, failProb, tick, pingInterval, electionTimeout);
     }
 
     private static void runScenarios(Cluster cluster, int n) throws InterruptedException {
