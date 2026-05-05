@@ -87,6 +87,17 @@ public class Cluster {
         node.turnOff();
     }
 
+    public void turnOnNode(int nodeId) {
+        Node node = findNode(nodeId);
+
+        if (node == null) {
+            LOG.log(Logger.Level.WARNING, "cluster cannot find node " + nodeId);
+            return;
+        }
+
+        node.turnOn();
+    }
+
     public int getLeaderId() {
         for (Node node : nodes) {
             if (node.getNodeStatus() == NodeStatus.LEADER) {

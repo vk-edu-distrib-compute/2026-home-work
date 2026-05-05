@@ -76,6 +76,25 @@ public class Node extends Thread {
         leaderId = NO_LEADER;
         electionInProgress = false;
         answerFromHigherNode = false;
+        inbox.clear();
+    }
+
+    public synchronized void turnOn() {
+        if (status != NodeStatus.DOWN) {
+            LOG.log(Logger.Level.INFO, getName() + " is already alive");
+            return;
+        }
+
+        LOG.log(Logger.Level.INFO, getName() + " turns on");
+
+        status = NodeStatus.FOLLOWER;
+        leaderId = NO_LEADER;
+        lastLeaderAnswerTime = System.currentTimeMillis();
+        electionInProgress = false;
+        answerFromHigherNode = false;
+        inbox.clear();
+
+        startElection();
     }
 
     public void receive(Message message) {
