@@ -12,6 +12,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings({
+    "PMD.AvoidSynchronizedStatement",
+    "PMD.AvoidUsingVolatile",
+    "PMD.CyclomaticComplexity"
+})
 public final class Node extends Thread {
     private static final Logger log = LoggerFactory.getLogger(Node.class);
     private final int nodeId;
@@ -128,7 +133,7 @@ public final class Node extends Thread {
                 tick();
             } catch (InterruptedException e) {
                 if (!running.get()) {
-                    Thread.currentThread().interrupt();
+                    currentThread().interrupt();
                     return;
                 }
             }
@@ -224,7 +229,6 @@ public final class Node extends Thread {
             case ELECT -> handleElect(message);
             case ANSWER -> handleAnswer(message);
             case VICTORY -> handleVictory(message);
-            default -> throw new IllegalStateException("Unsupported message: " + message.type());
         }
     }
 

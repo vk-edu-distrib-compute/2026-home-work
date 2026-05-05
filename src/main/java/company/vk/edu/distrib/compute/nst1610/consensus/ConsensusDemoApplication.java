@@ -1,10 +1,16 @@
 package company.vk.edu.distrib.compute.nst1610.consensus;
 
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ConsensusDemoApplication {
+    private static final Logger log = LoggerFactory.getLogger(ConsensusDemoApplication.class);
 
-    public static void main(String[] args) throws Exception {
+    private ConsensusDemoApplication() {
+    }
+
+    public static void main(String[] args) throws InterruptedException {
         runScenario("startup", ConsensusConfig.defaultConfig(), cluster -> {
             Thread.sleep(1_500L);
             printSnapshots(cluster.snapshots());
@@ -29,9 +35,10 @@ public final class ConsensusDemoApplication {
         });
     }
 
-    private static void runScenario(String name, ConsensusConfig config, ScenarioAction action) throws Exception {
-        System.out.println();
-        System.out.println("Scenario: " + name);
+    private static void runScenario(String name, ConsensusConfig config, ScenarioAction action)
+        throws InterruptedException {
+        log.info("");
+        log.info("Scenario: {}", name);
         try (ConsensusCluster cluster = ConsensusCluster.withNodeCount(5, config)) {
             cluster.start();
             action.run(cluster);
@@ -40,12 +47,12 @@ public final class ConsensusDemoApplication {
 
     private static void printSnapshots(List<NodeSnapshot> snapshots) {
         for (NodeSnapshot snapshot : snapshots) {
-            System.out.println(snapshot.toString());
+            log.info("{}", snapshot);
         }
     }
 
     @FunctionalInterface
     private interface ScenarioAction {
-        void run(ConsensusCluster cluster) throws Exception;
+        void run(ConsensusCluster cluster) throws InterruptedException;
     }
 }

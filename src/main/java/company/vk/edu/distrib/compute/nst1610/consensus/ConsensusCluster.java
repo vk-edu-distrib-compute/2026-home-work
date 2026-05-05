@@ -1,23 +1,21 @@
 package company.vk.edu.distrib.compute.nst1610.consensus;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class ConsensusCluster implements AutoCloseable {
-    private final ConsensusConfig config;
     private final ElectionCoordinator electionCoordinator;
     private final Map<Integer, Node> nodes;
 
     public ConsensusCluster(Set<Integer> nodeIds, ConsensusConfig config) {
-        this.config = config;
         this.electionCoordinator = new ElectionCoordinator();
-        Map<Integer, Node> nodes = new LinkedHashMap<>();
+        Map<Integer, Node> nodes = new ConcurrentHashMap<>();
         for (int nodeId : nodeIds.stream().sorted().toList()) {
             nodes.put(nodeId, new Node(nodeId, config, electionCoordinator));
         }
