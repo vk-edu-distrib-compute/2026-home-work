@@ -196,8 +196,9 @@ class LeaderElectionTest {
         List<ElectionNode> nodes = new ArrayList<>();
         ElectionConfig config = ElectionConfig.defaults(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs);
         for (int id : ids) {
-            nodes.add(new ElectionNode(id, ids, config, pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
-                    0.0, 100, 200, 1));
+            nodes.add(new ElectionNode(id, ids, config,
+                    new ElectionNodeParameters(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
+                    0.0, 100, 200, 1)));
         }
 
         Cluster cluster = new Cluster(nodes);

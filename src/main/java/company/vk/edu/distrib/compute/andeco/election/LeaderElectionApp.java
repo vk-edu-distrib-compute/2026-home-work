@@ -28,8 +28,9 @@ public final class LeaderElectionApp {
         ElectionConfig config = ElectionConfig.defaults(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs);
 
         for (int id : ids) {
-            nodes.add(new ElectionNode(id, ids, config, pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
-                    failProb, minRecoverMs, maxRecoverMs, seed));
+            nodes.add(new ElectionNode(id, ids, config,
+                    new ElectionNodeParameters(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
+                    failProb, minRecoverMs, maxRecoverMs, seed)));
         }
         for (ElectionNode node : nodes) {
             node.attachCluster(cluster);

@@ -84,7 +84,6 @@ public final class ClusterMonitor extends Thread {
             };
             String line = color + "узел: " + node.id()
                     + " роль: " + LocalisationUtils.roleRu(node.role())
-                    + " лидер: " + node.leader()
                     + RESET;
             log.info(line);
         }

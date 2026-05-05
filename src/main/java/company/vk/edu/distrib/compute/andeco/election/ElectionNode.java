@@ -14,9 +14,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings({"PMD.CyclomaticComplexity", "PMD.AvoidUsingVolatile"})
 public final class ElectionNode extends Thread {
-    private static final Logger log = LoggerFactory.getLogger(ElectionNode.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ElectionNode.class);
+    private static final double NO_FAILURE_PROBABILITY = 0.0;
 
-    private final int id;
+    private final int nodeId;
     private final List<Integer> nodeIds;
     private final BlockingQueue<Message> queue = new LinkedBlockingQueue<>();
     private final Random random;
@@ -25,7 +26,7 @@ public final class ElectionNode extends Thread {
 
     private volatile Cluster cluster;
 
-    private volatile NodeRole role = NodeRole.SLAVE;
+    private volatile NodeRole nodeRole = NodeRole.SLAVE;
     private volatile Integer leader;
 
     private volatile long election;
@@ -43,31 +44,26 @@ public final class ElectionNode extends Thread {
 
     private volatile long recoverAtNs;
 
-    public ElectionNode(int id,
+    public ElectionNode(int nodeId,
                         List<Integer> nodeIds,
                         ElectionConfig config,
-                        long pingTimeoutMs,
-                        long electionAnswerTimeoutMs,
-                        long victoryTimeoutMs,
-                        double failProbabilityPerTick,
-                        long minRecoverMs,
-                        long maxRecoverMs,
-                        long randomSeed) {
-        super("election-node-" + id);
-        this.id = id;
+                        ElectionNodeParameters parameters) {
+        super("election-node-" + nodeId);
+        this.nodeId = nodeId;
         this.nodeIds = List.copyOf(nodeIds);
         this.config = Objects.requireNonNullElseGet(
                 config,
-                () -> ElectionConfig.defaults(pingTimeoutMs, electionAnswerTimeoutMs, victoryTimeoutMs)
+                () -> ElectionConfig.defaults(parameters.pingTimeoutMs(),
+                        parameters.electionAnswerTimeoutMs(), parameters.victoryTimeoutMs())
         );
-        this.failProbabilityPerTick = failProbabilityPerTick;
-        this.minRecoverMs = minRecoverMs;
-        this.maxRecoverMs = Math.max(maxRecoverMs, minRecoverMs);
-        this.random = new Random(randomSeed ^ id);
+        this.failProbabilityPerTick = parameters.failProbabilityPerTick();
+        this.minRecoverMs = parameters.minRecoverMs();
+        this.maxRecoverMs = Math.max(parameters.maxRecoverMs(), parameters.minRecoverMs());
+        this.random = new Random(parameters.randomSeed() * nodeId);
     }
 
     public int id() {
-        return id;
+        return nodeId;
     }
 
     public void attachCluster(Cluster cluster) {
@@ -75,11 +71,7 @@ public final class ElectionNode extends Thread {
     }
 
     public NodeRole role() {
-        return role;
-    }
-
-    public Integer leader() {
-        return leader;
+        return nodeRole;
     }
 
     public void enqueue(Message message) {
@@ -92,14 +84,14 @@ public final class ElectionNode extends Thread {
     }
 
     public void forceDown() {
-        if (role == NodeRole.DOWN) {
+        if (nodeRole == NodeRole.DOWN) {
             return;
         }
         goDown("forced");
     }
 
     public void forceUp() {
-        if (role != NodeRole.DOWN) {
+        if (nodeRole != NodeRole.DOWN) {
             return;
         }
         recoverAtNs = 0;
@@ -107,15 +99,15 @@ public final class ElectionNode extends Thread {
     }
 
     public void gracefulShutdown() {
-        if (role == NodeRole.DOWN) {
+        if (nodeRole == NodeRole.DOWN) {
             return;
         }
-        if (role == NodeRole.LEADER) {
+        if (nodeRole == NodeRole.LEADER) {
             long nextElectionId = election + 1;
             log("штатное отключение: передача роли");
             Cluster c = cluster;
             if (c != null) {
-                c.broadcast(new Message(MessageType.STEP_DOWN, id, nextElectionId));
+                c.broadcast(new Message(MessageType.STEP_DOWN, nodeId, nextElectionId));
             }
         }
         goDown("graceful");
@@ -173,7 +165,7 @@ public final class ElectionNode extends Thread {
     }
 
     private boolean handleDownState(long now) {
-        if (role != NodeRole.DOWN) {
+        if (nodeRole != NodeRole.DOWN) {
             return false;
         }
 
@@ -184,7 +176,7 @@ public final class ElectionNode extends Thread {
     }
 
     private boolean handleLeaderState(long now) {
-        if (role != NodeRole.LEADER) {
+        if (nodeRole != NodeRole.LEADER) {
             return false;
         }
 
@@ -197,7 +189,7 @@ public final class ElectionNode extends Thread {
     }
 
     private boolean handleNoLeader(long now) {
-        if (leader != null) {
+        if (leader != -1) {
             return false;
         }
 
@@ -208,7 +200,7 @@ public final class ElectionNode extends Thread {
     private void maybeSendPing(long now) {
         if (now - lastPingSentNs >= config.getPingPeriodNs()) {
             lastPingSentNs = now;
-            send(leader, new Message(MessageType.PING, id, election));
+            send(leader, new Message(MessageType.PING, nodeId, election));
         }
     }
 
@@ -218,7 +210,7 @@ public final class ElectionNode extends Thread {
         }
 
         log("лидер " + leader + " недоступен по таймауту, старт выборов");
-        leader = null;
+        leader = -1;
         startElection("leader-timeout");
         return true;
     }
@@ -241,7 +233,7 @@ public final class ElectionNode extends Thread {
     }
 
     private void onMessage(Message message) {
-        if (role == NodeRole.DOWN) {
+        if (nodeRole == NodeRole.DOWN) {
             return;
         }
 
@@ -259,8 +251,8 @@ public final class ElectionNode extends Thread {
     }
 
     private void onPing(Message message) {
-        if (role == NodeRole.LEADER) {
-            send(message.getFrom(), new Message(MessageType.ANSWER, id, election));
+        if (nodeRole == NodeRole.LEADER) {
+            send(message.getFrom(), new Message(MessageType.ANSWER, nodeId, election));
         }
     }
 
@@ -272,9 +264,9 @@ public final class ElectionNode extends Thread {
             victoryDeadlineNs = 0;
         }
 
-        if (id > message.getFrom()) {
-            send(message.getFrom(), new Message(MessageType.ANSWER, id, election));
-            if (role != NodeRole.LEADER) {
+        if (nodeId > message.getFrom()) {
+            send(message.getFrom(), new Message(MessageType.ANSWER, nodeId, election));
+            if (nodeRole != NodeRole.LEADER) {
                 startElection("elect-from-" + message.getFrom());
             }
         }
@@ -289,7 +281,7 @@ public final class ElectionNode extends Thread {
             hasAnswer = true;
         }
 
-        if (leader != null && message.getFrom() == leader) {
+        if (leader != -1 && message.getFrom() == leader) {
             lastLeaderSeenNs = System.nanoTime();
         }
     }
@@ -304,17 +296,17 @@ public final class ElectionNode extends Thread {
         victoryDeadlineNs = 0;
         hasAnswer = false;
 
-        if (message.getFrom() == id) {
-            role = NodeRole.LEADER;
-            leader = id;
+        if (message.getFrom() == nodeId) {
+            nodeRole = NodeRole.LEADER;
+            leader = nodeId;
             lastLeaderSeenNs = System.nanoTime();
             log("лидер подтверждён");
             return;
         }
 
-        if (leader == null || message.getFrom() >= leader) {
-            if (role == NodeRole.LEADER) {
-                role = NodeRole.SLAVE;
+        if (leader == -1 || message.getFrom() >= leader) {
+            if (nodeRole == NodeRole.LEADER) {
+                nodeRole = NodeRole.SLAVE;
             }
             leader = message.getFrom();
             lastLeaderSeenNs = System.nanoTime();
@@ -326,8 +318,8 @@ public final class ElectionNode extends Thread {
         if (message.getElectionId() < election) {
             return;
         }
-        if (message.getFrom() == leader || leader == null) {
-            leader = null;
+        if (message.getFrom() == leader || leader == -1) {
+            leader = -1;
         }
 
         if (message.getElectionId() > election) {
@@ -339,7 +331,7 @@ public final class ElectionNode extends Thread {
     }
 
     private void startElection(String reason) {
-        if (role == NodeRole.DOWN) {
+        if (nodeRole == NodeRole.DOWN) {
             return;
         }
 
@@ -350,8 +342,8 @@ public final class ElectionNode extends Thread {
         }
         election = newElectionId;
 
-        role = NodeRole.SLAVE;
-        leader = null;
+        nodeRole = NodeRole.SLAVE;
+        leader = -1;
         hasAnswer = false;
 
         List<Integer> higherIds = higherNodeIds();
@@ -360,8 +352,10 @@ public final class ElectionNode extends Thread {
             return;
         }
 
+        Message electMessage = new Message(MessageType.ELECT, nodeId, election);
+
         for (int target : higherIds) {
-            send(target, new Message(MessageType.ELECT, id, election));
+            send(target, electMessage);
         }
 
         answerDeadlineNs = System.nanoTime() + config.getAnswerTimeoutNs();
@@ -370,8 +364,8 @@ public final class ElectionNode extends Thread {
     }
 
     private void becomeLeaderAndBroadcast() {
-        role = NodeRole.LEADER;
-        leader = id;
+        nodeRole = NodeRole.LEADER;
+        leader = nodeId;
         lastLeaderSeenNs = System.nanoTime();
         answerDeadlineNs = 0;
         victoryDeadlineNs = 0;
@@ -380,14 +374,14 @@ public final class ElectionNode extends Thread {
         log("победа: рассылка сообщения VICTORY");
         Cluster c = cluster;
         if (c != null) {
-            c.broadcast(new Message(MessageType.VICTORY, id, election));
+            c.broadcast(new Message(MessageType.VICTORY, nodeId, election));
         }
     }
 
     private List<Integer> higherNodeIds() {
         List<Integer> result = new ArrayList<>();
         for (int other : nodeIds) {
-            if (other > id) {
+            if (other > nodeId) {
                 result.add(other);
             }
         }
@@ -403,7 +397,7 @@ public final class ElectionNode extends Thread {
     }
 
     private void maybeFail(long now) {
-        if (failProbabilityPerTick <= 0.0) {
+        if (failProbabilityPerTick <= NO_FAILURE_PROBABILITY) {
             return;
         }
         if (random.nextDouble() >= failProbabilityPerTick) {
@@ -418,8 +412,8 @@ public final class ElectionNode extends Thread {
     }
 
     private void goDown(String reason) {
-        role = NodeRole.DOWN;
-        leader = null;
+        nodeRole = NodeRole.DOWN;
+        leader = -1;
         answerDeadlineNs = 0;
         victoryDeadlineNs = 0;
         hasAnswer = false;
@@ -427,7 +421,7 @@ public final class ElectionNode extends Thread {
     }
 
     private void goUp(String reason) {
-        role = NodeRole.SLAVE;
+        nodeRole = NodeRole.SLAVE;
         lastLeaderSeenNs = System.nanoTime();
         lastPingSentNs = 0;
         log("узел включен (" + reason + ")");
@@ -436,12 +430,14 @@ public final class ElectionNode extends Thread {
 
     private long nextElectionId() {
         long ms = System.currentTimeMillis();
-        return (ms << 16) | (id & 0xFFFFL);
+        return (ms << 16) | (nodeId & 0xFFFFL);
     }
 
     private void log(String message) {
-        log.info("узел={} роль={} лидер={} выборы={} :: {}",
-                id, LocalisationUtils.roleRu(role), leader, election, message);
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("узел={} роль={} лидер={} выборы={} :: {}",
+                    nodeId, LocalisationUtils.roleRu(nodeRole), leader, election, message);
+        }
     }
 
 }
