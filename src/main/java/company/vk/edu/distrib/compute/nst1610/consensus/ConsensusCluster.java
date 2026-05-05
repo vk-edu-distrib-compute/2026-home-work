@@ -12,7 +12,6 @@ import java.util.stream.IntStream;
 public final class ConsensusCluster implements AutoCloseable {
     private final Map<Integer, Node> nodes;
 
-    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     public ConsensusCluster(Set<Integer> nodeIds, ConsensusConfig config) {
         ElectionCoordinator electionCoordinator = new ElectionCoordinator();
         Map<Integer, Node> nodes = new ConcurrentHashMap<>();
