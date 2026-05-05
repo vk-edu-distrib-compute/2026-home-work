@@ -20,7 +20,7 @@ public final class ConsensusCluster implements AutoCloseable {
     private final Map<Integer, ConsensusNode> nodes;
     private final List<Integer> sortedNodeIds;
     private final AtomicBoolean started = new AtomicBoolean();
-    private final AtomicInteger leaderId = new AtomicInteger(NO_LEADER);
+    private final AtomicInteger electedLeaderId = new AtomicInteger(NO_LEADER);
 
     public ConsensusCluster(Collection<Integer> nodeIds) {
         this(nodeIds, ConsensusConfig.defaults());
@@ -38,7 +38,7 @@ public final class ConsensusCluster implements AutoCloseable {
         }
         Map<Integer, ConsensusNode> createdNodes = new ConcurrentHashMap<>();
         for (int nodeId : uniqueIds) {
-            createdNodes.put(nodeId, new ConsensusNode(nodeId, this, config));
+            createdNodes.put(nodeId, createNode(nodeId, config));
         }
         this.nodes = Collections.unmodifiableMap(createdNodes);
         this.sortedNodeIds = List.copyOf(uniqueIds);
@@ -61,8 +61,8 @@ public final class ConsensusCluster implements AutoCloseable {
         node.fail();
         leaderLock.lock();
         try {
-            if (leaderId.get() == nodeId) {
-                leaderId.set(NO_LEADER);
+            if (electedLeaderId.get() == nodeId) {
+                electedLeaderId.set(NO_LEADER);
             }
         } finally {
             leaderLock.unlock();
@@ -95,8 +95,8 @@ public final class ConsensusCluster implements AutoCloseable {
         leader.shutdownGracefully();
         leaderLock.lock();
         try {
-            if (leaderId.get() == currentLeaderId) {
-                leaderId.set(NO_LEADER);
+            if (electedLeaderId.get() == currentLeaderId) {
+                electedLeaderId.set(NO_LEADER);
             }
         } finally {
             leaderLock.unlock();
@@ -105,7 +105,7 @@ public final class ConsensusCluster implements AutoCloseable {
     }
 
     public int leaderId() {
-        return leaderId.get();
+        return electedLeaderId.get();
     }
 
     public Map<Integer, NodeState> snapshot() {
@@ -139,7 +139,7 @@ public final class ConsensusCluster implements AutoCloseable {
             if (highestActiveNodeIdLocked() != candidateId) {
                 return false;
             }
-            leaderId.set(candidateId);
+            electedLeaderId.set(candidateId);
         } finally {
             leaderLock.unlock();
         }
@@ -185,6 +185,10 @@ public final class ConsensusCluster implements AutoCloseable {
             throw new IllegalArgumentException("Unknown node ID: " + nodeId);
         }
         return node;
+    }
+
+    private ConsensusNode createNode(int nodeId, ConsensusConfig config) {
+        return new ConsensusNode(nodeId, this, config);
     }
 
     private void requestElectionFromActiveNodes() {

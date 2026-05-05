@@ -9,8 +9,11 @@ public record FailurePolicy(
         Duration minRecoveryDelay,
         Duration maxRecoveryDelay
 ) {
+    private static final double MIN_PROBABILITY = 0.0d;
+    private static final double MAX_PROBABILITY = 1.0d;
+    private static final int SAME_DELAY = 0;
     private static final FailurePolicy DISABLED = new FailurePolicy(
-            0.0d,
+            MIN_PROBABILITY,
             Duration.ofSeconds(1L),
             Duration.ofSeconds(1L),
             Duration.ofSeconds(1L)
@@ -20,7 +23,7 @@ public record FailurePolicy(
         Objects.requireNonNull(checkInterval);
         Objects.requireNonNull(minRecoveryDelay);
         Objects.requireNonNull(maxRecoveryDelay);
-        if (failureProbability < 0.0d || failureProbability > 1.0d) {
+        if (failureProbability < MIN_PROBABILITY || failureProbability > MAX_PROBABILITY) {
             throw new IllegalArgumentException("Failure probability must be in [0, 1]");
         }
         if (checkInterval.isNegative() || checkInterval.isZero()) {
@@ -29,7 +32,7 @@ public record FailurePolicy(
         if (minRecoveryDelay.isNegative() || minRecoveryDelay.isZero()) {
             throw new IllegalArgumentException("Min recovery delay must be positive");
         }
-        if (maxRecoveryDelay.compareTo(minRecoveryDelay) < 0) {
+        if (maxRecoveryDelay.compareTo(minRecoveryDelay) < SAME_DELAY) {
             throw new IllegalArgumentException("Max recovery delay must not be less than min recovery delay");
         }
     }
@@ -39,6 +42,6 @@ public record FailurePolicy(
     }
 
     boolean enabled() {
-        return failureProbability > 0.0d;
+        return failureProbability > MIN_PROBABILITY;
     }
 }

@@ -66,7 +66,9 @@ public final class ConsensusVisualizer implements AutoCloseable {
     }
 
     private void render() {
-        log.info("{}", renderSnapshot(cluster.snapshot()));
+        if (log.isInfoEnabled()) {
+            log.info("{}", renderSnapshot(cluster.snapshot()));
+        }
     }
 
     private static String coloredRole(NodeRole role) {

@@ -10,6 +10,8 @@ import java.util.concurrent.TimeUnit;
 
 public final class ConsensusApplication {
     private static final Logger log = LoggerFactory.getLogger(ConsensusApplication.class);
+    private static final int NO_ARGUMENTS = 0;
+    private static final int MIN_NODE_COUNT = 1;
     private static final int DEFAULT_NODE_COUNT = 5;
     private static final long INITIAL_STATE_DELAY_MS = 1_500L;
     private static final long FAILURE_STATE_DELAY_MS = 1_500L;
@@ -19,8 +21,8 @@ public final class ConsensusApplication {
     private ConsensusApplication() {
     }
 
-    static void main(String... args) throws InterruptedException {
-        int nodeCount = args.length == 0 ? DEFAULT_NODE_COUNT : Integer.parseInt(args[0]);
+    public static void main(String... args) throws InterruptedException {
+        int nodeCount = args.length == NO_ARGUMENTS ? DEFAULT_NODE_COUNT : Integer.parseInt(args[0]);
         try (
                 ConsensusCluster cluster = new ConsensusCluster(nodeIds(nodeCount));
                 ConsensusVisualizer visualizer = new ConsensusVisualizer(cluster, Duration.ofMillis(500L))
@@ -44,13 +46,15 @@ public final class ConsensusApplication {
     private static void sleepAndLogLeader(long millis, ConsensusCluster cluster) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(millis);
         while (System.nanoTime() < deadline) {
-            log.debug("Leader is {}", cluster.leaderId());
+            if (log.isDebugEnabled()) {
+                log.debug("Leader is {}", cluster.leaderId());
+            }
             TimeUnit.MILLISECONDS.sleep(500L);
         }
     }
 
     private static List<Integer> nodeIds(int nodeCount) {
-        if (nodeCount <= 0) {
+        if (nodeCount < MIN_NODE_COUNT) {
             throw new IllegalArgumentException("Node count must be positive");
         }
         List<Integer> nodeIds = new ArrayList<>(nodeCount);

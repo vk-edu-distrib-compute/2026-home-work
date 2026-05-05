@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
 final class FailureController {
+    private static final long NOT_SCHEDULED = 0L;
+
     private final int nodeId;
     private final ConsensusCluster cluster;
     private final FailurePolicy policy;
@@ -20,7 +22,7 @@ final class FailureController {
         if (!policy.enabled()) {
             return;
         }
-        if (nextFailureCheckNanos == 0L) {
+        if (nextFailureCheckNanos == NOT_SCHEDULED) {
             nextFailureCheckNanos = now + policy.checkInterval().toNanos();
             return;
         }
@@ -35,13 +37,13 @@ final class FailureController {
     }
 
     void recoverIfDue(long now) {
-        if (automaticRecoveryNanos > 0L && now >= automaticRecoveryNanos) {
+        if (automaticRecoveryNanos != NOT_SCHEDULED && now >= automaticRecoveryNanos) {
             cluster.restoreNode(nodeId);
         }
     }
 
     void resetRecovery() {
-        automaticRecoveryNanos = 0L;
+        automaticRecoveryNanos = NOT_SCHEDULED;
     }
 
     private static Duration randomRecoveryDelay(FailurePolicy policy) {
