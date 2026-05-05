@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package company.vk.edu.distrib.compute.artttnik.grpc;
+
+option java_multiple_files = true;
+option java_package = "company.vk.edu.distrib.compute.artttnik.grpc";
+option java_outer_classname = "ArtttnikInternalKvProto";
+
+service InternalKvService {
+  rpc Proxy(ProxyRequest) returns (ProxyResponse);
+}
+
+message ProxyRequest {
+  string method = 1;
+  string id = 2;
+  bytes body = 3;
+  bool has_ack = 4;
+  int32 ack = 5;
+}
+
+message ProxyResponse {
+  int32 status_code = 1;
+  bytes body = 2;
+}
