@@ -15,7 +15,6 @@ public record ElectionConfig(long loopPollMs, long pingPeriodMs, long pingTimeou
         );
     }
 
-
     public long getPingPeriodNs() {
         return TimeUnit.MILLISECONDS.toNanos(pingPeriodMs);
     }

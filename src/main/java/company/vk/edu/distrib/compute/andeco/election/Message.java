@@ -17,7 +17,7 @@ public final class Message {
         return type;
     }
 
-    public int from() {
+    public int getFrom() {
         return from;
     }
 

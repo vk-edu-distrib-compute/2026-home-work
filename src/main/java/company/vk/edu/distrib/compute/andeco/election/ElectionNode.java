@@ -260,7 +260,7 @@ public final class ElectionNode extends Thread {
 
     private void onPing(Message message) {
         if (role == NodeRole.LEADER) {
-            send(message.from(), new Message(MessageType.ANSWER, id, election));
+            send(message.getFrom(), new Message(MessageType.ANSWER, id, election));
         }
     }
 
@@ -272,10 +272,10 @@ public final class ElectionNode extends Thread {
             victoryDeadlineNs = 0;
         }
 
-        if (id > message.from()) {
-            send(message.from(), new Message(MessageType.ANSWER, id, election));
+        if (id > message.getFrom()) {
+            send(message.getFrom(), new Message(MessageType.ANSWER, id, election));
             if (role != NodeRole.LEADER) {
-                startElection("elect-from-" + message.from());
+                startElection("elect-from-" + message.getFrom());
             }
         }
     }
@@ -289,7 +289,7 @@ public final class ElectionNode extends Thread {
             hasAnswer = true;
         }
 
-        if (leader != null && message.from() == leader) {
+        if (leader != null && message.getFrom() == leader) {
             lastLeaderSeenNs = System.nanoTime();
         }
     }
@@ -304,7 +304,7 @@ public final class ElectionNode extends Thread {
         victoryDeadlineNs = 0;
         hasAnswer = false;
 
-        if (message.from() == id) {
+        if (message.getFrom() == id) {
             role = NodeRole.LEADER;
             leader = id;
             lastLeaderSeenNs = System.nanoTime();
@@ -312,11 +312,11 @@ public final class ElectionNode extends Thread {
             return;
         }
 
-        if (leader == null || message.from() >= leader) {
+        if (leader == null || message.getFrom() >= leader) {
             if (role == NodeRole.LEADER) {
                 role = NodeRole.SLAVE;
             }
-            leader = message.from();
+            leader = message.getFrom();
             lastLeaderSeenNs = System.nanoTime();
             log("лидер -> " + leader);
         }
@@ -326,7 +326,7 @@ public final class ElectionNode extends Thread {
         if (message.getElectionId() < election) {
             return;
         }
-        if (message.from() == leader || leader == null) {
+        if (message.getFrom() == leader || leader == null) {
             leader = null;
         }
 
@@ -335,7 +335,7 @@ public final class ElectionNode extends Thread {
         }
 
         steppedDownUntilNs = System.nanoTime() + config.getStepDownCooldownNs();
-        startElection("step-down-from-" + message.from());
+        startElection("step-down-from-" + message.getFrom());
     }
 
     private void startElection(String reason) {

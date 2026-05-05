@@ -74,6 +74,7 @@ public final class ClusterMonitor extends Thread {
         }
         logNodes(nodes);
     }
+
     private static void logNodes(List<ElectionNode> nodes) {
         for (ElectionNode node : nodes) {
             String color = switch (node.role()) {
