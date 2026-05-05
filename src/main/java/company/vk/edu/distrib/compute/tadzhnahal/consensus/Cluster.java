@@ -11,6 +11,7 @@ public class Cluster {
     private final List<Node> nodes = new ArrayList<>();
 
     private boolean started;
+    private FailureSimulator failureSimulator;
 
     public Cluster(int nodeCount) {
         if (nodeCount <= 0) {
@@ -52,6 +53,8 @@ public class Cluster {
             return;
         }
 
+        stopRandomFailures();
+
         LOG.log(Logger.Level.INFO, "cluster stops");
 
         for (Node node : nodes) {
@@ -63,6 +66,31 @@ public class Cluster {
         started = false;
 
         LOG.log(Logger.Level.INFO, "cluster stopped");
+    }
+
+    public synchronized void startRandomFailures() {
+        if (!started) {
+            LOG.log(Logger.Level.INFO, "cluster is not started");
+            return;
+        }
+
+        if (failureSimulator != null && failureSimulator.isAlive()) {
+            LOG.log(Logger.Level.INFO, "failure simulator already started");
+            return;
+        }
+
+        failureSimulator = new FailureSimulator(this);
+        failureSimulator.start();
+    }
+
+    public synchronized void stopRandomFailures() {
+        if (failureSimulator == null) {
+            return;
+        }
+
+        failureSimulator.interrupt();
+        waitThread(failureSimulator);
+        failureSimulator = null;
     }
 
     public void sendMessage(int fromId, int toId, MessageType type) {
@@ -106,6 +134,18 @@ public class Cluster {
         }
 
         return Node.NO_LEADER;
+    }
+
+    public int getWorkingNodeCount() {
+        int count = 0;
+
+        for (Node node : nodes) {
+            if (node.isWorking()) {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     public void printState() {
@@ -154,12 +194,15 @@ public class Cluster {
 
     private void waitNodes() {
         for (Node node : nodes) {
-            try {
-                node.join(1000L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
+            waitThread(node);
+        }
+    }
+
+    private void waitThread(Thread thread) {
+        try {
+            thread.join(1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

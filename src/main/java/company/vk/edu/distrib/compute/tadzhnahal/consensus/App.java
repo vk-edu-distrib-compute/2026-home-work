@@ -11,6 +11,7 @@ public final class App {
     private static final long ELECTION_DEMO_DELAY_MS = 1500L;
     private static final long LEADER_FAIL_DEMO_DELAY_MS = 3000L;
     private static final long RECOVERY_DEMO_DELAY_MS = 2000L;
+    private static final long RANDOM_FAILURE_DEMO_MS = 8000L;
 
     private App() {
     }
@@ -38,6 +39,19 @@ public final class App {
             cluster.turnOnNode(FIRST_LEADER_ID);
 
             TimeUnit.MILLISECONDS.sleep(RECOVERY_DEMO_DELAY_MS);
+
+            cluster.printState();
+            LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
+
+            LOG.log(Logger.Level.INFO, "demo: start random failures");
+            cluster.startRandomFailures();
+
+            TimeUnit.MILLISECONDS.sleep(RANDOM_FAILURE_DEMO_MS);
+
+            LOG.log(Logger.Level.INFO, "demo: stop random failures");
+            cluster.stopRandomFailures();
+
+            TimeUnit.MILLISECONDS.sleep(ELECTION_DEMO_DELAY_MS);
 
             cluster.printState();
             LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
