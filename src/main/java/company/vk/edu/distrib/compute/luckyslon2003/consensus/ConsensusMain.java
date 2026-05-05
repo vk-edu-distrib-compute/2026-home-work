@@ -1,25 +1,34 @@
 package company.vk.edu.distrib.compute.luckyslon2003.consensus;
 
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
+/**
+ * Main class for running consensus algorithm scenarios.
+ */
+public final class ConsensusMain {
 
-public class ConsensusMain {
+    private static final Logger LOGGER = Logger.getLogger(ConsensusMain.class.getName());
 
     /** Cluster size used across all scenarios. */
     private static final int CLUSTER_SIZE = 5;
 
+    private ConsensusMain() {
+        // Utility class - prevent instantiation
+    }
+
     public static void main(String[] args) throws InterruptedException {
-        scenario1_cleanStart();
-        scenario2_leaderFailure();
-        scenario3_nodeRecovery();
-        scenario4_rapidFailures();
+        scenario1CleanStart();
+        scenario2LeaderFailure();
+        scenario3NodeRecovery();
+        scenario4RapidFailures();
     }
 
     // -----------------------------------------------------------------------
     // Scenario 1 – clean start
     // -----------------------------------------------------------------------
 
-    private static void scenario1_cleanStart() throws InterruptedException {
+    private static void scenario1CleanStart() throws InterruptedException {
         printScenarioHeader(1, "Clean start – election at cluster initialisation");
 
         Cluster cluster = new Cluster(CLUSTER_SIZE);
@@ -39,7 +48,7 @@ public class ConsensusMain {
     // Scenario 2 – leader failure
     // -----------------------------------------------------------------------
 
-    private static void scenario2_leaderFailure() throws InterruptedException {
+    private static void scenario2LeaderFailure() throws InterruptedException {
         printScenarioHeader(2, "Leader failure – new leader must be elected");
 
         Cluster cluster = new Cluster(CLUSTER_SIZE);
@@ -47,12 +56,12 @@ public class ConsensusMain {
         sleep(4_000);
 
         cluster.printStatus();
-        int originalLeader = cluster.getConsensusLeader();
-        System.out.println("Original leader: " + originalLeader);
+        final int originalLeader = cluster.getConsensusLeader();
+        LOGGER.info("Original leader: " + originalLeader);
 
         // Bring down the current leader
         cluster.getNode(originalLeader).forceDown();
-        System.out.println("\n>>> Node " + originalLeader + " forced DOWN\n");
+        LOGGER.info("\n>>> Node " + originalLeader + " forced DOWN\n");
 
         // Wait for the cluster to elect a new leader
         sleep(6_000);
@@ -68,7 +77,7 @@ public class ConsensusMain {
     // Scenario 3 – node recovery
     // -----------------------------------------------------------------------
 
-    private static void scenario3_nodeRecovery() throws InterruptedException {
+    private static void scenario3NodeRecovery() throws InterruptedException {
         printScenarioHeader(3, "Node recovery – rejoining node must not break consensus");
 
         Cluster cluster = new Cluster(CLUSTER_SIZE);
@@ -81,12 +90,12 @@ public class ConsensusMain {
         // Bring down a non-leader node
         int failingNode = 2;
         cluster.getNode(failingNode).forceDown();
-        System.out.println("\n>>> Node " + failingNode + " forced DOWN\n");
+        LOGGER.info("\n>>> Node " + failingNode + " forced DOWN\n");
         sleep(2_000);
 
         // Recover it
         cluster.getNode(failingNode).forceRecover();
-        System.out.println("\n>>> Node " + failingNode + " forced RECOVER\n");
+        LOGGER.info("\n>>> Node " + failingNode + " forced RECOVER\n");
         sleep(4_000);
 
         cluster.printStatus();
@@ -101,29 +110,29 @@ public class ConsensusMain {
     // Scenario 4 – rapid failures / recoveries
     // -----------------------------------------------------------------------
 
-    private static void scenario4_rapidFailures() throws InterruptedException {
+    private static void scenario4RapidFailures() throws InterruptedException {
         printScenarioHeader(4, "Rapid failures/recoveries – stability under chaos");
 
         Cluster cluster = new Cluster(CLUSTER_SIZE);
         cluster.startInitialElection();
         sleep(4_000);
 
-        System.out.println("Starting rapid failure/recovery cycle...\n");
+        LOGGER.info("Starting rapid failure/recovery cycle...\n");
 
         // Cycle all non-leader nodes up and down quickly
         for (int round = 1; round <= 5; round++) {
             int nodeId = (round % (CLUSTER_SIZE - 1)) + 1; // cycle through nodes 1..4
-            System.out.printf("Round %d: taking node %d down%n", round, nodeId);
+            LOGGER.info(String.format("Round %d: taking node %d down%n", round, nodeId));
             cluster.getNode(nodeId).forceDown();
             sleep(800);
 
-            System.out.printf("Round %d: bringing node %d back up%n", round, nodeId);
+            LOGGER.info(String.format("Round %d: bringing node %d back up%n", round, nodeId));
             cluster.getNode(nodeId).forceRecover();
             sleep(1_500);
 
             cluster.printStatus();
             int leader = cluster.getConsensusLeader();
-            System.out.println("Current consensus leader: " + (leader < 0 ? "NONE/SPLIT-BRAIN" : leader));
+            LOGGER.info("Current consensus leader: " + (leader < 0 ? "NONE/SPLIT-BRAIN" : leader));
         }
 
         // Final stabilisation
@@ -148,13 +157,13 @@ public class ConsensusMain {
         int actual = cluster.getConsensusLeader();
 
         if (actual == -2) {
-            System.out.println("[FAIL] Split-brain detected – two or more nodes believe they are leader!");
+            LOGGER.info("[FAIL] Split-brain detected – two or more nodes believe they are leader!");
         } else if (actual < 0) {
-            System.out.println("[WARN] No consensus leader found yet (election still in progress?)");
+            LOGGER.info("[WARN] No consensus leader found yet (election still in progress?)");
         } else if (expectedLeaderId > 0 && actual != expectedLeaderId) {
-            System.out.printf("[WARN] Leader is node %d, expected node %d%n", actual, expectedLeaderId);
+            LOGGER.info(String.format("[WARN] Leader is node %d, expected node %d%n", actual, expectedLeaderId));
         } else {
-            System.out.printf("[OK]   Single leader confirmed: node %d%n", actual);
+            LOGGER.info(String.format("[OK]   Single leader confirmed: node %d%n", actual));
         }
     }
 
@@ -167,14 +176,14 @@ public class ConsensusMain {
     }
 
     private static void printScenarioHeader(int number, String description) {
-        System.out.println("\n");
-        System.out.println("══════════════════════════════════════════════════════");
-        System.out.printf("  SCENARIO %d: %s%n", number, description);
-        System.out.println("══════════════════════════════════════════════════════");
+        LOGGER.info("\n");
+        LOGGER.info("══════════════════════════════════════════════════════");
+        LOGGER.info(String.format("  SCENARIO %d: %s%n", number, description));
+        LOGGER.info("══════════════════════════════════════════════════════");
     }
 
     private static void printScenarioFooter(int number) {
-        System.out.printf("%n  [Scenario %d complete]%n", number);
-        System.out.println("──────────────────────────────────────────────────────\n");
+        LOGGER.info(String.format("%n  [Scenario %d complete]%n", number));
+        LOGGER.info("──────────────────────────────────────────────────────\n");
     }
 }

@@ -6,6 +6,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * A single node in the distributed cluster.
@@ -59,8 +60,10 @@ public class Node implements Runnable {
 
     private final int id;
 
-    /** Reference to all nodes in the cluster (set by Cluster after construction). */
-    private volatile Map<Integer, Node> peers;
+    /**
+     * Reference to all nodes in the cluster (set by Cluster after construction).
+     */
+    private Map<Integer, Node> peers;
 
     private final BlockingQueue<Message> inbox = new LinkedBlockingQueue<>();
 
@@ -74,14 +77,14 @@ public class Node implements Runnable {
 
     // Election bookkeeping (accessed only inside the message-processing thread
     // or under electionLock)
-    private final Object electionLock = new Object();
-    private volatile boolean waitingForElectionAnswer = false;
-    private volatile long electionStartedAt = 0;
+    private final ReentrantLock electionLock = new ReentrantLock();
+    private boolean waitingForElectionAnswer;
+    private long electionStartedAt;
 
     // Ping bookkeeping (accessed only inside the message-processing thread
     // or under pingLock)
-    private final Object pingLock = new Object();
-    private volatile long lastPingResponseAt = System.currentTimeMillis();
+    private final ReentrantLock pingLock = new ReentrantLock();
+    private long lastPingResponseAt = System.currentTimeMillis();
 
     private final ScheduledExecutorService scheduler;
 
@@ -98,7 +101,9 @@ public class Node implements Runnable {
         });
     }
 
-    /** Called by {@link Cluster} after all nodes have been created. */
+    /**
+     * Called by {@link Cluster} after all nodes have been created.
+     */
     public void setPeers(Map<Integer, Node> peers) {
         this.peers = peers;
     }
@@ -213,36 +218,49 @@ public class Node implements Runnable {
 
     private void handleAnswer(Message msg) {
         // Reset ping watchdog whenever we hear from the leader
-        synchronized (pingLock) {
+        pingLock.lock();
+        try {
             lastPingResponseAt = System.currentTimeMillis();
+        } finally {
+            pingLock.unlock();
         }
 
         // If we're in election and received an ANSWER, a higher node is alive –
         // stop waiting (the higher node will finish the election)
-        synchronized (electionLock) {
+        electionLock.lock();
+        try {
             if (waitingForElectionAnswer) {
                 log("Received ANSWER from node " + msg.getSenderId() + " – backing off election");
                 waitingForElectionAnswer = false;
                 state.compareAndSet(NodeState.ELECTION, NodeState.FOLLOWER);
             }
+        } finally {
+            electionLock.unlock();
         }
     }
 
     private void handleElect(Message msg) {
         // We have a higher ID, so we respond and start our own election
         send(msg.getSenderId(), Message.Type.ANSWER);
-        log("Received ELECT from node " + msg.getSenderId() + " – responding ANSWER and starting own election");
+        log("Received ELECT from node " + msg.getSenderId()
+                + " – responding ANSWER and starting own election");
         startElection();
     }
 
     private void handleVictory(Message msg) {
         int newLeader = msg.getSenderId();
         leaderId.set(newLeader);
-        synchronized (electionLock) {
+        electionLock.lock();
+        try {
             waitingForElectionAnswer = false;
+        } finally {
+            electionLock.unlock();
         }
-        synchronized (pingLock) {
+        pingLock.lock();
+        try {
             lastPingResponseAt = System.currentTimeMillis();
+        } finally {
+            pingLock.unlock();
         }
         if (newLeader == id) {
             state.set(NodeState.LEADER);
@@ -268,7 +286,8 @@ public class Node implements Runnable {
             return;
         }
 
-        synchronized (electionLock) {
+        electionLock.lock();
+        try {
             if (waitingForElectionAnswer) {
                 // Already in an election – refresh the timer
                 electionStartedAt = System.currentTimeMillis();
@@ -296,6 +315,8 @@ public class Node implements Runnable {
 
             waitingForElectionAnswer = true;
             electionStartedAt = System.currentTimeMillis();
+        } finally {
+            electionLock.unlock();
         }
     }
 
@@ -305,19 +326,25 @@ public class Node implements Runnable {
      * this node declares itself the winner.
      */
     private void checkElectionTimeout() {
-        synchronized (electionLock) {
+        electionLock.lock();
+        try {
             if (waitingForElectionAnswer
                     && System.currentTimeMillis() - electionStartedAt > ELECTION_TIMEOUT_MS) {
                 log("Election timeout – no higher node responded, declaring VICTORY");
                 declareVictory();
             }
+        } finally {
+            electionLock.unlock();
         }
     }
 
     /** Broadcast VICTORY to all peers and update own state. */
     private void declareVictory() {
-        synchronized (electionLock) {
+        electionLock.lock();
+        try {
             waitingForElectionAnswer = false;
+        } finally {
+            electionLock.unlock();
         }
         leaderId.set(id);
         state.set(NodeState.LEADER);
@@ -349,13 +376,17 @@ public class Node implements Runnable {
         send(currentLeader, Message.Type.PING);
 
         // Check if the last PING response is within the timeout window
-        synchronized (pingLock) {
+        pingLock.lock();
+        try {
             long silence = System.currentTimeMillis() - lastPingResponseAt;
             if (silence > PING_TIMEOUT_MS) {
-                log("Leader node " + currentLeader + " is unresponsive (silence " + silence + " ms) – starting election");
+                log("Leader node " + currentLeader + " is unresponsive (silence "
+                        + silence + " ms) – starting election");
                 leaderId.set(-1);
                 startElection();
             }
+        } finally {
+            pingLock.unlock();
         }
     }
 
@@ -391,12 +422,13 @@ public class Node implements Runnable {
 
     /** Structured log with timestamp and state. */
     void log(String msg) {
-        System.out.printf("[%6d ms] Node %2d [%-8s] leader=%-2s | %s%n",
-                System.currentTimeMillis() % 1_000_000,
-                id,
-                state.get(),
-                leaderId.get() < 0 ? "?" : leaderId.get(),
-                msg);
+        java.util.logging.Logger.getLogger(Node.class.getName())
+                .info(String.format("[%6d ms] Node %2d [%-8s] leader=%-2s | %s%n",
+                        System.currentTimeMillis() % 1_000_000,
+                        id,
+                        state.get(),
+                        leaderId.get() < 0 ? "?" : leaderId.get(),
+                        msg));
     }
 
     /** Gracefully stop the node's processing loop. */
