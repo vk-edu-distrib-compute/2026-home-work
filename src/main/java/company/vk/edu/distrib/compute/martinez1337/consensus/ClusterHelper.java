@@ -43,7 +43,7 @@ public final class ClusterHelper {
             log.info("Simulation started. Press ENTER to stop...");
 
             Thread.sleep(10_000);
-            if (nodes.size() >= 5) {
+            if (nodes.size() >= n) {
                 nodes.get(4).crash();
                 log.warn("Node 5 has been crashed!");
             }
