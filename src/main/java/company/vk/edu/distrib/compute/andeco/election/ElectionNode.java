@@ -1,5 +1,8 @@
 package company.vk.edu.distrib.compute.andeco.election;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -9,7 +12,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+@SuppressWarnings({"PMD.CyclomaticComplexity", "PMD.AvoidUsingVolatile"})
 public final class ElectionNode extends Thread {
+    private static final Logger log = LoggerFactory.getLogger(ElectionNode.class);
+
     private final int id;
     private final List<Integer> nodeIds;
     private final BlockingQueue<Message> queue = new LinkedBlockingQueue<>();
@@ -180,10 +186,10 @@ public final class ElectionNode extends Thread {
     private void ensureElectionProgress(long now) {
         if (answerDeadlineNs != 0 && now >= answerDeadlineNs) {
             answerDeadlineNs = 0;
-            if (!hasAnswer) {
-                becomeLeaderAndBroadcast();
-            } else {
+            if (hasAnswer) {
                 victoryDeadlineNs = now + config.victoryTimeoutNs();
+            } else {
+                becomeLeaderAndBroadcast();
             }
         }
 
@@ -209,8 +215,6 @@ public final class ElectionNode extends Thread {
             case ANSWER -> onAnswer(message);
             case VICTORY -> onVictory(message);
             case STEP_DOWN -> onStepDown(message);
-            default -> {
-            }
         }
     }
 
@@ -396,8 +400,8 @@ public final class ElectionNode extends Thread {
     }
 
     private void log(String message) {
-        System.out.println("узел=" + id + " роль=" + LocalisationUtils.roleRu(role) + " лидер=" + leader + " выборы=" + election
-                + " :: " + message);
+        log.info("узел={} роль={} лидер={} выборы={} :: {}",
+                id, LocalisationUtils.roleRu(role), leader, election, message);
     }
 
 }

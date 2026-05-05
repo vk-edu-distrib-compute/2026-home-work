@@ -17,7 +17,6 @@ public final class LeaderElectionApp {
         long minRecoverMs = longArg(args, "--min-recover-ms", 800);
         long maxRecoverMs = longArg(args, "--max-recover-ms", 2500);
         long seed = longArg(args, "--seed", 1);
-        long monitorPeriodMs = longArg(args, "--monitor-period-ms", 700);
 
         List<Integer> ids = new ArrayList<>();
         for (int i = 1; i <= n; i++) {
@@ -25,31 +24,32 @@ public final class LeaderElectionApp {
         }
 
         List<ElectionNode> nodes = new ArrayList<>();
+        Cluster cluster = new Cluster(nodes);
         ElectionConfig config = ElectionConfig.defaults(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs);
+
         for (int id : ids) {
             nodes.add(new ElectionNode(id, ids, config, pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
                     failProb, minRecoverMs, maxRecoverMs, seed));
         }
-
-        Cluster cluster = new Cluster(nodes);
         for (ElectionNode node : nodes) {
             node.attachCluster(cluster);
         }
-
         nodes.forEach(Thread::start);
-
+        final long monitorPeriodMs = longArg(args, "--monitor-period-ms", 700);
         ClusterMonitor monitor = null;
         if (monitorPeriodMs > 0) {
             monitor = new ClusterMonitor(cluster, monitorPeriodMs);
             monitor.start();
         }
-
         long runSeconds = longArg(args, "--run-seconds", 5);
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(runSeconds);
         while (System.nanoTime() < until) {
             TimeUnit.MILLISECONDS.sleep(500);
         }
+        close(nodes, monitor);
+    }
 
+    private static void close(List<ElectionNode> nodes, ClusterMonitor monitor) throws InterruptedException {
         for (ElectionNode node : nodes) {
             node.shutdown();
         }
@@ -60,7 +60,6 @@ public final class LeaderElectionApp {
             monitor.shutdown();
         }
     }
-
 
     private static int intArg(String[] args, String key, int def) {
         String v = arg(args, key);

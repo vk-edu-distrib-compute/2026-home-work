@@ -1,11 +1,16 @@
 package company.vk.edu.distrib.compute.andeco.election;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class ClusterMonitor extends Thread {
+    private static final Logger log = LoggerFactory.getLogger(ClusterMonitor.class);
+
     private static final String RESET = "\u001B[0m";
     private static final String GREEN = "\u001B[32m";
     private static final String YELLOW = "\u001B[33m";
@@ -33,7 +38,9 @@ public final class ClusterMonitor extends Thread {
             try {
                 printSnapshot(cluster.nodes());
                 TimeUnit.MILLISECONDS.sleep(periodMs);
-            } catch (InterruptedException _) {
+            } catch (InterruptedException e) {
+                this.interrupt();
+                return;
             }
         }
     }
@@ -61,8 +68,8 @@ public final class ClusterMonitor extends Thread {
                 .orElse(-1);
 
         String leaderText = leader == null ? "нет" : String.valueOf(leader);
-        System.out.println("кластер: активных: " + alive + "/" + nodes.size()
-                + " лидер: " + leaderText + " ожидаемо максимально активных:" + maxAliveId);
+        log.info("кластер: активных {}/{}; лидер {}; ожидаемый максимум среди активных {}",
+                alive, nodes.size(), leaderText, maxAliveId);
 
         for (ElectionNode node : nodes) {
             String color = switch (node.role()) {
@@ -70,8 +77,11 @@ public final class ClusterMonitor extends Thread {
                 case SLAVE -> YELLOW;
                 case DOWN -> RED;
             };
-            System.out.println(color + "узел: " + node.id() + " роль: " + LocalisationUtils.roleRu(node.role()) + " лидер: " + node.leader()
-                    + RESET);
+            String line = color + "узел: " + node.id()
+                    + " роль: " + LocalisationUtils.roleRu(node.role())
+                    + " лидер: " + node.leader()
+                    + RESET;
+            log.info(line);
         }
     }
 }
