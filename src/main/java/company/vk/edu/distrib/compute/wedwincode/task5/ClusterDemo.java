@@ -14,6 +14,7 @@ public class ClusterDemo {
 
             for (Node node : cluster.values()) {
                 node.setCluster(cluster);
+                node.setRandomFailuresEnabled(true);
             }
 
             for (Node node : cluster.values()) {

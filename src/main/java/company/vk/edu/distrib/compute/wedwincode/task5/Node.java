@@ -20,6 +20,7 @@ public class Node implements Runnable {
 
     private volatile boolean running = true;
     private volatile boolean manuallyEnabled = true;
+    private volatile boolean randomFailuresEnabled = true;
     private volatile boolean crashed = false;
 
     private volatile State state = State.FOLLOWER;
@@ -66,6 +67,10 @@ public class Node implements Runnable {
             leaderId = -1;
             messages.clear();
         }
+    }
+
+    public void setRandomFailuresEnabled(boolean value) {
+        randomFailuresEnabled = value;
     }
 
     public void stop() {
@@ -436,7 +441,9 @@ public class Node implements Runnable {
 
         while (running) {
             try {
-                maybeRandomCrash();
+                if (randomFailuresEnabled) {
+                    maybeRandomCrash();
+                }
 
                 if (!isAlive()) {
                     Thread.sleep(200);
