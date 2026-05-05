@@ -12,17 +12,19 @@ final class ElectionCoordinator {
         return nextClock.getAndIncrement();
     }
 
-    public synchronized boolean tryCommitVictory(long clock, int leaderId) {
-        long currentEpoch = committedClock.get();
-        if (clock < currentEpoch) {
-            return false;
+    public boolean tryCommitVictory(long clock, int leaderId) {
+        synchronized (this) {
+            long currentEpoch = committedClock.get();
+            if (clock < currentEpoch) {
+                return false;
+            }
+            if (clock == currentEpoch) {
+                return committedLeader.compareAndSet(-1, leaderId) || committedLeader.get() == leaderId;
+            }
+            committedClock.set(clock);
+            committedLeader.set(leaderId);
+            return true;
         }
-        if (clock == currentEpoch) {
-            return committedLeader.compareAndSet(-1, leaderId) || committedLeader.get() == leaderId;
-        }
-        committedClock.set(clock);
-        committedLeader.set(leaderId);
-        return true;
     }
 
     public long getCommittedClock() {

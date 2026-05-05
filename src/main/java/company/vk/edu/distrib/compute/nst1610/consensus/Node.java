@@ -179,33 +179,62 @@ public final class Node extends Thread {
     }
 
     private void processPing(long now) {
-        if (leader) {
+        if (shouldSkipPingProcessing()) {
             return;
         }
-        if (waitingElectionAnswer || waitingVictory) {
+        if (shouldStartElectionBecauseLeaderMissing()) {
+            startElectionForMissingLeader();
             return;
         }
-        if (leaderId < 0) {
-            startElection(ElectionReason.LEADER_MISSING);
-            return;
-        }
-        if (waitingPingAnswer && now >= pingDeadlineAt) {
-            waitingPingAnswer = false;
-            log.info("Node {} detected leader {} timeout", nodeId, leaderId);
-            startElection(ElectionReason.LEADER_TIMEOUT);
+        if (isPingTimedOut(now)) {
+            startElectionForPingTimeout();
             return;
         }
         if (!waitingPingAnswer && now >= nextPingAt) {
-            Node leaderNode = cluster.get(leaderId);
-            if (leaderNode == null || leaderNode.isFailed()) {
-                startElection(ElectionReason.LEADER_UNAVAILABLE);
+            if (isKnownLeaderUnavailable()) {
+                startElectionForUnavailableLeader();
                 return;
             }
-            sendMessage(leaderId, Message.ping(nodeId, leaderClock, leaderId));
-            waitingPingAnswer = true;
-            pingDeadlineAt = now + config.pingTimeoutMillis();
-            nextPingAt = now + config.pingIntervalMillis();
+            sendPing(now);
         }
+    }
+
+    private boolean shouldSkipPingProcessing() {
+        return leader || waitingElectionAnswer || waitingVictory;
+    }
+
+    private boolean shouldStartElectionBecauseLeaderMissing() {
+        return leaderId < 0;
+    }
+
+    private void startElectionForMissingLeader() {
+        startElection(ElectionReason.LEADER_MISSING);
+    }
+
+    private boolean isPingTimedOut(long now) {
+        return waitingPingAnswer && now >= pingDeadlineAt;
+    }
+
+    private void startElectionForPingTimeout() {
+        waitingPingAnswer = false;
+        log.info("Node {} detected leader {} timeout", nodeId, leaderId);
+        startElection(ElectionReason.LEADER_TIMEOUT);
+    }
+
+    private boolean isKnownLeaderUnavailable() {
+        Node leaderNode = cluster.get(leaderId);
+        return leaderNode == null || leaderNode.isFailed();
+    }
+
+    private void startElectionForUnavailableLeader() {
+        startElection(ElectionReason.LEADER_UNAVAILABLE);
+    }
+
+    private void sendPing(long now) {
+        sendMessage(leaderId, Message.ping(nodeId, leaderClock, leaderId));
+        waitingPingAnswer = true;
+        pingDeadlineAt = now + config.pingTimeoutMillis();
+        nextPingAt = now + config.pingIntervalMillis();
     }
 
     private void processElectionTimeout(long now) {

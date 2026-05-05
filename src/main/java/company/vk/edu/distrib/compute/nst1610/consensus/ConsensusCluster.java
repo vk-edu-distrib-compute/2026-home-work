@@ -10,11 +10,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class ConsensusCluster implements AutoCloseable {
-    private final ElectionCoordinator electionCoordinator;
     private final Map<Integer, Node> nodes;
 
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     public ConsensusCluster(Set<Integer> nodeIds, ConsensusConfig config) {
-        this.electionCoordinator = new ElectionCoordinator();
+        ElectionCoordinator electionCoordinator = new ElectionCoordinator();
         Map<Integer, Node> nodes = new ConcurrentHashMap<>();
         for (int nodeId : nodeIds.stream().sorted().toList()) {
             nodes.put(nodeId, new Node(nodeId, config, electionCoordinator));
