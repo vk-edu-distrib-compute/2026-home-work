@@ -1,35 +1,25 @@
 package company.vk.edu.distrib.compute.luckyslon2003.consensus;
 
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class Cluster {
 
     private final Map<Integer, Node> nodes;
     private final ExecutorService executor;
 
-    /**
-     * Creates a cluster with {@code size} nodes and starts them immediately.
-     *
-     * @param size number of nodes (IDs will be 1 .. size)
-     */
     public Cluster(int size) {
-        Map<Integer, Node> map = new ConcurrentHashMap<>();
-        for (int i = 1; i <= size; i++) {
-            map.put(i, new Node(i));
-        }
+        Map<Integer, Node> map = IntStream.rangeClosed(1, size)
+                .boxed()
+                .collect(Collectors.toMap(i -> i, Node::new, (a, b) -> a, ConcurrentHashMap::new));
         nodes = Collections.unmodifiableMap(map);
-
-        // Wire every node with the full topology
         nodes.values().forEach(n -> n.setPeers(nodes));
-
-        // Launch each node on its own thread
         executor = Executors.newFixedThreadPool(size, r -> {
             Thread t = new Thread(r);
             t.setDaemon(true);
@@ -38,20 +28,10 @@ public class Cluster {
         nodes.values().forEach(executor::submit);
     }
 
-    /**
-     * Triggers the initial election from the node with the lowest ID.
-     * In the Bully algorithm the lowest-ID node starts the election;
-     * the highest available node will ultimately win.
-     */
     public void startInitialElection() {
         getLogger().info("\n=== Cluster starting: initiating leader election ===\n");
-        // Any node can start; using the lowest for determinism
         nodes.values().iterator().next().startElection();
     }
-
-    // -----------------------------------------------------------------------
-    // Accessors
-    // -----------------------------------------------------------------------
 
     public Node getNode(int id) {
         return nodes.get(id);
@@ -61,13 +41,6 @@ public class Cluster {
         return nodes;
     }
 
-    // -----------------------------------------------------------------------
-    // Shutdown
-    // -----------------------------------------------------------------------
-
-    /**
-     * Stops all nodes and the executor service.
-     */
     public void shutdown() {
         nodes.values().forEach(Node::stop);
         executor.shutdownNow();
@@ -78,11 +51,6 @@ public class Cluster {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Diagnostic helpers
-    // -----------------------------------------------------------------------
-
-    /** Prints a one-line summary of every node's current state. */
     public void printStatus() {
         getLogger().info("\n--- Cluster status ---");
         nodes.values().forEach(n ->
@@ -93,10 +61,6 @@ public class Cluster {
         getLogger().info("----------------------\n");
     }
 
-    /**
-     * Returns the ID of the unique leader as agreed upon by all live nodes,
-     * or -1 if no consensus exists (or more than one leader is detected).
-     */
     public int getConsensusLeader() {
         int consensusLeader = -1;
         for (Node n : nodes.values()) {
@@ -105,7 +69,6 @@ public class Cluster {
             }
             if (n.getState() == NodeState.LEADER) {
                 if (consensusLeader >= 0 && consensusLeader != n.getId()) {
-                    // split-brain detected
                     return -2;
                 }
                 consensusLeader = n.getId();
