@@ -195,10 +195,10 @@ class LeaderElectionTest {
 
         List<ElectionNode> nodes = new ArrayList<>();
         ElectionConfig config = ElectionConfig.defaults(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs);
+        ElectionNodeParameters parameters = new ElectionNodeParameters(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
+                0.0, 100, 200, 1);
         for (int id : ids) {
-            nodes.add(new ElectionNode(id, ids, config,
-                    new ElectionNodeParameters(pingTimeoutMs, answerTimeoutMs, victoryTimeoutMs,
-                    0.0, 100, 200, 1)));
+            nodes.add(new ElectionNode(id, ids, config, parameters));
         }
 
         Cluster cluster = new Cluster(nodes);
@@ -222,12 +222,13 @@ class LeaderElectionTest {
         long until = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         Integer last = null;
         int sameCount = 0;
+        int sameCountThreshold = 3;
 
         while (System.nanoTime() < until) {
             Integer leader = currentSingleLeaderOrNull(cluster);
             if (leader != null && leader.equals(last)) {
                 sameCount++;
-                if (sameCount >= 3) {
+                if (sameCount >= sameCountThreshold) {
                     return;
                 }
             } else {
