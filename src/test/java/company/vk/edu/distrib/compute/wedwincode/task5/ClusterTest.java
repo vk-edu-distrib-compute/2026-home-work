@@ -1,11 +1,11 @@
 package company.vk.edu.distrib.compute.wedwincode.task5;
 
+import company.vk.edu.distrib.compute.wedwincode.task5.node.ClusterException;
 import company.vk.edu.distrib.compute.wedwincode.task5.node.Node;
 import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.Serial;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -119,15 +119,7 @@ class ClusterTest {
 
     private record TestCluster(Map<Integer, Node> nodes, List<Thread> threads) {
 
-        private static final class TestClusterException extends RuntimeException {
-            @Serial
-            private static final long serialVersionUID = 1504190869763212296L;
-
-            private TestClusterException(Throwable cause) {
-                super(cause);
-            }
-        }
-
+        @SuppressWarnings("PMD.AvoidInstantiatingObjectsInsideLoops")
         static TestCluster start(int size) {
                 Map<Integer, Node> nodes = new ConcurrentHashMap<>();
                 for (int i = 1; i <= size; i++) {
@@ -233,7 +225,7 @@ class ClusterTest {
                     Thread.sleep(millis);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw new TestClusterException(e);
+                    throw new ClusterException("error during test", e);
                 }
             }
         }

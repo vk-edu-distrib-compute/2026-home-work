@@ -6,6 +6,8 @@ import company.vk.edu.distrib.compute.wedwincode.task5.node.State;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public final class ClusterDemo {
 
@@ -15,20 +17,20 @@ public final class ClusterDemo {
 
     static void main() {
         try {
-            Map<Integer, Node> cluster = new ConcurrentHashMap<>();
-
-            for (int i = 1; i <= 5; i++) {
-                cluster.put(i, new Node(i));
-            }
+            Map<Integer, Node> cluster = IntStream.rangeClosed(1, 5)
+                    .boxed()
+                    .collect(Collectors.toMap(
+                            i -> i, Node::new,
+                            (a, b) -> b,
+                            ConcurrentHashMap::new
+                    ));
 
             for (Node node : cluster.values()) {
                 node.setCluster(cluster);
                 node.setRandomFailuresEnabled(true);
             }
 
-            for (Node node : cluster.values()) {
-                new Thread(node, "node-" + node.getId()).start();
-            }
+            cluster.values().forEach(node -> new Thread(node, "node-" + node.getId()).start());
 
             ClusterMonitor clusterMonitor = new ClusterMonitor(cluster);
             new Thread(clusterMonitor, "clusterMonitor").start();
