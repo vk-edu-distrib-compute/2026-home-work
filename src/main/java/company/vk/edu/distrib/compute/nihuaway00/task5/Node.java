@@ -75,7 +75,7 @@ public class Node implements Runnable {
         running = false;
     }
 
-    public void enqueue(Message message) {
+    void enqueue(Message message) {
         inbox.offer(message);
     }
 
@@ -87,7 +87,16 @@ public class Node implements Runnable {
                 if (message != null) {
                     processMessage(message);
                 }
-                onTick();
+                if (!enabled) {
+                    continue;
+                }
+
+                long now = System.currentTimeMillis();
+                if (state == NodeState.FOLLOWER) {
+                    evaluateFollowerState(now);
+                } else if (state == NodeState.CANDIDATE) {
+                    evaluateCandidateState(now);
+                }
             } catch (InterruptedException expected) {
                 Thread.currentThread().interrupt();
                 return;
@@ -108,20 +117,7 @@ public class Node implements Runnable {
         }
     }
 
-    private void onTick() {
-        if (!enabled) {
-            return;
-        }
-
-        long now = System.currentTimeMillis();
-        if (state == NodeState.FOLLOWER) {
-            onFollowerTick(now);
-        } else if (state == NodeState.CANDIDATE) {
-            onCandidateTick(now);
-        }
-    }
-
-    private void onFollowerTick(long now) {
+    private void evaluateFollowerState(long now) {
         int leaderToPing = -1;
         boolean needElection = false;
         synchronized (stateLock) {
@@ -149,7 +145,7 @@ public class Node implements Runnable {
         }
     }
 
-    private void onCandidateTick(long now) {
+    private void evaluateCandidateState(long now) {
         boolean shouldBecomeLeader = false;
         boolean shouldRestartElection = false;
         synchronized (stateLock) {
