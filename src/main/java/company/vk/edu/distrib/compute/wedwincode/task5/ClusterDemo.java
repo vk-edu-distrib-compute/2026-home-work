@@ -25,8 +25,12 @@ public class ClusterDemo {
 
             Thread.sleep(5_000);
 
-            System.out.println("\n--- Disable node 5 ---");
-            cluster.get(5).setEnabled(false);
+            System.out.println("\n--- Graceful shutdown current leader ---");
+            Node leader = findCurrentLeader(cluster);
+
+            if (leader != null) {
+                leader.gracefulShutdown();
+            }
 
             Thread.sleep(7_000);
 
@@ -35,13 +39,26 @@ public class ClusterDemo {
 
             Thread.sleep(10_000);
 
+            System.out.println("\n--- Final cluster state ---");
+            ClusterLogger.clusterSnapshot(cluster);
+
+            clusterMonitor.stop();
             for (Node node : cluster.values()) {
                 node.stop();
             }
-            clusterMonitor.stop();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("thread was interrupted");
         }
+    }
+
+    private static Node findCurrentLeader(Map<Integer, Node> cluster) {
+        for (Node node : cluster.values()) {
+            if (node.isAlive() && node.getState() == State.LEADER) {
+                return node;
+            }
+        }
+
+        return null;
     }
 }

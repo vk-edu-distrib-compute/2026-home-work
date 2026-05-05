@@ -124,6 +124,11 @@ public class Node implements Runnable {
             return;
         }
 
+        Node currentLeader = nodes.get(leaderId);
+        if (leaderId != -1 && currentLeader != null && currentLeader.isAlive()) {
+            return;
+        }
+
         if (senderId < id && !electionInProgress) {
             startElection();
         }
@@ -205,8 +210,18 @@ public class Node implements Runnable {
                 if (message.type() == Message.Type.ANSWER && message.senderId() > id) {
                     hasAnswerFromHigherNode = true;
                     ClusterLogger.event(id, "got ANSWER from higher node " + message.senderId());
-                } else {
-                    handleMessage(message);
+                    continue;
+                }
+
+                if (message.type() == Message.Type.VICTORY && message.senderId() > id) {
+                    handleVictory(message);
+                    return;
+                }
+
+                handleMessage(message);
+
+                if (leaderId != -1 && !electionInProgress) {
+                    return;
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -234,8 +249,12 @@ public class Node implements Runnable {
                 if (message.type() == Message.Type.VICTORY && message.senderId() > id) {
                     handleVictory(message);
                     return;
-                } else {
-                    handleMessage(message);
+                }
+
+                handleMessage(message);
+
+                if (leaderId != -1 && !electionInProgress) {
+                    return;
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -243,8 +262,13 @@ public class Node implements Runnable {
             }
         }
 
+        if (leaderId != -1) {
+            electionInProgress = false;
+            return;
+        }
+
         electionInProgress = false;
-        startElection();
+        receiveMessage(new Message(Message.Type.ELECT, id));
     }
 
     private void becomeLeader() {
@@ -335,6 +359,76 @@ public class Node implements Runnable {
         }
     }
 
+    public synchronized void gracefulShutdown() {
+        if (!isAlive()) {
+            return;
+        }
+
+        ClusterLogger.event(id, "requested graceful shutdown");
+
+        if (state != State.LEADER) {
+            ClusterLogger.event(id, "is not leader, shutting down normally");
+            setEnabled(false);
+            return;
+        }
+
+        Node nextLeader = findHighestAliveNodeExceptSelf();
+
+        if (nextLeader == null) {
+            ClusterLogger.event(id, "no alive replacement leader found, shutting down");
+            setEnabled(false);
+            return;
+        }
+
+        ClusterLogger.event(id, "transferring leadership to node " + nextLeader.getId());
+
+        nextLeader.forceBecomeLeaderAfterTransfer();
+
+        Message victory = new Message(Message.Type.VICTORY, nextLeader.getId());
+
+        for (Node node : nodes.values()) {
+            if (node.getId() != id && node.getId() != nextLeader.getId()) {
+                sendMessage(node, victory);
+            }
+        }
+
+        setEnabled(false);
+    }
+
+    private Node findHighestAliveNodeExceptSelf() {
+        Node result = null;
+
+        for (Node node : nodes.values()) {
+            if (node.getId() == id) {
+                continue;
+            }
+
+            if (!node.isAlive()) {
+                continue;
+            }
+
+            if (result == null || node.getId() > result.getId()) {
+                result = node;
+            }
+        }
+
+        return result;
+    }
+
+    private synchronized void forceBecomeLeaderAfterTransfer() {
+        if (!isAlive()) {
+            return;
+        }
+
+        leaderId = id;
+        state = State.LEADER;
+        electionInProgress = false;
+
+        lastAnswerFromLeaderTime = System.currentTimeMillis();
+        lastPingTime = 0;
+
+        ClusterLogger.event(id, "became LEADER by graceful transfer");
+    }
 
     @Override
     public void run() {
