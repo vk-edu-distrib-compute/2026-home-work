@@ -1,10 +1,10 @@
 package company.vk.edu.distrib.compute.tadzhnahal.consensus;
 
+import java.lang.System.Logger;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Logger;
 
-public class ClusterStatePrinter implements Runnable {
-    private static final Logger LOGGER = Logger.getLogger(ClusterStatePrinter.class.getName());
+final class ClusterStatePrinter implements Runnable {
+    private static final Logger LOG = System.getLogger(ClusterStatePrinter.class.getName());
 
     private final Cluster cluster;
     private final long pauseMillis;
@@ -12,46 +12,47 @@ public class ClusterStatePrinter implements Runnable {
 
     private Thread thread;
 
-    public ClusterStatePrinter(Cluster cluster, long pauseMillis) {
+    ClusterStatePrinter(Cluster cluster, long pauseMillis) {
         this.cluster = cluster;
         this.pauseMillis = pauseMillis;
     }
 
-    public void start() {
-        if (running.get()) {
-            return;
+    void start() {
+        if (running.compareAndSet(false, true)) {
+            thread = new Thread(this, "cluster-state-printer");
+            thread.start();
         }
-
-        running.set(true);
-        thread = new Thread(this, "cluster-state-printer");
-        thread.start();
     }
 
-    public void stop() {
+    void stop() {
         running.set(false);
 
         if (thread != null) {
             thread.interrupt();
+
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
     @Override
     public void run() {
-        LOGGER.info("cluster state printer started");
+        LogHelper.info(LOG, "cluster state printer started");
 
         while (running.get()) {
             cluster.printState();
-            sleep();
+
+            try {
+                Thread.sleep(pauseMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
 
-        LOGGER.info("cluster state printer stopped");
-    }
-
-    private void sleep() {
-        try {
-            Thread.sleep(pauseMillis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        LogHelper.info(LOG, "cluster state printer stopped");
     }
 }

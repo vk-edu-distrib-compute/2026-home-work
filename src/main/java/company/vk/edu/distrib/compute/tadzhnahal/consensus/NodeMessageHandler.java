@@ -12,29 +12,27 @@ final class NodeMessageHandler {
     }
 
     void handle(Message message) {
-        if (!node.isWorking()) {
+        LogHelper.info(LOG, () -> node.getName() + " got " + message);
+
+        if (message.getToId() != node.getNodeId()) {
             return;
         }
 
-        LOG.log(Logger.Level.INFO, node.getName() + " got " + message);
-
-        if (message.getType() == MessageType.PING) {
-            handlePing(message);
-            return;
-        }
-
-        if (message.getType() == MessageType.ELECT) {
-            handleElect(message);
-            return;
-        }
-
-        if (message.getType() == MessageType.ANSWER) {
-            handleAnswer(message);
-            return;
-        }
-
-        if (message.getType() == MessageType.VICTORY) {
-            handleVictory(message);
+        switch (message.getType()) {
+            case PING:
+                handlePing(message);
+                break;
+            case ELECT:
+                handleElect(message);
+                break;
+            case ANSWER:
+                handleAnswer(message);
+                break;
+            case VICTORY:
+                handleVictory(message);
+                break;
+            case SHUTDOWN:
+                break;
         }
     }
 
@@ -43,26 +41,41 @@ final class NodeMessageHandler {
     }
 
     private void handleElect(Message message) {
-        if (message.getFromId() < node.getNodeId()) {
-            node.sendMessage(message.getFromId(), MessageType.ANSWER);
-            node.startElection();
-        }
+        node.sendMessage(message.getFromId(), MessageType.ANSWER);
+        node.startElection();
     }
 
     private void handleAnswer(Message message) {
-        if (message.getFromId() == node.getLeaderId()) {
-            node.rememberLeaderAnswer();
-        }
+        node.markAnswerFromHigher(message.getFromId());
 
-        if (message.getFromId() > node.getNodeId()) {
-            node.rememberAnswerFromHigherNode();
-        }
-
-        LOG.log(Logger.Level.INFO, node.getName() + " got answer from node " + message.getFromId());
+        LogHelper.info(
+                LOG,
+                () -> node.getName() + " got answer from node " + message.getFromId()
+        );
     }
 
     private void handleVictory(Message message) {
-        node.rememberLeader(message.getLeaderId());
-        LOG.log(Logger.Level.INFO, node.getName() + " accepts leader " + message.getLeaderId());
+        int newLeaderId = message.getLeaderId();
+        int oldLeaderId = node.getLeaderId();
+
+        if (newLeaderId == Node.NO_LEADER) {
+            return;
+        }
+
+        if (newLeaderId < node.getNodeId()) {
+            node.startElection();
+            return;
+        }
+
+        if (oldLeaderId > newLeaderId && node.isNodeWorking(oldLeaderId)) {
+            return;
+        }
+
+        node.acceptLeader(newLeaderId);
+
+        LogHelper.info(
+                LOG,
+                () -> node.getName() + " accepts leader " + newLeaderId
+        );
     }
 }

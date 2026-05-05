@@ -1,12 +1,12 @@
 package company.vk.edu.distrib.compute.tadzhnahal.consensus;
 
 import java.lang.System.Logger;
-import java.util.concurrent.TimeUnit;
 
 final class Election {
     private static final Logger LOG = System.getLogger(Election.class.getName());
 
-    private static final long ELECTION_WAIT_MS = 400L;
+    private static final long ANSWER_TIMEOUT_MS = 500L;
+    private static final long VICTORY_TIMEOUT_MS = 1000L;
 
     private final Node node;
 
@@ -20,63 +20,53 @@ final class Election {
     }
 
     private void run() {
-        if (!node.tryStartElection()) {
+        LogHelper.info(LOG, () -> node.getName() + " starts election");
+
+        node.sendElectToHigherNodes();
+        sleep(ANSWER_TIMEOUT_MS);
+
+        if (!node.isWorking()) {
+            node.finishElection();
             return;
         }
 
-        try {
-            LOG.log(Logger.Level.INFO, node.getName() + " starts election");
+        if (!node.hasAnswerFromHigher()) {
+            becomeLeader();
+            return;
+        }
 
-            int electCount = sendElectToHigherNodes();
+        LogHelper.info(LOG, () -> node.getName() + " waits for victory from higher node");
 
-            if (electCount == 0) {
-                becomeLeader();
-                return;
-            }
+        int leaderBeforeWait = node.getLeaderId();
+        sleep(VICTORY_TIMEOUT_MS);
 
-            waitForAnswers();
+        if (!node.isWorking()) {
+            node.finishElection();
+            return;
+        }
 
-            if (!node.hasAnswerFromHigherNode()) {
-                becomeLeader();
-                return;
-            }
-
-            LOG.log(Logger.Level.INFO, node.getName() + " waits for victory from higher node");
-        } finally {
+        if (node.getLeaderId() == leaderBeforeWait || node.getLeaderId() == Node.NO_LEADER) {
+            node.finishElection();
+            node.clearLeader();
+            node.startElection();
+        } else {
             node.finishElection();
         }
     }
 
-    private int sendElectToHigherNodes() {
-        int electCount = 0;
+    private void becomeLeader() {
+        node.becomeLeader();
 
-        for (Node otherNode : node.getClusterNodesSnapshot()) {
-            if (otherNode.getNodeId() > node.getNodeId()) {
-                node.sendMessage(otherNode.getNodeId(), MessageType.ELECT);
-                electCount++;
-            }
-        }
+        LogHelper.info(LOG, () -> node.getName() + " becomes leader");
 
-        return electCount;
+        node.sendVictoryToAll();
     }
 
-    private void waitForAnswers() {
+    private void sleep(long millis) {
         try {
-            TimeUnit.MILLISECONDS.sleep(ELECTION_WAIT_MS);
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-    }
-
-    private void becomeLeader() {
-        node.rememberLeader(node.getNodeId());
-
-        LOG.log(Logger.Level.INFO, node.getName() + " becomes leader");
-
-        for (Node otherNode : node.getClusterNodesSnapshot()) {
-            if (otherNode.getNodeId() != node.getNodeId()) {
-                node.sendMessage(otherNode.getNodeId(), MessageType.VICTORY, node.getNodeId());
-            }
         }
     }
 }

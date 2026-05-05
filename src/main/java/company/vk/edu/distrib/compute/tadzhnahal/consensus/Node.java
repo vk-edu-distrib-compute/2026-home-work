@@ -1,108 +1,110 @@
 package company.vk.edu.distrib.compute.tadzhnahal.consensus;
 
 import java.lang.System.Logger;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Node extends Thread {
-    public static final int NO_LEADER = -1;
+    static final int NO_LEADER = -1;
 
     private static final Logger LOG = System.getLogger(Node.class.getName());
-
-    private static final long LOOP_WAIT_MS = 200L;
+    private static final long POLL_TIMEOUT_MS = 100L;
 
     private final int nodeId;
+    private final Cluster cluster;
     private final BlockingQueue<Message> inbox = new LinkedBlockingQueue<>();
-    private final Election election = new Election(this);
-    private final LeaderMonitor leaderMonitor = new LeaderMonitor(this);
     private final NodeMessageHandler messageHandler = new NodeMessageHandler(this);
+    private final LeaderMonitor leaderMonitor = new LeaderMonitor(this);
 
-    private List<Node> clusterNodes = Collections.emptyList();
-    private NodeStatus status = NodeStatus.FOLLOWER;
-    private int leaderId = NO_LEADER;
-    private long lastLeaderAnswerTime = System.currentTimeMillis();
-    private boolean electionInProgress;
-    private boolean answerFromHigherNode;
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final AtomicBoolean working = new AtomicBoolean(true);
+    private final AtomicBoolean electionInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean gotAnswerFromHigher = new AtomicBoolean(false);
+    private final AtomicInteger leaderId = new AtomicInteger(NO_LEADER);
+    private final AtomicLong lastLeaderAnswerTime = new AtomicLong(System.currentTimeMillis());
 
-    public Node(int nodeId) {
+    public Node(int nodeId, Cluster cluster) {
         super("node-" + nodeId);
+
+        if (nodeId <= 0) {
+            throw new IllegalArgumentException("node id must be positive");
+        }
+        if (cluster == null) {
+            throw new IllegalArgumentException("cluster is null");
+        }
+
         this.nodeId = nodeId;
+        this.cluster = cluster;
     }
 
     public int getNodeId() {
         return nodeId;
     }
 
-    public synchronized NodeStatus getNodeStatus() {
-        return status;
+    public int getLeaderId() {
+        return leaderId.get();
     }
 
-    public synchronized int getLeaderId() {
-        return leaderId;
+    public long getLastLeaderAnswerTime() {
+        return lastLeaderAnswerTime.get();
     }
 
-    public synchronized long getLastLeaderAnswerTime() {
-        return lastLeaderAnswerTime;
+    public boolean isWorking() {
+        return working.get();
     }
 
-    public synchronized boolean isWorking() {
-        return status != NodeStatus.DOWN;
+    public boolean isElectionInProgress() {
+        return electionInProgress.get();
     }
 
-    public synchronized void setNodeStatus(NodeStatus status) {
-        if (status == null) {
-            throw new IllegalArgumentException("node status is null");
+    public boolean hasAnswerFromHigher() {
+        return gotAnswerFromHigher.get();
+    }
+
+    public int getInboxSize() {
+        return inbox.size();
+    }
+
+    public void turnOff() {
+        if (working.compareAndSet(true, false)) {
+            leaderId.set(NO_LEADER);
+            gotAnswerFromHigher.set(false);
+            electionInProgress.set(false);
+            inbox.clear();
+
+            LogHelper.info(LOG, () -> getName() + " turns off");
         }
-
-        this.status = status;
     }
 
-    public synchronized void setClusterNodes(List<Node> clusterNodes) {
-        if (clusterNodes == null) {
-            throw new IllegalArgumentException("cluster nodes is null");
+    public void turnOn() {
+        if (working.compareAndSet(false, true)) {
+            leaderId.set(NO_LEADER);
+            lastLeaderAnswerTime.set(System.currentTimeMillis());
+
+            LogHelper.info(LOG, () -> getName() + " turns on");
+            startElection();
         }
-
-        this.clusterNodes = clusterNodes;
     }
 
-    public synchronized void turnOff() {
-        LOG.log(Logger.Level.INFO, getName() + " turns off");
-
-        status = NodeStatus.DOWN;
-        leaderId = NO_LEADER;
-        electionInProgress = false;
-        answerFromHigherNode = false;
-        inbox.clear();
+    public void shutdown() {
+        running.set(false);
+        receiveMessage(new Message(MessageType.SHUTDOWN, nodeId, nodeId, NO_LEADER));
     }
 
-    public synchronized void turnOn() {
-        if (status != NodeStatus.DOWN) {
-            LOG.log(Logger.Level.INFO, getName() + " is already alive");
-            return;
-        }
-
-        LOG.log(Logger.Level.INFO, getName() + " turns on");
-
-        status = NodeStatus.FOLLOWER;
-        leaderId = NO_LEADER;
-        lastLeaderAnswerTime = System.currentTimeMillis();
-        electionInProgress = false;
-        answerFromHigherNode = false;
-        inbox.clear();
-
-        startElection();
-    }
-
-    public void receive(Message message) {
+    public void receiveMessage(Message message) {
         if (message == null) {
             return;
         }
 
-        if (!isWorking()) {
+        if (!running.get() && message.getType() != MessageType.SHUTDOWN) {
+            return;
+        }
+
+        if (!working.get() && message.getType() != MessageType.SHUTDOWN) {
             return;
         }
 
@@ -113,115 +115,117 @@ public class Node extends Thread {
         sendMessage(toId, type, NO_LEADER);
     }
 
-    public void sendMessage(int toId, MessageType type, int leaderId) {
-        if (!isWorking()) {
+    public void sendMessage(int toId, MessageType type, int newLeaderId) {
+        if (!working.get()) {
             return;
         }
 
-        Node target = findNode(toId);
+        Message message = new Message(type, nodeId, toId, newLeaderId);
+        LogHelper.info(LOG, () -> getName() + " sends " + message);
 
-        if (target == null) {
-            LOG.log(Logger.Level.WARNING, getName() + " cannot find node " + toId);
-            return;
-        }
-
-        Message message = new Message(type, nodeId, toId, leaderId);
-        LOG.log(Logger.Level.INFO, getName() + " sends " + message);
-        target.receive(message);
+        cluster.getNode(toId).receiveMessage(message);
     }
 
     public void startElection() {
-        election.start();
+        if (!working.get()) {
+            return;
+        }
+
+        if (electionInProgress.compareAndSet(false, true)) {
+            gotAnswerFromHigher.set(false);
+            new Election(this).start();
+        }
     }
 
-    public int getInboxSize() {
-        return inbox.size();
+    public void finishElection() {
+        electionInProgress.set(false);
+    }
+
+    public void markAnswerFromHigher(int fromId) {
+        if (fromId > nodeId) {
+            gotAnswerFromHigher.set(true);
+        }
+
+        if (fromId == leaderId.get()) {
+            lastLeaderAnswerTime.set(System.currentTimeMillis());
+        }
+    }
+
+    public void acceptLeader(int newLeaderId) {
+        leaderId.set(newLeaderId);
+        lastLeaderAnswerTime.set(System.currentTimeMillis());
+        finishElection();
+    }
+
+    public void clearLeader() {
+        leaderId.set(NO_LEADER);
+    }
+
+    public void becomeLeader() {
+        leaderId.set(nodeId);
+        lastLeaderAnswerTime.set(System.currentTimeMillis());
+        finishElection();
+    }
+
+    public boolean isNodeWorking(int checkedNodeId) {
+        return cluster.getNode(checkedNodeId).isWorking();
+    }
+
+    public boolean hasHigherNode(int checkedNodeId) {
+        return checkedNodeId > nodeId;
+    }
+
+    public void sendVictoryToAll() {
+        for (Node node : cluster.getNodes()) {
+            if (node.getNodeId() != nodeId) {
+                sendMessage(node.getNodeId(), MessageType.VICTORY, nodeId);
+            }
+        }
+    }
+
+    public void sendElectToHigherNodes() {
+        for (Node node : cluster.getNodes()) {
+            if (node.getNodeId() > nodeId) {
+                sendMessage(node.getNodeId(), MessageType.ELECT);
+            }
+        }
+    }
+
+    public String getStatus() {
+        if (!working.get()) {
+            return "DOWN";
+        }
+
+        if (leaderId.get() == nodeId) {
+            return "LEADER";
+        }
+
+        return "FOLLOWER";
     }
 
     @Override
     public void run() {
-        LOG.log(Logger.Level.INFO, getName() + " started");
+        LogHelper.info(LOG, () -> getName() + " started");
 
-        while (!isInterrupted()) {
+        while (running.get()) {
             try {
-                Message message = inbox.poll(LOOP_WAIT_MS, TimeUnit.MILLISECONDS);
+                Message message = inbox.poll(POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
                 if (message != null) {
+                    if (message.getType() == MessageType.SHUTDOWN) {
+                        break;
+                    }
+
                     messageHandler.handle(message);
                 }
 
                 leaderMonitor.tick();
             } catch (InterruptedException e) {
-                interrupt();
+                currentThread().interrupt();
+                break;
             }
         }
 
-        LOG.log(Logger.Level.INFO, getName() + " stopped");
-    }
-
-    synchronized boolean tryStartElection() {
-        if (!isWorking() || electionInProgress) {
-            return false;
-        }
-
-        electionInProgress = true;
-        answerFromHigherNode = false;
-        status = NodeStatus.FOLLOWER;
-        leaderId = NO_LEADER;
-
-        return true;
-    }
-
-    synchronized void finishElection() {
-        electionInProgress = false;
-    }
-
-    synchronized void rememberAnswerFromHigherNode() {
-        answerFromHigherNode = true;
-    }
-
-    synchronized boolean hasAnswerFromHigherNode() {
-        return answerFromHigherNode;
-    }
-
-    synchronized void rememberLeader(int leaderId) {
-        if (!isWorking()) {
-            return;
-        }
-
-        this.leaderId = leaderId;
-        lastLeaderAnswerTime = System.currentTimeMillis();
-
-        if (leaderId == nodeId) {
-            status = NodeStatus.LEADER;
-            return;
-        }
-
-        status = NodeStatus.FOLLOWER;
-    }
-
-    synchronized void rememberLeaderAnswer() {
-        lastLeaderAnswerTime = System.currentTimeMillis();
-    }
-
-    synchronized void clearLeader() {
-        if (status != NodeStatus.DOWN) {
-            leaderId = NO_LEADER;
-            status = NodeStatus.FOLLOWER;
-        }
-    }
-
-    synchronized List<Node> getClusterNodesSnapshot() {
-        return new ArrayList<>(clusterNodes);
-    }
-
-    private Node findNode(int nodeId) {
-        for (Node node : getClusterNodesSnapshot()) {
-            if (node.getNodeId() == nodeId) {
-                return node;
-            }
-        }
-
-        return null;
+        LogHelper.info(LOG, () -> getName() + " stopped");
     }
 }

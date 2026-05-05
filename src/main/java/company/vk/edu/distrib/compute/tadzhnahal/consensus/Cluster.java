@@ -4,14 +4,15 @@ import java.lang.System.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Cluster {
     private static final Logger LOG = System.getLogger(Cluster.class.getName());
 
     private final List<Node> nodes = new ArrayList<>();
-
-    private boolean started;
-    private FailureSimulator failureSimulator;
+    private final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicReference<FailureSimulator> failureSimulator = new AtomicReference<>();
 
     public Cluster(int nodeCount) {
         if (nodeCount <= 0) {
@@ -19,116 +20,98 @@ public class Cluster {
         }
 
         for (int i = 1; i <= nodeCount; i++) {
-            nodes.add(new Node(i));
+            nodes.add(new Node(i, this));
+        }
+    }
+
+    public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
+
+        LogHelper.info(LOG, "cluster starts");
+
+        for (Node node : nodes) {
+            node.start();
+        }
+
+        if (!nodes.isEmpty()) {
+            nodes.get(0).startElection();
+        }
+    }
+
+    public void stop() {
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
+
+        LogHelper.info(LOG, "cluster stops");
+
+        stopRandomFailures();
+
+        for (Node node : nodes) {
+            node.shutdown();
         }
 
         for (Node node : nodes) {
-            node.setClusterNodes(nodes);
+            waitThread(node);
         }
+
+        LogHelper.info(LOG, "cluster stopped");
     }
 
     public List<Node> getNodes() {
         return Collections.unmodifiableList(nodes);
     }
 
-    public synchronized void start() {
-        if (started) {
-            LOG.log(Logger.Level.INFO, "cluster already started");
-            return;
-        }
-
-        LOG.log(Logger.Level.INFO, "cluster starts");
-
+    public Node getNode(int nodeId) {
         for (Node node : nodes) {
-            node.start();
+            if (node.getNodeId() == nodeId) {
+                return node;
+            }
         }
 
-        started = true;
-        startElectionFromFirstNode();
-    }
-
-    public synchronized void stop() {
-        if (!started) {
-            LOG.log(Logger.Level.INFO, "cluster already stopped");
-            return;
-        }
-
-        stopRandomFailures();
-
-        LOG.log(Logger.Level.INFO, "cluster stops");
-
-        for (Node node : nodes) {
-            node.interrupt();
-        }
-
-        waitNodes();
-
-        started = false;
-
-        LOG.log(Logger.Level.INFO, "cluster stopped");
-    }
-
-    public synchronized void startRandomFailures() {
-        if (!started) {
-            LOG.log(Logger.Level.INFO, "cluster is not started");
-            return;
-        }
-
-        if (failureSimulator != null && failureSimulator.isAlive()) {
-            LOG.log(Logger.Level.INFO, "failure simulator already started");
-            return;
-        }
-
-        failureSimulator = new FailureSimulator(this);
-        failureSimulator.start();
-    }
-
-    public synchronized void stopRandomFailures() {
-        if (failureSimulator == null) {
-            return;
-        }
-
-        failureSimulator.interrupt();
-        waitThread(failureSimulator);
-        failureSimulator = null;
-    }
-
-    public void sendMessage(int fromId, int toId, MessageType type) {
-        Node sender = findNode(fromId);
-
-        if (sender == null) {
-            LOG.log(Logger.Level.WARNING, "cluster cannot find sender node " + fromId);
-            return;
-        }
-
-        sender.sendMessage(toId, type);
+        throw new IllegalArgumentException("unknown node id: " + nodeId);
     }
 
     public void turnOffNode(int nodeId) {
-        Node node = findNode(nodeId);
-
-        if (node == null) {
-            LOG.log(Logger.Level.WARNING, "cluster cannot find node " + nodeId);
-            return;
-        }
-
-        node.turnOff();
+        getNode(nodeId).turnOff();
     }
 
     public void turnOnNode(int nodeId) {
-        Node node = findNode(nodeId);
+        getNode(nodeId).turnOn();
+    }
 
-        if (node == null) {
-            LOG.log(Logger.Level.WARNING, "cluster cannot find node " + nodeId);
+    public void startRandomFailures() {
+        FailureSimulator currentSimulator = failureSimulator.get();
+
+        if (currentSimulator != null && currentSimulator.isAlive()) {
             return;
         }
 
-        node.turnOn();
+        FailureSimulator newSimulator = new FailureSimulator(this);
+        failureSimulator.set(newSimulator);
+        newSimulator.start();
     }
 
-    public int getLeaderId() {
+    public void stopRandomFailures() {
+        FailureSimulator simulator = failureSimulator.get();
+
+        if (simulator == null) {
+            return;
+        }
+
+        if (!simulator.isAlive()) {
+            return;
+        }
+
+        simulator.stopSimulator();
+        waitThread(simulator);
+    }
+
+    public int getCurrentLeaderId() {
         for (Node node : nodes) {
-            if (node.getNodeStatus() == NodeStatus.LEADER) {
+            if (node.isWorking() && node.getLeaderId() == node.getNodeId()) {
                 return node.getNodeId();
             }
         }
@@ -136,26 +119,14 @@ public class Cluster {
         return Node.NO_LEADER;
     }
 
-    public int getWorkingNodeCount() {
-        int count = 0;
-
-        for (Node node : nodes) {
-            if (node.isWorking()) {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
     public void printState() {
-        LOG.log(Logger.Level.INFO, "cluster state:");
+        LogHelper.info(LOG, "cluster state:");
 
         for (Node node : nodes) {
-            LOG.log(
-                    Logger.Level.INFO,
-                    "node " + node.getNodeId()
-                            + " | " + node.getNodeStatus()
+            LogHelper.info(
+                    LOG,
+                    () -> "node " + node.getNodeId()
+                            + " | " + node.getStatus()
                             + " | leader=" + node.getLeaderId()
                             + " | threadAlive=" + node.isAlive()
                             + " | inbox=" + node.getInboxSize()
@@ -163,44 +134,9 @@ public class Cluster {
         }
     }
 
-    public void startElectionFromNode(int nodeId) {
-        Node node = findNode(nodeId);
-
-        if (node == null) {
-            LOG.log(Logger.Level.WARNING, "cluster cannot find node " + nodeId);
-            return;
-        }
-
-        node.startElection();
-    }
-
-    private void startElectionFromFirstNode() {
-        if (nodes.isEmpty()) {
-            return;
-        }
-
-        nodes.get(0).startElection();
-    }
-
-    private Node findNode(int nodeId) {
-        for (Node node : nodes) {
-            if (node.getNodeId() == nodeId) {
-                return node;
-            }
-        }
-
-        return null;
-    }
-
-    private void waitNodes() {
-        for (Node node : nodes) {
-            waitThread(node);
-        }
-    }
-
     private void waitThread(Thread thread) {
         try {
-            thread.join(1000L);
+            thread.join();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

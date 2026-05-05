@@ -1,34 +1,41 @@
 package company.vk.edu.distrib.compute.tadzhnahal.consensus;
 
-import java.util.logging.Logger;
+import java.lang.System.Logger;
 
 public final class VisualApp {
-    private static final Logger LOGGER = Logger.getLogger(VisualApp.class.getName());
+    private static final Logger LOG = System.getLogger(VisualApp.class.getName());
+
+    private static final int NODE_COUNT = 5;
+    private static final int LEADER_ID = 5;
+    private static final long PRINT_PAUSE_MS = 1000L;
 
     private VisualApp() {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        Cluster cluster = new Cluster(5);
-        ClusterStatePrinter printer = new ClusterStatePrinter(cluster, 1000);
+        Cluster cluster = new Cluster(NODE_COUNT);
+        ClusterStatePrinter printer = new ClusterStatePrinter(cluster, PRINT_PAUSE_MS);
 
-        cluster.start();
-        printer.start();
+        try {
+            cluster.start();
+            printer.start();
 
-        Thread.sleep(3000);
+            Thread.sleep(3000L);
 
-        LOGGER.info("visual demo: turn off node 5");
-        cluster.turnOffNode(5);
+            LogHelper.info(LOG, () -> "visual demo: turn off node " + LEADER_ID);
+            cluster.turnOffNode(LEADER_ID);
 
-        Thread.sleep(4000);
+            Thread.sleep(4000L);
 
-        LOGGER.info("visual demo: turn on node 5");
-        cluster.turnOnNode(5);
+            LogHelper.info(LOG, () -> "visual demo: turn on node " + LEADER_ID);
+            cluster.turnOnNode(LEADER_ID);
 
-        Thread.sleep(4000);
+            Thread.sleep(4000L);
 
-        LOGGER.info("visual demo: stop");
-        printer.stop();
-        cluster.stop();
+            LogHelper.info(LOG, "visual demo: stop");
+        } finally {
+            printer.stop();
+            cluster.stop();
+        }
     }
 }

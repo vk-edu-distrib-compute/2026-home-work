@@ -1,65 +1,61 @@
 package company.vk.edu.distrib.compute.tadzhnahal.consensus;
 
 import java.lang.System.Logger;
-import java.util.concurrent.TimeUnit;
 
 public final class App {
     private static final Logger LOG = System.getLogger(App.class.getName());
 
-    private static final int DEFAULT_NODE_COUNT = 5;
+    private static final int NODE_COUNT = 5;
     private static final int FIRST_LEADER_ID = 5;
-    private static final long ELECTION_DEMO_DELAY_MS = 1500L;
-    private static final long LEADER_FAIL_DEMO_DELAY_MS = 3000L;
-    private static final long RECOVERY_DEMO_DELAY_MS = 2000L;
-    private static final long RANDOM_FAILURE_DEMO_MS = 8000L;
+    private static final String CURRENT_LEADER_MESSAGE = "demo: current leader is node ";
 
     private App() {
     }
 
     public static void main(String[] args) {
-        Cluster cluster = new Cluster(DEFAULT_NODE_COUNT);
+        Cluster cluster = new Cluster(NODE_COUNT);
 
         try {
             cluster.start();
-
-            TimeUnit.MILLISECONDS.sleep(ELECTION_DEMO_DELAY_MS);
-
+            sleep(2000L);
             cluster.printState();
-            LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
+            logCurrentLeader(cluster);
 
-            LOG.log(Logger.Level.INFO, "demo: turn off node " + FIRST_LEADER_ID);
+            LogHelper.info(LOG, () -> "demo: turn off node " + FIRST_LEADER_ID);
             cluster.turnOffNode(FIRST_LEADER_ID);
-
-            TimeUnit.MILLISECONDS.sleep(LEADER_FAIL_DEMO_DELAY_MS);
-
+            sleep(3000L);
             cluster.printState();
-            LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
+            logCurrentLeader(cluster);
 
-            LOG.log(Logger.Level.INFO, "demo: turn on node " + FIRST_LEADER_ID);
+            LogHelper.info(LOG, () -> "demo: turn on node " + FIRST_LEADER_ID);
             cluster.turnOnNode(FIRST_LEADER_ID);
-
-            TimeUnit.MILLISECONDS.sleep(RECOVERY_DEMO_DELAY_MS);
-
+            sleep(2000L);
             cluster.printState();
-            LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
+            logCurrentLeader(cluster);
 
-            LOG.log(Logger.Level.INFO, "demo: start random failures");
+            LogHelper.info(LOG, "demo: start random failures");
             cluster.startRandomFailures();
+            sleep(8000L);
 
-            TimeUnit.MILLISECONDS.sleep(RANDOM_FAILURE_DEMO_MS);
-
-            LOG.log(Logger.Level.INFO, "demo: stop random failures");
+            LogHelper.info(LOG, "demo: stop random failures");
             cluster.stopRandomFailures();
-
-            TimeUnit.MILLISECONDS.sleep(ELECTION_DEMO_DELAY_MS);
-
+            sleep(1000L);
             cluster.printState();
-            LOG.log(Logger.Level.INFO, "demo: current leader is node " + cluster.getLeaderId());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            LOG.log(Logger.Level.WARNING, "demo interrupted");
+            logCurrentLeader(cluster);
         } finally {
             cluster.stop();
+        }
+    }
+
+    private static void logCurrentLeader(Cluster cluster) {
+        LogHelper.info(LOG, () -> CURRENT_LEADER_MESSAGE + cluster.getCurrentLeaderId());
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

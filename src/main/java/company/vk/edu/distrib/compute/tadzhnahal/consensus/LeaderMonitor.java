@@ -23,16 +23,21 @@ final class LeaderMonitor {
 
         int leaderId = node.getLeaderId();
 
-        if (leaderId == Node.NO_LEADER || leaderId == node.getNodeId()) {
+        if (leaderId == Node.NO_LEADER) {
+            node.startElection();
+            return;
+        }
+
+        if (leaderId == node.getNodeId()) {
             return;
         }
 
         long now = System.currentTimeMillis();
 
         if (now - node.getLastLeaderAnswerTime() > LEADER_TIMEOUT_MS) {
-            LOG.log(
-                    Logger.Level.INFO,
-                    node.getName() + " lost leader " + leaderId + ", starts election"
+            LogHelper.info(
+                    LOG,
+                    () -> node.getName() + " lost leader " + leaderId + ", starts election"
             );
 
             node.clearLeader();
