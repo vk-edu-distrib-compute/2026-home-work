@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -39,8 +40,7 @@ public class KVServiceImpl implements ReplicatedService {
     private final InMemoryDao dao;
     private final List<String> clusterNodes;
     private final String selfAddress;
-    private final int grpcPort;
-    private final Map<String, ManagedChannel> grpcChannels = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, ManagedChannel> grpcChannels = new ConcurrentHashMap<>();
 
     private final int replicationFactor;
     private int defaultAck;
@@ -58,7 +58,7 @@ public class KVServiceImpl implements ReplicatedService {
 
         this.dao = dao;
         this.selfAddress = "http://localhost:" + port;
-        this.grpcPort = port + 1000;
+        int grpcPort = port + 1000;
         this.clusterNodes = allPorts.stream()
                 .map(p -> "http://localhost:" + p + "?grpcPort=" + (p + 1000))
                 .collect(Collectors.toList());
@@ -114,7 +114,7 @@ public class KVServiceImpl implements ReplicatedService {
         String id = extractParam(query, PARAM_ID);
         int ack = extractAck(query);
 
-        if (ack > replicationFactor) {
+        if (isInvalidAck(ack)) {
             sendResponse(exchange, STATUS_BAD_REQUEST,
                     ("Invalid ack: " + ack + " > " + replicationFactor).getBytes());
             return;
@@ -144,6 +144,10 @@ public class KVServiceImpl implements ReplicatedService {
         }
     }
 
+    private boolean isInvalidAck(int ack) {
+        return ack > replicationFactor;
+    }
+
     private List<String> getReplicas(String key) {
         return clusterNodes.stream()
                 .sorted(Comparator.comparingLong((String node) -> {
@@ -155,33 +159,39 @@ public class KVServiceImpl implements ReplicatedService {
                 .collect(Collectors.toList());
     }
 
-    // ==================== gRPC методы ====================
-
     private record ReplicaResponse(byte[] value, boolean found) {
     }
 
-    private ReplicaResponse getFromReplica(String replica, String id) throws IOException, InterruptedException {
+    private ReplicaResponse getFromReplica(String replica, String id) {
         if (replica.startsWith(selfAddress)) {
             try {
                 return new ReplicaResponse(dao.get(id), true);
-            } catch (NoSuchElementException e) {
+            } catch (NoSuchElementException | IOException e) {
                 return new ReplicaResponse(null, false);
             }
         }
         return getFromReplicaGrpc(replica, id);
     }
 
-    private void putToReplica(String replica, String id, byte[] body) throws IOException, InterruptedException {
+    private void putToReplica(String replica, String id, byte[] body) {
         if (replica.startsWith(selfAddress)) {
-            dao.upsert(id, body);
+            try {
+                dao.upsert(id, body);
+            } catch (IOException e) {
+                // DAO exception
+            }
             return;
         }
         putToReplicaGrpc(replica, id, body);
     }
 
-    private void deleteFromReplica(String replica, String id) throws IOException, InterruptedException {
+    private void deleteFromReplica(String replica, String id) {
         if (replica.startsWith(selfAddress)) {
-            dao.delete(id);
+            try {
+                dao.delete(id);
+            } catch (IOException e) {
+                // DAO exception
+            }
             return;
         }
         deleteFromReplicaGrpc(replica, id);
@@ -201,7 +211,7 @@ public class KVServiceImpl implements ReplicatedService {
         GetRequest request = GetRequest.newBuilder().setId(id).build();
         GetResponse response = stub.get(request);
 
-        if (response.getStatus() == 200) {
+        if (response.getStatus() == STATUS_OK) {
             return new ReplicaResponse(response.getValue().toByteArray(), true);
         }
         return new ReplicaResponse(null, false);
@@ -243,8 +253,6 @@ public class KVServiceImpl implements ReplicatedService {
     private String extractHost(String address) {
         return address.replace("http://", "").split(":")[0];
     }
-
-    // ==================== Обработчики репликации ====================
 
     private void handleReplicatedGet(HttpExchange exchange, String id,
                                      List<String> replicas, int ack) throws IOException {
@@ -321,8 +329,6 @@ public class KVServiceImpl implements ReplicatedService {
         sendResponse(exchange, STATUS_ACCEPTED, "Accepted".getBytes());
     }
 
-    // ==================== Вспомогательные методы ====================
-
     private int extractAck(String query) {
         String ackStr = extractParam(query, PARAM_ACK);
         if (ackStr != null) {
@@ -380,7 +386,7 @@ public class KVServiceImpl implements ReplicatedService {
         try {
             dao.close();
         } catch (IOException ex) {
-            // Closing DAO resource
+            // Closing DAO resource, exception can be safely ignored during shutdown
         }
     }
 }
