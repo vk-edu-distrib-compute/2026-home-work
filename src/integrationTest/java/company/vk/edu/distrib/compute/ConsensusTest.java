@@ -73,7 +73,7 @@ public class ConsensusTest {
 
     private int getEnabledNode(Cluster cluster, int currentLeader) {
         return cluster.nodes.values().stream()
-                .filter(Node::isEnable)
+                .filter(Node::isEnabled)
                 .filter(node -> node.getId() != currentLeader)
                 .map(Node::getId)
                 .findFirst()

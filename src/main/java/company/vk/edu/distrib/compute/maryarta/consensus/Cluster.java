@@ -15,6 +15,7 @@ public class Cluster {
     private void createNodes() {
         nodeIds.forEach(this::addNode);
     }
+
     private void addNode(int nodeId) {
         nodes.put(nodeId, createNode(nodeId));
     }
