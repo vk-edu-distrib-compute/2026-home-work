@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import company.vk.edu.distrib.compute.goshanchic.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.aldor7705.KVServiceFactorySimple;
 import company.vk.edu.distrib.compute.andeco.AndecoKVServiceFactory;
 import company.vk.edu.distrib.compute.artttnik.MyKVServiceFactory;
@@ -13,7 +14,6 @@ import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevFileSystemK
 import company.vk.edu.distrib.compute.kirillmedvedev23.KirillmedvedevKVServiceFactory;
 import company.vk.edu.distrib.compute.korjick.CakeKVServiceFactory;
 import company.vk.edu.distrib.compute.luckyslon2003.LuckySlon2003KVServiceFactory;
-import company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl;
 import company.vk.edu.distrib.compute.nesterukia.file_system.NesterukiaFileSystemKVServiceFactory;
 import company.vk.edu.distrib.compute.nihuaway00.NihuawayKVServiceFactory;
 import company.vk.edu.distrib.compute.shuuuurik.ShuuuurikFileKVServiceFactory;
@@ -30,23 +30,24 @@ import org.junit.platform.commons.util.ReflectionUtils;
 public class KVServiceFactoryArgumentsProvider implements ArgumentsProvider {
 
     private final Set<Class<? extends KVServiceFactory>> factories = Set.of(
-        KVServiceFactorySimple.class,
-        KVServiceFactoryImpl.class,
-        AndecoKVServiceFactory.class,
-        MyKVServiceFactory.class,
-        InMemoryKVServiceFactory.class,
-        Vitos23KVServiceFactory.class,
-        NihuawayKVServiceFactory.class,
-        ShuuuurikFileKVServiceFactory.class,
-        B10nicleKVServiceFactory.class,
-        VredakonKVServiceFactory.class,
-        PopovIgorKVServiceFactoryImpl.class,
-        NesterukiaFileSystemKVServiceFactory.class,
-        KirillmedvedevKVServiceFactory.class,
-        KirillmedvedevFileSystemKVServiceFactory.class,
-        LuckySlon2003KVServiceFactory.class,
-        Wolfram158KVServiceFactoryFileWithCacheImpl.class,
-        CakeKVServiceFactory.class
+            KVServiceFactorySimple.class,
+            AndecoKVServiceFactory.class,
+            MyKVServiceFactory.class,
+            InMemoryKVServiceFactory.class,
+            Vitos23KVServiceFactory.class,
+            NihuawayKVServiceFactory.class,
+            ShuuuurikFileKVServiceFactory.class,
+            B10nicleKVServiceFactory.class,
+            VredakonKVServiceFactory.class,
+            PopovIgorKVServiceFactoryImpl.class,
+            NesterukiaFileSystemKVServiceFactory.class,
+            KirillmedvedevKVServiceFactory.class,
+            KirillmedvedevFileSystemKVServiceFactory.class,
+            LuckySlon2003KVServiceFactory.class,
+            Wolfram158KVServiceFactoryFileWithCacheImpl.class,
+            CakeKVServiceFactory.class,
+            company.vk.edu.distrib.compute.mandesero.KVServiceFactoryImpl.class,
+            KVServiceFactoryImpl.class
     );
 
     @Override
