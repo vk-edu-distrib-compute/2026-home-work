@@ -7,6 +7,9 @@ public final class ConsensusApp {
     private static final Logger LOGGER = Logger.getLogger(ConsensusApp.class.getName());
     private static final int CLUSTER_SIZE = 5;
 
+    private ConsensusApp() {
+    }
+
     public static void main(String[] args) throws InterruptedException {
         LOGGER.info("=".repeat(60));
         LOGGER.info("РАСПРЕДЕЛЁННЫЙ КОНСЕНСУС - АЛГОРИТМ BULLY");
