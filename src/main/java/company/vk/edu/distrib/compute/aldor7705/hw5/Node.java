@@ -1,37 +1,43 @@
 package company.vk.edu.distrib.compute.aldor7705.hw5;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.DelayQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 
 public class Node implements Runnable {
+    private static final Logger LOGGER = Logger.getLogger(Node.class.getName());
     private static final long PING_INTERVAL_MS = 1_000;
     private static final long PING_TIMEOUT_MS = 2_500;
     private static final long ELECTION_TIMEOUT_MS = 2_000;
     private static final long MALFUNCTION_CHECK_INTERVAL_MS = 5_000;
     private static final long MIN_RECOVERY_DELAY_MS = 3_000;
     private static final long MAX_RECOVERY_DELAY_MS = 8_000;
+    private static final double FAILURE_PROBABILITY = 0.15;
 
     private final int id;
     private final AtomicReference<NodeState> state = new AtomicReference<>(NodeState.FOLLOWER);
     private final AtomicInteger leaderId = new AtomicInteger(-1);
     private final AtomicBoolean stopped = new AtomicBoolean(false);
-    private final DelayQueue<Message> inbox = new DelayQueue<>();
-    private volatile Map<Integer, Node> peers;
+    private final BlockingQueue<Message> inbox = new DelayQueue<>();
+    private Map<Integer, Node> peers;
     private Thread thread;
     private final ReentrantLock electionLock = new ReentrantLock();
     private final ReentrantLock pingLock = new ReentrantLock();
-    private boolean electionInProgress = false;
-    private long electionStartTime = 0;
-    private long lastPingResponseTime = 0;
-    private boolean pingInProgress = false;
+    private boolean electionInProgress;
+    private long electionStartTime;
+    private long lastPingResponseTime;
+    private boolean pingInProgress;
     private final Random random = new Random();
-    private volatile boolean malfunctionScheduled = false;
-    private long lastMalfunctionCheck = 0;
-    private static final double FAILURE_PROBABILITY = 0.15;
+    private boolean malfunctionScheduled;
+    private long lastMalfunctionCheck;
 
     public Node(int id) {
         this.id = id;
@@ -96,14 +102,6 @@ public class Node implements Runnable {
         }
     }
 
-    private void sendToHigherNodes(MessageType type) {
-        for (int peerId : peers.keySet()) {
-            if (peerId > id) {
-                send(peerId, type);
-            }
-        }
-    }
-
     private void scheduleSelfMessage(MessageType type, long delayMs) {
         inbox.offer(new Message(type, id, delayMs, type));
     }
@@ -128,7 +126,7 @@ public class Node implements Runnable {
             electionInProgress = true;
             electionStartTime = System.currentTimeMillis();
 
-            log("Запускаю выборы (алгоритм Bully)");
+            log("Запуск выборов (алгоритм Bully)");
 
             List<Integer> higherNodes = peers.keySet().stream()
                     .filter(pid -> pid > id)
@@ -194,8 +192,8 @@ public class Node implements Runnable {
         if (msg.getSenderId() == id && msg.getInResponseTo() == MessageType.ELECT) {
             electionLock.lock();
             try {
-                if (electionInProgress &&
-                        System.currentTimeMillis() - electionStartTime >= ELECTION_TIMEOUT_MS) {
+                if (electionInProgress
+                        && System.currentTimeMillis() - electionStartTime >= ELECTION_TIMEOUT_MS) {
                     log("Таймаут выборов - старшие узлы не ответили");
                     declareVictory();
                 }
@@ -205,8 +203,12 @@ public class Node implements Runnable {
             return;
         }
 
+        if (state.get() == NodeState.LEADER) {
+            return;
+        }
+
         if (state.get() != NodeState.DOWN && state.get() != NodeState.CANDIDATE) {
-            log("Получил ELECT от узла " + msg.getSenderId() + " - запускаю свои выборы");
+            log("Получил ELECT от узла " + msg.getSenderId() + " - запуск своих выборов");
             startElection();
         }
     }
@@ -223,7 +225,7 @@ public class Node implements Runnable {
         electionLock.lock();
         try {
             if (electionInProgress && msg.getSenderId() > id) {
-                log("Получил ANSWER от старшего узла " + msg.getSenderId() + " - отступаю");
+                log("Получил ANSWER от старшего узла " + msg.getSenderId());
                 electionInProgress = false;
                 state.set(NodeState.FOLLOWER);
             }
@@ -258,7 +260,8 @@ public class Node implements Runnable {
 
             log("Признаю нового лидера: узел " + newLeaderId);
         } else {
-            log("Получил VICTORY от младшего узла " + newLeaderId + " - подозрительно, запускаю выборы");
+            log("Получил VICTORY от младшего узла " + newLeaderId
+                    + " - запуск выборов заново");
             startElection();
         }
     }
@@ -270,7 +273,7 @@ public class Node implements Runnable {
 
         int currentLeader = leaderId.get();
         if (currentLeader < 0) {
-            log("Лидер неизвестен - запускаю выборы");
+            log("Лидер неизвестен - запуск выборов");
             startElection();
             return;
         }
@@ -317,8 +320,8 @@ public class Node implements Runnable {
             log("!!! СЛУЧАЙНЫЙ СБОЙ !!!");
             forceDown();
 
-            long recoveryDelay = MIN_RECOVERY_DELAY_MS +
-                    random.nextLong(MAX_RECOVERY_DELAY_MS - MIN_RECOVERY_DELAY_MS);
+            long recoveryDelay = MIN_RECOVERY_DELAY_MS
+                    + random.nextLong(MAX_RECOVERY_DELAY_MS - MIN_RECOVERY_DELAY_MS);
 
             new Thread(() -> {
                 try {
@@ -370,11 +373,11 @@ public class Node implements Runnable {
     }
 
     private void log(String msg) {
-        System.out.printf("[%5dмс] Узел %2d [%-9s] лидер=%s | %s%n",
+        LOGGER.info(String.format("[%5dмс] Узел %2d [%-9s] лидер=%s | %s",
                 System.currentTimeMillis() % 100_000,
                 id,
                 state.get(),
                 leaderId.get() < 0 ? "?" : leaderId.get(),
-                msg);
+                msg));
     }
 }

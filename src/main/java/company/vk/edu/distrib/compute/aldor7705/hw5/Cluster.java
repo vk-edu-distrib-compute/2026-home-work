@@ -1,9 +1,16 @@
 package company.vk.edu.distrib.compute.aldor7705.hw5;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 public class Cluster {
+    private static final Logger LOGGER = Logger.getLogger(Cluster.class.getName());
     private final Map<Integer, Node> nodes;
     private final ExecutorService executor;
 
@@ -63,23 +70,23 @@ public class Cluster {
     }
 
     public void printStatus() {
-        System.out.println("\n=== СОСТОЯНИЕ КЛАСТЕРА ===");
+        LOGGER.info("\n=== СОСТОЯНИЕ КЛАСТЕРА ===");
         for (Node n : nodes.values()) {
-            System.out.printf("  Узел %2d  состояние=%-9s  лидер=%s%n",
+            LOGGER.info(String.format("  Узел %2d  состояние=%-9s  лидер=%s",
                     n.getId(),
                     n.getState(),
-                    n.getLeaderId() < 0 ? "?" : n.getLeaderId());
+                    n.getLeaderId() < 0 ? "?" : n.getLeaderId()));
         }
 
         int leader = getConsensusLeader();
         if (leader == -2) {
-            System.out.println("  *** ОБНАРУЖЕН SPLIT-BRAIN! ***");
+            LOGGER.info("  *** ОБНАРУЖЕН SPLIT-BRAIN! ***");
         } else if (leader > 0) {
-            System.out.println("  Текущий лидер: " + leader);
+            LOGGER.info("  Текущий лидер: " + leader);
         } else {
-            System.out.println("  Лидер пока не выбран");
+            LOGGER.info("  Лидер пока не выбран");
         }
-        System.out.println("==============================\n");
+        LOGGER.info("==============================\n");
     }
 
     public void shutdown() {
