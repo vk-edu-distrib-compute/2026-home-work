@@ -24,7 +24,7 @@ public class Cluster {
             node.setPeers(map);
         }
 
-        this.nodes = Collections.unmodifiableMap(map);
+        this.nodes = map;
         this.executor = Executors.newFixedThreadPool(size, r -> {
             Thread t = new Thread(r);
             t.setDaemon(true);
