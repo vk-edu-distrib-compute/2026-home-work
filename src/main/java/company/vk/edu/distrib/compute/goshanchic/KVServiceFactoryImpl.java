@@ -14,31 +14,20 @@ public class KVServiceFactoryImpl extends KVServiceFactory {
     private final int defaultAck;
 
     public KVServiceFactoryImpl() {
-        this(DEFAULT_REPLICATION_FACTOR, DEFAULT_ACK);
+        super();
+        this.replicationFactor = DEFAULT_REPLICATION_FACTOR;
+        this.defaultAck = DEFAULT_ACK;
     }
 
     public KVServiceFactoryImpl(int replicationFactor, int defaultAck) {
+        super();
         this.replicationFactor = replicationFactor;
         this.defaultAck = defaultAck;
     }
 
     @Override
     protected KVService doCreate(int port) throws IOException {
-        // одиночный режим (без кластера)
-        return doCreate(port, List.of(port));
-    }
-
-    @Override
-    protected KVService doCreate(int port, List<Integer> clusterPorts) throws IOException {
         InMemoryDao dao = new InMemoryDao();
-
-        // Передаём ВЕСЬ кластер, а не одну ноду
-        return new KVServiceImpl(
-                port,
-                clusterPorts,
-                dao,
-                replicationFactor,
-                defaultAck
-        );
+        return new KVServiceImpl(port, List.of(port), dao, replicationFactor, defaultAck);
     }
 }
