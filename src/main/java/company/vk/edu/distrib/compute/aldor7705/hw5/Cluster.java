@@ -1,6 +1,5 @@
 package company.vk.edu.distrib.compute.aldor7705.hw5;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
