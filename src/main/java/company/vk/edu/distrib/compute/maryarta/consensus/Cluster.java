@@ -13,18 +13,28 @@ public class Cluster {
     }
 
     private void createNodes() {
-        for (int nodeId : nodeIds) {
-            Node node = new Node(nodes, nodeId);
-            nodes.put(nodeId, node);
-        }
+        nodeIds.forEach(this::addNode);
+    }
+    private void addNode(int nodeId) {
+        nodes.put(nodeId, createNode(nodeId));
     }
 
     public void startNodes() {
-        for (Node node : nodes.values()) {
-            Thread nodeThread = new Thread(node, "node-" + node.getId());
-            nodeThread.start();
-            node.start();
-        }
+        nodes.values().forEach(this::startNode);
+    }
+
+    private void startNode(Node node) {
+        Thread nodeThread = createNodeThread(node);
+        nodeThread.start();
+        node.start();
+    }
+
+    private Thread createNodeThread(Node node) {
+        return new Thread(node, "node-" + node.getId());
+    }
+
+    private Node createNode(int nodeId) {
+        return new Node(nodes, nodeId);
     }
 
     public void stopNode(int id) {

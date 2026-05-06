@@ -23,9 +23,9 @@ public class Node implements Runnable {
     private final int id;
     private final BlockingQueue<Message> inbox = new LinkedBlockingQueue<>();
     private final Map<Integer, Node> nodes;
-    private final AtomicBoolean isEnable = new AtomicBoolean();
-
+    private final AtomicBoolean enabled = new AtomicBoolean();
     private final AtomicInteger leaderID = new AtomicInteger(-1);
+    private final Object stateLock = new Object();
 
     private long pingDeadlineAt;
     private boolean waitingLeaderAnswer;
@@ -42,7 +42,7 @@ public class Node implements Runnable {
     }
 
     public void start() {
-        isEnable.set(true);
+        enabled.set(true);
         scheduler.scheduleWithFixedDelay(this::failRandomly,
                 FAILURE_CHECK_INTERVAL_MS,
                 FAILURE_CHECK_INTERVAL_MS,
@@ -50,8 +50,8 @@ public class Node implements Runnable {
         scheduler.scheduleWithFixedDelay(this::checkLeaderAvailability, 0, 5, TimeUnit.SECONDS);
     }
 
-    private synchronized void failRandomly() {
-        if (!isEnable.get()) {
+    private void failRandomly() {
+        if (!enabled.get()) {
             return;
         }
         double value = ThreadLocalRandom.current().nextDouble();
@@ -59,12 +59,20 @@ public class Node implements Runnable {
             return;
         }
         long recoveryDelayMs = ThreadLocalRandom.current().nextLong(MIN_RECOVERY_DELAY_MS, MAX_RECOVERY_DELAY_MS + 1);
-        failFor(recoveryDelayMs);
+        synchronized (this) {
+            if (!enabled.get()) {
+                return;
+            }
+            failFor(recoveryDelayMs);
+        }
     }
 
-    public synchronized void failFor(long recoveryDelayMs) {
-        if (!isEnable.get()) {
-            return;
+    private void failFor(long recoveryDelayMs) {
+        synchronized (stateLock) {
+            if (!enabled.get()) {
+                return;
+            }
+            setEnabled(false);
         }
         stop();
         log.warn("Node {} failed for {} ms", id, recoveryDelayMs);
@@ -100,7 +108,7 @@ public class Node implements Runnable {
         startElection();
     }
 
-    private synchronized void handleAnswer(MessageType answerTo, int fromId) {
+    private void handleAnswer(MessageType answerTo, int fromId) {
         if (answerTo == PING) {
             handlePingAnswer(fromId);
             return;
@@ -110,44 +118,50 @@ public class Node implements Runnable {
         }
     }
 
-    private synchronized void handlePingAnswer(int fromId) {
-        if (!waitingLeaderAnswer) {
-            return;
-        }
-        if (fromId != leaderID.get()) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        waitingLeaderAnswer = false;
+    private void handlePingAnswer(int fromId) {
+        synchronized (stateLock) {
+            if (!waitingLeaderAnswer) {
+                return;
+            }
+            if (fromId != leaderID.get()) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            waitingLeaderAnswer = false;
 
-        if (now >= pingDeadlineAt) {
-            log.warn("Node {} received late PING answer from leader {}; starting election", id, leaderID);
-            leaderID.set(-1);
-            startElection();
+            if (now >= pingDeadlineAt) {
+                log.warn("Node {} received late PING answer from leader {}; starting election", id, leaderID);
+                leaderID.set(-1);
+                startElection();
+            }
         }
     }
 
-    private synchronized void handleElectAnswer(int fromId) {
-        if (!electionInProgress) {
-            return;
+    private void handleElectAnswer(int fromId) {
+        synchronized (stateLock) {
+            if (!electionInProgress) {
+                return;
+            }
+            if (fromId <= this.id) {
+                return;
+            }
+            log.info("Node {} received ELECT answer from {}", id, fromId);
+            receivedAnswerOnElect.set(true);
         }
-        if (fromId <= this.id) {
-            return;
-        }
-        log.info("Node {} received ELECT answer from {}", id, fromId);
-        receivedAnswerOnElect.set(true);
     }
 
-    private synchronized void handleVictory(int leaderID) {
-        this.leaderID.set(leaderID);
-        receivedAnswerOnElect.set(false);
-        waitingLeaderAnswer = false;
-        electionInProgress = false;
+    private void handleVictory(int leaderID) {
+        synchronized (stateLock) {
+            this.leaderID.set(leaderID);
+            receivedAnswerOnElect.set(false);
+            waitingLeaderAnswer = false;
+            electionInProgress = false;
+        }
         log.info("Node {} accepted leader {}", id, leaderID);
     }
 
     public void receive(Message message) {
-        if (!isEnable.get()) {
+        if (!enabled.get()) {
             return;
         }
         inbox.offer(message);
@@ -168,7 +182,7 @@ public class Node implements Runnable {
     }
 
     private void handleMessage(Message message) {
-        if (!isEnable.get()) {
+        if (!enabled.get()) {
             return;
         }
         switch (message.type) {
@@ -179,79 +193,84 @@ public class Node implements Runnable {
         }
     }
 
-    private synchronized void checkLeaderAvailability() {
-        if (!isEnable.get()) {
-            return;
-        }
-        int currentLeaderId = leaderID.get();
-        if (id == currentLeaderId) {
-            return;
-        }
-        if (currentLeaderId <= 0) {
-            startElection();
-            return;
-        }
+    private void checkLeaderAvailability() {
+        synchronized (stateLock) {
+            if (!enabled.get()) {
+                return;
+            }
+            int currentLeaderId = leaderID.get();
+            if (id == currentLeaderId) {
+                return;
+            }
+            if (currentLeaderId <= 0) {
+                startElection();
+                return;
+            }
 
-        long now = System.currentTimeMillis();
-        if (!waitingLeaderAnswer) {
-            sendMessage(PING, currentLeaderId, null);
-            waitingLeaderAnswer = true;
-            pingDeadlineAt = now + PING_TIMEOUT_MS;
+            long now = System.currentTimeMillis();
+            if (!waitingLeaderAnswer) {
+                sendMessage(PING, currentLeaderId, null);
+                waitingLeaderAnswer = true;
+                pingDeadlineAt = now + PING_TIMEOUT_MS;
 
-            log.info("Node {} sent PING to leader {}", id, currentLeaderId);
-            return;
+                log.info("Node {} sent PING to leader {}", id, currentLeaderId);
+                return;
+            }
+
+            if (now >= pingDeadlineAt) {
+                log.warn("Node {} detected leader {} failure", id, currentLeaderId);
+                waitingLeaderAnswer = false;
+                leaderID.set(-1);
+                startElection();
+            }
         }
+    }
 
-        if (now >= pingDeadlineAt) {
-            log.warn("Node {} detected leader {} failure", id, currentLeaderId);
+    private void startElection() {
+        synchronized (stateLock) {
+            if (!enabled.get()) {
+                return;
+            }
+            if (electionInProgress) {
+                return;
+            }
+            electionRound++;
+
+            electionInProgress = true;
+            receivedAnswerOnElect.set(false);
+
+            int electSent = 0;
+            log.info("Node {} started election", this.id);
+            for (int target : nodes.keySet()) {
+                if (target > this.id) {
+                    sendMessage(ELECT, target, null);
+                    electSent++;
+                    log.info("Node {} sent ELECT to {}", this.id, target);
+                }
+            }
+            if (electSent == 0) {
+                becomeLeader();
+                return;
+            }
+            int currentRound = electionRound;
+            waitElectionAnswer(currentRound);
+        }
+    }
+
+    private void becomeLeader() {
+        synchronized (stateLock) {
+            leaderID.set(id);
+            electionInProgress = false;
             waitingLeaderAnswer = false;
-            leaderID.set(-1);
-            startElection();
-        }
-    }
-
-    private synchronized void startElection() {
-        if (!isEnable.get()) {
-            return;
-        }
-        if (electionInProgress) {
-            return;
-        }
-        electionRound++;
-
-        electionInProgress = true;
-        receivedAnswerOnElect.set(false);
-
-        int electSent = 0;
-        log.info("Node {} started election", this.id);
-        for (int target: nodes.keySet()) {
-            if (target > this.id) {
-                sendMessage(ELECT, target, null);
-                electSent++;
-                log.info("Node {} sent ELECT to {}", this.id, target);
+            receivedAnswerOnElect.set(false);
+            log.info("Node {} became leader", this.id);
+            for (int target : nodes.keySet()) {
+                if (target != this.id) {
+                    sendMessage(VICTORY, target, null);
+                    log.info("Node {} sent VICTORY to {}", this.id, target);
+                }
             }
         }
-        if (electSent == 0) {
-            becomeLeader();
-            return;
-        }
-        int currentRound = electionRound;
-        waitElectionAnswer(currentRound);
-    }
-
-    private synchronized void becomeLeader() {
-        leaderID.set(id);
-        electionInProgress = false;
-        waitingLeaderAnswer = false;
-        receivedAnswerOnElect.set(false);
-        log.info("Node {} became leader", this.id);
-        for (int target: nodes.keySet()) {
-            if (target != this.id) {
-                sendMessage(VICTORY, target, null);
-                log.info("Node {} sent VICTORY to {}", this.id, target);
-            }
-        }
-
     }
 
     private void waitElectionAnswer(int round) {
@@ -266,36 +285,42 @@ public class Node implements Runnable {
         }, "election-timeout-" + id).start();
     }
 
-    private synchronized void checkElectionAnswerAfterTimeout(int round) {
-        if (!electionInProgress) {
-            return;
-        }
-        if (round != electionRound) {
-            return;
-        }
+    private void checkElectionAnswerAfterTimeout(int round) {
+        synchronized (stateLock) {
+            if (!electionInProgress) {
+                return;
+            }
+            if (round != electionRound) {
+                return;
+            }
 
-        if (receivedAnswerOnElect.get()) {
-            log.info("Node {} received ELECT answer in time; stays follower", id);
-            electionInProgress = false;
-        } else {
-            log.info("Node {} did not receive ELECT answer in time", id);
-            becomeLeader();
+            if (receivedAnswerOnElect.get()) {
+                log.info("Node {} received ELECT answer in time; stays follower", id);
+                electionInProgress = false;
+            } else {
+                log.info("Node {} did not receive ELECT answer in time", id);
+                becomeLeader();
+            }
         }
     }
 
-    public synchronized void stop() {
-        setEnabled(false);
+    public void stop() {
+        synchronized (stateLock) {
+            setEnabled(false);
+        }
         log.warn("Node {} stopped", id);
     }
 
-    public synchronized void recover() {
-        setEnabled(true);
+    public void recover() {
+        synchronized (stateLock) {
+            setEnabled(true);
+        }
         log.info("Node {} recovered", id);
         startElection();
     }
 
     private void setEnabled(boolean enabled) {
-        isEnable.set(enabled);
+        this.enabled.set(enabled);
         leaderID.set(-1);
         waitingLeaderAnswer = false;
         electionInProgress = false;
@@ -308,7 +333,7 @@ public class Node implements Runnable {
     }
 
     public boolean isEnable() {
-        return isEnable.get();
+        return enabled.get();
     }
 
     public int getId() {
